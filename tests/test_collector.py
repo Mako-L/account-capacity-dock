@@ -1,8 +1,10 @@
 import importlib.util
+import base64
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 import urllib.error
 
@@ -12,6 +14,39 @@ spec.loader.exec_module(collector)
 
 
 class CapacityParsingTests(unittest.TestCase):
+    def test_cursor_cli_uses_cli_identity_and_keychain_not_editor(self):
+        claims = {'sub': 'auth0|cli-user', 'exp': collector.time.time() + 3600}
+        token = 'header.' + base64.urlsafe_b64encode(json.dumps(claims).encode()).decode() + '.signature'
+        with patch.object(collector, 'read_json', return_value={'authInfo': {'email': 'cli@example.test', 'authId': claims['sub']}}), \
+                patch.dict(collector.os.environ, {'AGENT_CLI_CREDENTIAL_STORE': 'default'}), \
+                patch.object(collector.subprocess, 'run', return_value=SimpleNamespace(stdout=token)) as keychain:
+            entry, request = collector.cursor_cli_account()
+        self.assertEqual(entry['email'], 'cli@example.test')
+        self.assertEqual(entry['source'], 'Cursor CLI')
+        self.assertIn('cli-user%3A%3A' + token, request[1]['Cookie'])
+        self.assertIn('cursor-access-token', keychain.call_args.args[0])
+        self.assertNotIn(token, json.dumps(entry))
+
+    def test_cursor_cli_missing_login_clears_cached_quota_immediately(self):
+        with patch.object(collector.subprocess, 'run', side_effect=OSError), \
+                patch.object(collector, 'read_json', return_value={}):
+            entry, request = collector.cursor_cli_account()
+        old = dict(entry, status='live', windows=[{'label': 'Monthly', 'used': 60}], nextPollAt=collector.time.time()+300)
+        result = collector.fetch((entry, request), {entry['id']: old})
+        self.assertEqual(result['status'], 'loginRequired')
+        self.assertEqual(result['windows'], [])
+
+    def test_cursor_cli_file_store_does_not_use_stale_profile_or_keychain(self):
+        token = 'header.' + base64.urlsafe_b64encode(json.dumps({'sub': 'auth0|new-user', 'exp': collector.time.time()+3600}).encode()).decode() + '.signature'
+        with patch.dict(collector.os.environ, {'AGENT_CLI_CREDENTIAL_STORE': 'file'}), \
+                patch.object(collector, 'read_json', side_effect=[{'authInfo': {'email': 'old@example.test', 'authId': 'auth0|old-user'}}, {'accessToken': token}]), \
+                patch.object(collector.subprocess, 'run') as keychain:
+            entry, request = collector.cursor_cli_account()
+        keychain.assert_not_called()
+        self.assertEqual(entry['email'], 'Cursor CLI account')
+        self.assertEqual(entry['id'], collector.account('Cursor', '', 'cli:auth0|new-user')['id'])
+        self.assertIsNotNone(request)
+
     def test_unknown_and_boolean_values_do_not_become_zero_capacity(self):
         for value in (None, True, '0', float('nan'), float('inf')):
             self.assertIsNone(collector.percentage(value))
@@ -82,7 +117,7 @@ class CapacityParsingTests(unittest.TestCase):
             for name, refresh in [('trial', ''), ('dedicated', 'private-refresh')]:
                 (auths / (name + '.json')).write_text(json.dumps({'type': 'claude', 'organization_uuid': 'org',
                     'email': 'test@example.test', 'access_token': 'private-access', 'refresh_token': refresh}))
-            with patch.object(collector, 'HOME', home):
+            with patch.object(collector, 'HOME', home), patch.object(collector.subprocess, 'run', side_effect=OSError):
                 discovered = collector.discover()
             rows = [row for row, _ in discovered if row['provider'] == 'Claude']
             self.assertEqual(len(rows), 2)

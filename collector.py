@@ -8,7 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
-import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -113,6 +113,38 @@ def account(provider, email, identity, title=None, plan='', source=''):
             'fetchedAt': None, 'nextPollAt': 0}
 
 
+def cursor_cli_account():
+    info = read_json(HOME / '.cursor/cli-config.json').get('authInfo') or {}
+    email = info.get('email') or 'Cursor CLI account'
+    entry = account('Cursor', email, 'cli:' + (info.get('authId') or 'signed-out'), source='Cursor CLI')
+    request = None
+    try:
+        if os.environ.get('AGENT_CLI_CREDENTIAL_STORE') == 'memory':
+            token = ''
+        elif os.environ.get('AGENT_CLI_CREDENTIAL_STORE') == 'file':
+            token = read_json(HOME / '.cursor/auth.json').get('accessToken') or ''
+        else:
+            result = subprocess.run(
+                ['/usr/bin/security', 'find-generic-password', '-a', 'cursor-user',
+                 '-s', 'cursor-access-token', '-w'],
+                capture_output=True, text=True, timeout=5, check=True)
+            token = result.stdout.strip()
+        claims = json.loads(base64.urlsafe_b64decode(token.split('.')[1] + '==='))
+        subject = claims['sub']
+        # Cached CLI profile information can outlive a login. Never label another
+        # token's usage with that stale email or reuse the previous account's quota.
+        if info.get('authId') != subject:
+            email = 'Cursor CLI account'
+        entry = account('Cursor', email, 'cli:' + subject, source='Cursor CLI')
+        if claims.get('exp', 0) > time.time() + 60:
+            user_id = subject.split('|')[-1]
+            request = ('https://cursor.com/api/usage-summary', {
+                'Cookie': 'WorkosCursorSessionToken=' + user_id + '%3A%3A' + token})
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError, KeyError, TypeError):
+        pass
+    return entry, request
+
+
 def discover():
     result = []
     sequence = read_json(HOME / '.claude-swap-backup/sequence.json').get('accounts', {})
@@ -151,24 +183,7 @@ def discover():
             headers['ChatGPT-Account-Id'] = row['accountId']
         codex[identity] = (entry, ('https://chatgpt.com/backend-api/wham/usage', headers) if headers else None)
     result.extend(codex.values())
-    db = HOME / 'Library/Application Support/Cursor/User/globalStorage/state.vscdb'
-    entry = account('Cursor', 'Cursor account', 'default', source='Cursor app')
-    request = None
-    try:
-        connection = sqlite3.connect(db.as_uri() + '?mode=ro', uri=True, timeout=2)
-        rows = dict(connection.execute("SELECT key,value FROM ItemTable WHERE key IN ('cursorAuth/accessToken','cursorAuth/cachedEmail','cursorAuth/stripeMembershipType')"))
-        connection.close()
-        entry['email'] = rows.get('cursorAuth/cachedEmail') or 'Cursor account'
-        entry['title'] = entry['email'].split('@')[0]
-        entry['plan'] = (rows.get('cursorAuth/stripeMembershipType') or '').title()
-        token = rows.get('cursorAuth/accessToken') or ''
-        claims = json.loads(base64.urlsafe_b64decode(token.split('.')[1] + '==='))
-        if claims.get('exp', 0) > time.time() + 60:
-            user_id = claims['sub'].split('|')[-1]
-            request = ('https://cursor.com/api/usage-summary', {'Cookie': 'WorkosCursorSessionToken=' + user_id + '%3A%3A' + token})
-    except (OSError, sqlite3.Error, ValueError, IndexError, KeyError):
-        pass
-    result.append((entry, request))
+    result.append(cursor_cli_account())
     return result
 
 
@@ -176,6 +191,9 @@ def fetch(item, previous, force=False):
     entry, request = item
     now = time.time()
     old = previous.get(entry['id'])
+    if request is None:
+        entry.update(status='loginRequired', message='Reconnect this account to read capacity.', windows=[], nextPollAt=now + 300)
+        return entry
     if old:
         for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan'):
             if key in old:
@@ -183,9 +201,6 @@ def fetch(item, previous, force=False):
         if now < old.get('nextPollAt', 0) and (not force or old.get('status') == 'rateLimited'):
             return entry
     entry['nextPollAt'] = now + 300
-    if request is None:
-        entry.update(status='loginRequired', message='Reconnect this account to read capacity.', windows=[])
-        return entry
     try:
         url, headers = request
         headers = dict(headers, **{'Accept': 'application/json', 'User-Agent': 'CodeBurn'})

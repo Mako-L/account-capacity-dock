@@ -35,8 +35,10 @@ bubble. Exhausted and disconnected accounts remain visible.
   usable proxy login remain visible with a reconnect message.
 - **Codex:** reads every account in `~/codex-proxy/data/accounts.json`, including
   cached quota as a fallback, then fetches current usage using the access token.
-- **Cursor:** reads the Cursor app's local state database in read-only mode and
-  queries its usage-summary endpoint using the existing session.
+- **Cursor:** reads the Cursor CLI identity from `~/.cursor/cli-config.json` and
+  its access token from the macOS Keychain (`cursor-access-token`, `cursor-user`).
+  If launched with `AGENT_CLI_CREDENTIAL_STORE=file`, it uses `~/.cursor/auth.json`
+  instead. Usage is queried for that CLI login; the editor's login is independent.
 
 The app never rotates refresh tokens, signs you in, switches accounts, or routes
 model traffic. Credential lifecycle remains with the existing apps and proxies.
@@ -46,7 +48,7 @@ but respects rate-limit backoff. Failed reads keep previous capacity visible wit
 a stale status. Authentication failures clear quota so it cannot look live.
 
 Add Claude accounts in the Claude proxy dashboard. Add Codex accounts in the Codex
-proxy. Sign in to Cursor through Cursor. The next inventory refresh picks up new
+proxy. Sign in to Cursor CLI with `cursor-agent login`. The next inventory refresh picks up new
 proxy accounts automatically. A saved account without a login remains visible.
 
 ## Build
