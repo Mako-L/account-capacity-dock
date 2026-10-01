@@ -23,8 +23,11 @@ background opacity, and screen edge. Changes apply immediately and persist acros
 launches. Short docks scroll to keep every account accessible. **Restore defaults**
 returns to the original right-edge appearance. Settings also open with Command-comma.
 
-The dock reports **percent used**, using the most constrained reported quota
-window. Missing capacity is shown as `—`, with an explanation in the detail
+The dock reports **percent used**. Claude and Codex use the most constrained
+reported quota window. Cursor matches the custom LLimit display: **Models**,
+**Other**, and **Grok** appear separately on the rail, with full names and each
+reset time in the overview and hover details. Its ring represents Cursor Models.
+Missing capacity is shown as `—`, with an explanation in the detail
 bubble. Exhausted and disconnected accounts remain visible.
 
 ## Account sources
@@ -38,7 +41,10 @@ bubble. Exhausted and disconnected accounts remain visible.
 - **Cursor:** reads the Cursor CLI identity from `~/.cursor/cli-config.json` and
   its access token from the macOS Keychain (`cursor-access-token`, `cursor-user`).
   If launched with `AGENT_CLI_CREDENTIAL_STORE=file`, it uses `~/.cursor/auth.json`
-  instead. Usage is queried for that CLI login; the editor's login is independent.
+  instead. Usage is queried for that CLI login through `GetCurrentPeriodUsage`
+  and `GetSandUsageStatus`, matching LLimit's message percentages, rounding,
+  Cursor Models / Other Models / Grok Bot breakdown, and optional on-demand spend.
+  The editor's login is independent.
 
 The app never rotates refresh tokens, signs you in, switches accounts, or routes
 model traffic. Credential lifecycle remains with the existing apps and proxies.
@@ -87,5 +93,8 @@ Provider icons are reused under that license. Quota endpoint formats follow its
 provider adapters; the collector and native multi-account app are independent
 implementations. The adapted ring, edge flare, and detail-tail geometry retain
 CodeBurn's MIT attribution in `Resources/CodeBurn-LICENSE.txt`.
+
+Cursor quota interpretation and the drawn cube icon follow the custom local
+LLimit app. Its MIT attribution is included in `Resources/LLimit-LICENSE.txt`.
 
 This repository is separate from the full CodeBurn app and does not replace it.

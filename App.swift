@@ -6,6 +6,7 @@ struct CapacityWindow: Codable, Identifiable {
     let label: String
     let used: Double
     let resetAt: Double?
+    let detail: String?
     var id: String { label }
 }
 
@@ -20,7 +21,7 @@ struct CapacityAccount: Codable, Identifiable {
     let message: String
     let windows: [CapacityWindow]
     let fetchedAt: Double?
-    var used: Double? { windows.map(\.used).max() }
+    var used: Double? { provider == "Cursor" ? windows.first(where: { $0.label == "Cursor Models" })?.used : windows.map(\.used).max() }
     var limitingWindow: String { windows.max(by: { $0.used < $1.used })?.label ?? "Unknown" }
     var accent: Color { provider == "Claude" ? .orange : provider == "Codex" ? .mint : .purple }
     var signal: Color { status == "loginRequired" ? .orange : (used ?? 0) >= 100 ? .red : (used ?? 0) >= 85 ? .orange : (used ?? 0) >= 70 ? .yellow : .green }
@@ -122,11 +123,34 @@ func resetTime(_ timestamp: Double?) -> String {
     return "Resets in \(max(1, seconds / 60))m"
 }
 
+// Cursor cube geometry adapted from LLimit's ProviderIcon (MIT).
+struct CursorCube: Shape {
+    func path(in rect: CGRect) -> Path {
+        let size = min(rect.width, rect.height)
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.midX - size / 2 + x / 24 * size, y: rect.midY - size / 2 + y / 24 * size)
+        }
+        var path = Path()
+        for polygon: [(CGFloat, CGFloat)] in [
+            [(12, 0.13), (1.89, 5.68), (1.47, 6.40), (1.47, 17.59), (1.89, 18.31),
+             (11.50, 23.86), (12.50, 23.86), (22.11, 18.31), (22.53, 17.59),
+             (22.53, 6.40), (22.11, 5.68), (12.50, 0.13)],
+            [(2.66, 6.34), (21.21, 6.34), (21.51, 6.85), (12.23, 22.92),
+             (12, 22.86), (12, 12.34), (11.70, 11.83), (2.59, 6.57)]
+        ] {
+            path.move(to: point(polygon[0].0, polygon[0].1))
+            for (x, y) in polygon.dropFirst() { path.addLine(to: point(x, y)) }
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
 struct ProviderMark: View {
     let provider: String
     var body: some View {
         if provider == "Cursor" {
-            Image(systemName: "cursorarrow").font(.system(size: 20, weight: .semibold))
+            CursorCube().fill(style: FillStyle(eoFill: true))
         } else if let url = Bundle.main.url(forResource: provider.lowercased(), withExtension: "png"), let image = NSImage(contentsOf: url) {
             Image(nsImage: image).resizable().renderingMode(.template).scaledToFit()
         } else {
@@ -190,7 +214,7 @@ struct AccountCard: View {
             if account.windows.isEmpty {
                 Text(account.message.isEmpty ? "Capacity unknown" : account.message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
-                ForEach(showAllWindows ? account.windows : Array(account.windows.prefix(2))) { window in
+                ForEach(showAllWindows || account.provider == "Cursor" ? account.windows : Array(account.windows.prefix(2))) { window in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(window.label)
@@ -205,6 +229,7 @@ struct AccountCard: View {
                             }
                         }.frame(height: 5)
                         Text(resetTime(window.resetAt)).font(.system(size: 10)).foregroundStyle(.secondary)
+                        if let detail = window.detail { Text(detail).font(.system(size: 10)).foregroundStyle(.secondary) }
                     }
                 }
                 if !account.message.isEmpty {
@@ -319,21 +344,42 @@ struct RailView: View {
     var showSettings: () -> Void
     var hover: (CapacityAccount?) -> Void
     var horizontal: Bool { store.dockEdge == "top" || store.dockEdge == "bottom" }
+    func cursorQuotas(_ account: CapacityAccount) -> some View {
+        VStack(spacing: 1) {
+            ForEach(account.windows) { window in
+                HStack(spacing: 2) {
+                    Text(window.label == "Cursor Models" ? "Models" : window.label == "Other Models" ? "Other" : window.label == "Grok Bot" ? "Grok" : "Spend")
+                        .foregroundStyle(.white.opacity(0.65))
+                    Spacer(minLength: 0)
+                    Text("\(Int(window.used))%").monospacedDigit()
+                        .foregroundStyle(window.used >= 100 ? Color.red : window.used >= 85 ? .orange : .green)
+                }
+            }
+        }.font(.system(size: 9, weight: .medium)).frame(width: 59)
+    }
     func cell(_ account: CapacityAccount) -> some View {
         Button(action: showOverview) {
             if horizontal {
                 VStack(spacing: 4) {
                     AccountRing(account: account, size: 36, dockStyle: true, round: store.roundIcons)
                     if store.showNames { Text(account.title).font(.system(size: 10, weight: .semibold)).lineLimit(1) }
-                    Text(account.used.map { "\(Int($0))%" } ?? "—").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(account.signal)
+                    if account.provider == "Cursor" && !account.windows.isEmpty {
+                        cursorQuotas(account)
+                    } else {
+                        Text(account.used.map { "\(Int($0))%" } ?? "—").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(account.signal)
+                    }
                 }.frame(width: 72)
             } else {
                 VStack(spacing: 3) {
-                    AccountRing(account: account, size: 42, dockStyle: true, round: store.roundIcons)
-                    Text(account.used.map { "\(Int($0))%" } ?? "—")
-                        .font(.system(size: 15, weight: .medium)).monospacedDigit().foregroundStyle(account.signal)
+                    AccountRing(account: account, size: account.provider == "Cursor" ? 36 : 42, dockStyle: true, round: store.roundIcons)
+                    if account.provider == "Cursor" && !account.windows.isEmpty {
+                        cursorQuotas(account)
+                    } else {
+                        Text(account.used.map { "\(Int($0))%" } ?? "—")
+                            .font(.system(size: 15, weight: .medium)).monospacedDigit().foregroundStyle(account.signal)
+                    }
                     if store.showNames { Text(account.title).font(.system(size: 9, weight: .medium)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
-                }.frame(width: 64, height: store.showNames ? 80 : 68)
+                }.frame(width: 64, height: (store.showNames ? 78 : 66) + (account.provider == "Cursor" ? CGFloat(max(3, account.windows.count) - 2) * 16 : 0))
             }
         }.buttonStyle(.plain).onHover { inside in hover(inside ? account : nil) }
             .help("\(account.provider) · \(account.email) · \(account.stateLabel)")

@@ -23,7 +23,8 @@ class CapacityParsingTests(unittest.TestCase):
             entry, request = collector.cursor_cli_account()
         self.assertEqual(entry['email'], 'cli@example.test')
         self.assertEqual(entry['source'], 'Cursor CLI')
-        self.assertIn('cli-user%3A%3A' + token, request[1]['Cookie'])
+        self.assertEqual(request[1]['Authorization'], 'Bearer ' + token)
+        self.assertTrue(request[0].endswith('/GetCurrentPeriodUsage'))
         self.assertIn('cursor-access-token', keychain.call_args.args[0])
         self.assertNotIn(token, json.dumps(entry))
 
@@ -74,9 +75,39 @@ class CapacityParsingTests(unittest.TestCase):
         self.assertEqual(cached, [live[1]])
 
     def test_cursor_zero_usage_is_valid_but_missing_capacity_is_unknown(self):
-        self.assertEqual(collector.cursor_windows({'individualUsage': {'plan': {'limit': 0}}}), [])
-        result = collector.cursor_windows({'individualUsage': {'plan': {'totalPercentUsed': 0}}})
+        self.assertEqual(collector.cursor_windows({'planUsage': {}}), [])
+        result = collector.cursor_windows({'planUsage': {'autoPercentUsed': 0}})
         self.assertEqual(result[0]['used'], 0)
+
+    def test_cursor_matches_llimit_messages_grok_rounding_and_resets(self):
+        result = collector.cursor_windows({
+            'billingCycleEnd': '1791989574000',
+            'planUsage': {'autoPercentUsed': 56.586, 'apiPercentUsed': 100},
+            'autoModelSelectedDisplayMessage': "You've used 60% of your included total usage",
+            'namedModelSelectedDisplayMessage': "You've used 100% of your included API usage",
+            'spendLimitUsage': {'individualLimit': 2000, 'individualUsed': 500},
+        }, {'usagePercent': 1.767891, 'nextResetTimestampUtc': '2026-10-05T15:26:53.586Z'})
+        self.assertEqual([(w['label'], w['used']) for w in result],
+                         [('Cursor Models', 60), ('Other Models', 100), ('Grok Bot', 2), ('On-demand', 25)])
+        self.assertEqual(result[0]['resetAt'], 1791989574)
+        self.assertNotEqual(result[2]['resetAt'], result[0]['resetAt'])
+        self.assertEqual(result[3]['detail'], '$5 / $20')
+
+    def test_cursor_positive_fractional_usage_is_visible(self):
+        result = collector.cursor_windows({'planUsage': {'autoPercentUsed': 0.2, 'apiPercentUsed': None}})
+        self.assertEqual([(w['label'], w['used']) for w in result], [('Cursor Models', 1)])
+
+    def test_cursor_fetch_posts_dashboard_and_keeps_models_when_grok_unavailable(self):
+        entry = collector.account('Cursor', 'cli@example.test', 'cli-user')
+        response = unittest.mock.MagicMock()
+        response.read.return_value = json.dumps({'planUsage': {'autoPercentUsed': 60}})
+        with patch.object(collector.urllib.request, 'urlopen', side_effect=[response, TimeoutError]) as requests:
+            result = collector.fetch((entry, ('https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage', {})), {}, True)
+        self.assertEqual(result['status'], 'live')
+        self.assertEqual(result['windows'][0]['used'], 60)
+        self.assertIn('Grok Bot usage unavailable', result['message'])
+        self.assertEqual(requests.call_args_list[0].args[0].data, b'{}')
+        self.assertTrue(requests.call_args_list[1].args[0].full_url.endswith('/GetSandUsageStatus'))
 
     def test_transient_failure_retains_cached_quota_with_stale_status(self):
         entry = collector.account('Codex', 'test@example.test', 'test')

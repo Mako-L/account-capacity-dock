@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -86,22 +87,36 @@ def codex_windows(data):
     return sorted(result, key=lambda w: w['label'] == 'Weekly')
 
 
-def cursor_windows(data):
-    plan = (data.get('individualUsage') or {}).get('plan') or {}
-    reset = data.get('billingCycleEnd')
+def cursor_windows(data, sand=None):
+    plan = data.get('planUsage') or {}
+    try:
+        reset = float(data['billingCycleEnd']) / 1000
+    except (KeyError, TypeError, ValueError):
+        reset = None
     result = []
-    for key, label in [('totalPercentUsed', 'Monthly'), ('autoPercentUsed', 'Auto'), ('apiPercentUsed', 'API')]:
-        item = window(label, plan.get(key), reset)
+    for key, label, message in [
+            ('autoPercentUsed', 'Cursor Models', 'autoModelSelectedDisplayMessage'),
+            ('apiPercentUsed', 'Other Models', 'namedModelSelectedDisplayMessage')]:
+        match = re.search(r"You've used (\d+)%", data.get(message) or '')
+        raw = int(match.group(1)) if match else plan.get(key)
+        # Match LLimit's display rounding, including positive usage below 1%.
+        used = percentage(raw)
+        if used is not None:
+            used = min(100, max(1, math.floor(used + 0.5))) if used > 0 else 0
+        item = window(label, used, reset)
         if item:
             result.append(item)
-    if not result:
-        used, limit = plan.get('used'), plan.get('limit')
-        if isinstance(used, (int, float)) and isinstance(limit, (int, float)) and limit > 0:
-            result.append(window('Monthly', used / limit * 100, reset))
-    for name, key in [('Team pool', 'pooled'), ('Team on-demand', 'onDemand')]:
-        row = (data.get('teamUsage') or {}).get(key) or {}
-        if isinstance(row.get('limit'), (int, float)) and row['limit'] > 0 and isinstance(row.get('used'), (int, float)):
-            result.append(window(name, row['used'] / row['limit'] * 100, reset))
+    if sand:
+        used = percentage(sand.get('usagePercent'))
+        if used is not None:
+            used = max(1, math.floor(used + 0.5)) if used > 0 else 0
+            result.append(window('Grok Bot', used, sand.get('nextResetTimestampUtc')))
+    spend = data.get('spendLimitUsage') or {}
+    used, limit = spend.get('individualUsed', 0), spend.get('individualLimit')
+    if percentage(used) is not None and isinstance(limit, (int, float)) and limit > 0:
+        item = window('On-demand', used / limit * 100, reset)
+        item['detail'] = '${:g} / ${:g}'.format(used / 100, limit / 100)
+        result.append(item)
     return result
 
 
@@ -137,9 +152,9 @@ def cursor_cli_account():
             email = 'Cursor CLI account'
         entry = account('Cursor', email, 'cli:' + subject, source='Cursor CLI')
         if claims.get('exp', 0) > time.time() + 60:
-            user_id = subject.split('|')[-1]
-            request = ('https://cursor.com/api/usage-summary', {
-                'Cookie': 'WorkosCursorSessionToken=' + user_id + '%3A%3A' + token})
+            request = ('https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage', {
+                'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json',
+                'Connect-Protocol-Version': '1'})
     except (OSError, subprocess.SubprocessError, ValueError, IndexError, KeyError, TypeError):
         pass
     return entry, request
@@ -204,7 +219,8 @@ def fetch(item, previous, force=False):
     try:
         url, headers = request
         headers = dict(headers, **{'Accept': 'application/json', 'User-Agent': 'CodeBurn'})
-        response = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=12)
+        body = b'{}' if entry['provider'] == 'Cursor' else None
+        response = urllib.request.urlopen(urllib.request.Request(url, headers=headers, data=body), timeout=12)
         with response:
             data = json.load(response)
         if entry['provider'] == 'Claude':
@@ -213,9 +229,19 @@ def fetch(item, previous, force=False):
             entry['windows'] = codex_windows(data)
             entry['plan'] = {'pro': 'Pro', 'prolite': 'Pro Lite', 'promax': 'Pro Max'}.get(data.get('plan_type'), data.get('plan_type') or entry['plan'])
         else:
-            entry['windows'] = cursor_windows(data)
-            entry['plan'] = (data.get('membershipType') or entry['plan']).title()
+            sand = None
+            try:
+                sand_url = 'https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus'
+                with urllib.request.urlopen(urllib.request.Request(sand_url, headers=headers, data=b'{}'), timeout=10) as response:
+                    sand = json.load(response)
+            except (OSError, ValueError, TimeoutError):
+                pass
+            entry['windows'] = cursor_windows(data, sand)
+            if sand:
+                entry['plan'] = sand.get('cursorPlanName') or entry['plan']
         entry.update(status='live' if entry['windows'] else 'unknown', fetchedAt=now, message='')
+        if entry['provider'] == 'Cursor' and sand is None:
+            entry['message'] = 'Grok Bot usage unavailable; retrying later.'
         if not entry['windows']:
             entry['message'] = 'The provider did not return a measurable quota.'
         if entry['provider'] == 'Cursor' and entry['plan'].lower() == 'free':
