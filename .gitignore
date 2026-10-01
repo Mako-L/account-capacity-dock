@@ -1,0 +1,8 @@
+build/
+__pycache__/
+*-snapshot.json
+*.png
+!Resources/*.png
+screenshots/
+*.layout.json
+.DS_Store
