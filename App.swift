@@ -47,6 +47,21 @@ final class CapacityStore: ObservableObject {
     @Published var refreshing = false
     @Published var error: String?
     @Published var dockEdge = UserDefaults.standard.string(forKey: "dockEdge") ?? "right"
+    @Published var dockScale = (UserDefaults.standard.object(forKey: "dockScale") as? Double ?? 1) {
+        didSet { UserDefaults.standard.set(dockScale, forKey: "dockScale") }
+    }
+    @Published var dockLength = (UserDefaults.standard.object(forKey: "dockLength") as? Double ?? 820) {
+        didSet { UserDefaults.standard.set(dockLength, forKey: "dockLength") }
+    }
+    @Published var roundIcons = UserDefaults.standard.bool(forKey: "roundIcons") {
+        didSet { UserDefaults.standard.set(roundIcons, forKey: "roundIcons") }
+    }
+    @Published var showNames = (UserDefaults.standard.object(forKey: "showNames") as? Bool ?? true) {
+        didSet { UserDefaults.standard.set(showNames, forKey: "showNames") }
+    }
+    @Published var dockOpacity = (UserDefaults.standard.object(forKey: "dockOpacity") as? Double ?? 1) {
+        didSet { UserDefaults.standard.set(dockOpacity, forKey: "dockOpacity") }
+    }
     private var timer: Timer?
 
     init() {
@@ -120,18 +135,28 @@ struct ProviderMark: View {
     }
 }
 
+struct RingOutline: Shape {
+    var circular: Bool
+    var cornerRadius: CGFloat
+    func path(in rect: CGRect) -> Path {
+        circular ? Circle().path(in: rect) : RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+    }
+}
+
 struct AccountRing: View {
     let account: CapacityAccount
     var size: CGFloat = 48
     var dockStyle = false
+    var round = false
+    var cornerRadius: CGFloat { size * (round || !dockStyle ? 0.50 : 0.30) }
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: size * (dockStyle ? 0.30 : 0.50), style: .continuous)
+            RingOutline(circular: round, cornerRadius: cornerRadius)
                 .stroke(.black.opacity(0.75), lineWidth: 6)
-            RoundedRectangle(cornerRadius: size * (dockStyle ? 0.30 : 0.50), style: .continuous)
+            RingOutline(circular: round, cornerRadius: cornerRadius)
                 .stroke(.white.opacity(0.12), lineWidth: 4)
             if let used = account.used {
-                RoundedRectangle(cornerRadius: size * (dockStyle ? 0.30 : 0.50), style: .continuous).trim(from: 0, to: used / 100)
+                RingOutline(circular: round, cornerRadius: cornerRadius).trim(from: 0, to: used / 100)
                     .stroke(account.signal, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
@@ -291,28 +316,37 @@ struct DetailBubble: Shape {
 struct RailView: View {
     @ObservedObject var store: CapacityStore
     var showOverview: () -> Void
+    var showSettings: () -> Void
     var hover: (CapacityAccount?) -> Void
     var horizontal: Bool { store.dockEdge == "top" || store.dockEdge == "bottom" }
     func cell(_ account: CapacityAccount) -> some View {
         Button(action: showOverview) {
             if horizontal {
                 VStack(spacing: 4) {
-                    AccountRing(account: account, size: 36)
-                    Text(account.title).font(.system(size: 10, weight: .semibold)).lineLimit(1)
+                    AccountRing(account: account, size: 36, dockStyle: true, round: store.roundIcons)
+                    if store.showNames { Text(account.title).font(.system(size: 10, weight: .semibold)).lineLimit(1) }
                     Text(account.used.map { "\(Int($0))%" } ?? "—").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(account.signal)
                 }.frame(width: 72)
             } else {
                 VStack(spacing: 3) {
-                    AccountRing(account: account, size: 42, dockStyle: true)
+                    AccountRing(account: account, size: 42, dockStyle: true, round: store.roundIcons)
                     Text(account.used.map { "\(Int($0))%" } ?? "—")
                         .font(.system(size: 15, weight: .medium)).monospacedDigit().foregroundStyle(account.signal)
-                    Text(account.title).font(.system(size: 9, weight: .medium)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                }.frame(width: 64, height: 80)
+                    if store.showNames { Text(account.title).font(.system(size: 9, weight: .medium)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
+                }.frame(width: 64, height: store.showNames ? 80 : 68)
             }
         }.buttonStyle(.plain).onHover { inside in hover(inside ? account : nil) }
             .help("\(account.provider) · \(account.email) · \(account.stateLabel)")
     }
     var body: some View {
+        GeometryReader { geometry in
+            railContent
+                .frame(width: geometry.size.width / store.dockScale, height: geometry.size.height / store.dockScale)
+                .scaleEffect(store.dockScale, anchor: .topLeading)
+        }
+        .contextMenu { Button("Dock settings…", action: showSettings); Button("All accounts", action: showOverview) }
+    }
+    var railContent: some View {
         Group {
             if horizontal {
                 HStack(spacing: 8) {
@@ -321,6 +355,7 @@ struct RailView: View {
                         HStack(spacing: 8) { ForEach(store.accounts) { cell($0) } }
                     }
                     Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill") }.buttonStyle(.plain)
+                    Button(action: showSettings) { Image(systemName: "gearshape") }.buttonStyle(.plain).help("Dock settings")
                 }.padding(.horizontal, 34).padding(.vertical, 14)
             } else {
                 VStack(spacing: 8) {
@@ -329,15 +364,57 @@ struct RailView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 6) { ForEach(store.accounts) { cell($0) } }.padding(.horizontal, 12)
                     }
-                    Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill").font(.system(size: 13)) }
-                        .buttonStyle(.plain).padding(.bottom, store.dockEdge == "floating" ? 12 : 32).help("Open all accounts")
+                    HStack(spacing: 14) {
+                        Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill") }.help("Open all accounts")
+                        Button(action: showSettings) { Image(systemName: "gearshape") }.help("Dock settings")
+                    }.font(.system(size: 13)).buttonStyle(.plain)
+                        .padding(.bottom, store.dockEdge == "floating" ? 12 : 32)
                 }
             }
         }
         .foregroundStyle(.white)
-        .background(DockSurface(edge: store.dockEdge).fill(Color(white: 0.065)))
+        .background(DockSurface(edge: store.dockEdge).fill(Color(white: 0.065).opacity(store.dockOpacity)))
         .overlay(DockSurface(edge: store.dockEdge).stroke(.white.opacity(0.12)))
         .preferredColorScheme(.dark)
+    }
+}
+
+struct DockSettingsView: View {
+    @ObservedObject var store: CapacityStore
+    var attach: (String) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("Dock settings").font(.title2.bold())
+            Text("Changes apply immediately and are saved.").foregroundStyle(.secondary)
+            VStack(alignment: .leading) {
+                Text("Size · \(Int((store.dockScale * 100).rounded()))%")
+                Slider(value: $store.dockScale, in: 0.65...1.4, step: 0.05)
+            }
+            VStack(alignment: .leading) {
+                Text("Length · \(Int(store.dockLength)) pt")
+                Slider(value: $store.dockLength, in: 400...1100, step: 20)
+                Text("Accounts scroll when the dock is shorter than the list.").font(.caption).foregroundStyle(.secondary)
+            }
+            Picker("Icon shape", selection: $store.roundIcons) {
+                Text("Rounded square").tag(false)
+                Text("Circle").tag(true)
+            }.pickerStyle(.segmented)
+            Toggle("Show account names", isOn: $store.showNames)
+            VStack(alignment: .leading) {
+                Text("Background opacity · \(Int((store.dockOpacity * 100).rounded()))%")
+                Slider(value: $store.dockOpacity, in: 0.25...1, step: 0.05)
+            }
+            Picker("Screen edge", selection: Binding(get: { store.dockEdge }, set: attach)) {
+                ForEach(["right", "left", "top", "bottom", "floating"], id: \.self) { Text($0.capitalized).tag($0) }
+            }
+            HStack {
+                Spacer()
+                Button("Restore defaults") {
+                    store.dockScale = 1; store.dockLength = 820; store.roundIcons = false
+                    store.showNames = true; store.dockOpacity = 1; attach("right")
+                }
+            }
+        }.padding(26).frame(width: 390).background(Color(nsColor: .windowBackgroundColor)).preferredColorScheme(.dark)
     }
 }
 
@@ -347,6 +424,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var overview: NSWindow!
     var rail: NSPanel!
     var detail: NSPanel?
+    var settings: NSWindow?
+    var layoutSubscription: AnyCancellable?
     var statusItem: NSStatusItem!
     var closeDetailWork: DispatchWorkItem?
     var dockingWork: DispatchWorkItem?
@@ -369,12 +448,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         rail.hidesOnDeactivate = false
         rail.delegate = self
         positionRail(edge: store.dockEdge)
-        rail.contentView = NSHostingView(rootView: RailView(store: store, showOverview: { [weak self] in self?.showOverview() }, hover: { [weak self] in self?.showDetail($0) }))
+        rail.contentView = NSHostingView(rootView: RailView(store: store, showOverview: { [weak self] in self?.showOverview() }, showSettings: { [weak self] in self?.showSettings() }, hover: { [weak self] in self?.showDetail($0) }))
+        layoutSubscription = Publishers.CombineLatest(store.$dockScale, store.$dockLength)
+            .dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.repositionRail() }
         rail.orderFrontRegardless()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mako Capacity")
         let menu = NSMenu()
         menu.addItem(withTitle: "All accounts", action: #selector(showOverview), keyEquivalent: "")
+        menu.addItem(withTitle: "Dock settings…", action: #selector(showSettings), keyEquivalent: ",")
         menu.addItem(withTitle: "Show / hide capacity dock", action: #selector(toggleRail), keyEquivalent: "")
         let edges = NSMenuItem(title: "Attach to screen", action: nil, keyEquivalent: "")
         let edgesMenu = NSMenu()
@@ -394,6 +476,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "All accounts", action: #selector(showOverview), keyEquivalent: "0").target = self
+        appMenu.addItem(withTitle: "Dock settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         appMenu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "r").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Mako Capacity", action: #selector(quit), keyEquivalent: "q").target = self
@@ -403,6 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(repositionRail), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(repositionRail), name: NSWorkspace.didWakeNotification, object: nil)
         let args = CommandLine.arguments
+        if args.contains("--settings") { showSettings() }
         if args.contains("--overview") || args.contains("--screenshot") { showOverview() }
         if let index = args.firstIndex(of: "--screenshot"), args.count > index + 1 {
             let path = args[index + 1]
@@ -411,6 +495,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func showOverview() { overview.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
+    @objc func showSettings() {
+        showDetail(nil)
+        if settings == nil {
+            let view = NSHostingView(rootView: DockSettingsView(store: store, attach: { [weak self] edge in self?.positionRail(edge: edge) }))
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: view.fittingSize), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Mako Capacity — Dock settings"
+            window.isReleasedWhenClosed = false
+            window.contentView = view
+            window.center()
+            settings = window
+        }
+        settings?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
     @objc func toggleRail() { if rail.isVisible { rail.orderOut(nil) } else { rail.orderFrontRegardless() } }
     @objc func refresh() { store.refresh(force: true) }
     @objc func repositionRail() { positionRail(edge: store.dockEdge) }
@@ -424,7 +522,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         store.dockEdge = edge
         UserDefaults.standard.set(edge, forKey: "dockEdge")
         let horizontal = edge == "top" || edge == "bottom"
-        let size = horizontal ? NSSize(width: min(760, screen.visibleFrame.width), height: 114) : NSSize(width: 88, height: min(820, screen.visibleFrame.height - 24))
+        let scale = store.dockScale
+        let size = horizontal ? NSSize(width: min(store.dockLength * scale, screen.visibleFrame.width), height: 114 * scale) : NSSize(width: 88 * scale, height: min(store.dockLength * scale, screen.visibleFrame.height - 24))
         let offset = UserDefaults.standard.object(forKey: "dockOffset") as? Double ?? 0.5
         var origin = NSPoint(x: screen.visibleFrame.minX + (screen.visibleFrame.width - size.width) * offset,
                              y: screen.visibleFrame.minY + (screen.visibleFrame.height - size.height) * offset)
@@ -517,7 +616,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let screen = rail.screen ?? NSScreen.main!
         let layout: [String: Any] = ["edge": store.dockEdge, "railMaxX": rail.frame.maxX,
             "screenMaxX": screen.frame.maxX, "railHeight": rail.frame.height,
-            "accounts": store.accounts.count, "railWidth": rail.frame.width]
+            "accounts": store.accounts.count, "railWidth": rail.frame.width,
+            "scale": store.dockScale, "roundIcons": store.roundIcons]
+        if let view = settings?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            if let png = bitmap.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: path + ".settings.png")) }
+        }
         if let data = try? JSONSerialization.data(withJSONObject: layout, options: [.prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: path + ".layout.json"))
         }

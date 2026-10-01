@@ -17,6 +17,12 @@ of any screen edge to attach there, or pull it away to float. Position and edge
 are remembered. The menu-bar gauge offers **Attach to screen → Right**, show/hide,
 refresh, overview, and quit. Closing the overview leaves the dock running.
 
+Click the dock's **gear** (or choose **Dock settings…** from the menu-bar gauge)
+to adjust size, length, circular or rounded-square icons, account labels,
+background opacity, and screen edge. Changes apply immediately and persist across
+launches. Short docks scroll to keep every account accessible. **Restore defaults**
+returns to the original right-edge appearance. Settings also open with Command-comma.
+
 The dock reports **percent used**, using the most constrained reported quota
 window. Missing capacity is shown as `—`, with an explanation in the detail
 bubble. Exhausted and disconnected accounts remain visible.
