@@ -27,7 +27,8 @@ class SetupTests(unittest.TestCase):
                 self.assertEqual(config.read_text(), 'user config')
                 self.assertEqual((state / 'claude-proxy/client-key').read_text(), key)
                 self.assertEqual(json.loads(credential.read_text())['access_token'], 'private')
-                self.assertEqual((state / 'settings.json').stat().st_mode & 0o777, 0o600)
+                if os.name != 'nt':  # Windows has no Unix permission bits.
+                    self.assertEqual((state / 'settings.json').stat().st_mode & 0o777, 0o600)
 
     def test_paths_with_spaces_and_port_overrides_persist(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -71,6 +71,7 @@ class RenderTests(unittest.TestCase):
         snapshot = {'accounts': self.snapshot['accounts'] + [dict(account('d', 'pro', 7, 'Codex'), windows=[])]}
         self.assertEqual(capacity.status_line(snapshot, {'c'}), '✳ ◔31 ●100  ◎ ○—')
 
+    @unittest.skipIf(sys.platform == 'win32', 'The Herdr plugin supports macOS and Linux only.')
     def test_widgets_share_one_collector_run(self):
         import tempfile, threading, time
         from unittest.mock import patch
