@@ -54,6 +54,8 @@ struct Snapshot {
     accounts: Vec<Account>,
     #[serde(default)]
     hidden: HashMap<String, String>,
+    #[serde(default)]
+    warning: Option<String>,
 }
 impl Account {
     fn used(&self) -> Option<f32> {
@@ -129,6 +131,60 @@ fn state_dir() -> PathBuf {
     std::env::var_os("MAKO_CAPACITY_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".mako-capacity"))
+}
+fn read_settings() -> serde_json::Map<String, serde_json::Value> {
+    std::fs::read(state_dir().join("settings.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+fn setting(key: &str) -> String {
+    read_settings()
+        .get(key)
+        .and_then(|value| value.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+/// The CLIProxyAPI address: a configured remote server, else the local Docker port.
+fn proxy_base() -> String {
+    let url = setting("PROXY_URL");
+    if url.is_empty() {
+        let port = setting("CLAUDE_PROXY_PORT");
+        format!(
+            "http://127.0.0.1:{}",
+            if port.is_empty() { "8317" } else { &port }
+        )
+    } else {
+        url.trim_end_matches('/').to_string()
+    }
+}
+/// Save a remote proxy, or clear it with an empty URL. The collector checks it on the next refresh.
+fn save_proxy(url: &str, key: &str) -> Result<(), String> {
+    let url = url.trim().trim_end_matches('/');
+    let mut settings = read_settings();
+    if url.is_empty() {
+        settings.remove("PROXY_URL");
+        settings.remove("PROXY_MANAGEMENT_KEY");
+    } else {
+        if !(url.starts_with("http://") || url.starts_with("https://")) || url.len() < 10 {
+            return Err("Use an address like https://server:8317.".into());
+        }
+        if key.trim().is_empty() {
+            return Err("A remote proxy needs its management key.".into());
+        }
+        settings.insert("PROXY_URL".into(), url.into());
+        settings.insert("PROXY_MANAGEMENT_KEY".into(), key.trim().into());
+    }
+    std::fs::create_dir_all(state_dir()).map_err(|e| e.to_string())?;
+    let path = state_dir().join("settings.json");
+    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    std::fs::write(&path, text + "\n").map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 fn cache_dir() -> PathBuf {
     #[cfg(target_os = "macos")]
@@ -213,6 +269,9 @@ struct Dock {
     confirm_delete: Option<String>,
     show_hidden: bool,
     queued_action: Vec<String>,
+    proxy_url: String,
+    proxy_key: String,
+    proxy_message: String,
     prefs: Preferences,
     error: Option<String>,
     refreshing: bool,
@@ -284,7 +343,9 @@ impl Dock {
             .iter()
             .position(|a| a == "--preview")
             .and_then(|i| args.get(i + 1));
-        let Snapshot { accounts, hidden } = std::fs::read(
+        let Snapshot {
+            accounts, hidden, ..
+        } = std::fs::read(
             preview_path
                 .map(PathBuf::from)
                 .unwrap_or_else(|| cache_dir().join("snapshot.json")),
@@ -324,6 +385,9 @@ impl Dock {
             confirm_delete: None,
             show_hidden: false,
             queued_action: vec![],
+            proxy_url: setting("PROXY_URL"),
+            proxy_key: setting("PROXY_MANAGEMENT_KEY"),
+            proxy_message: String::new(),
             prefs,
             error: None,
             refreshing: false,
@@ -654,7 +718,7 @@ impl Dock {
             ui.label(egui::RichText::new("Usage refreshes every 5 minutes. Credentials stay with your provider apps and proxies.")
                 .size(11.0).color(Color32::from_gray(153)));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.hyperlink_to("Proxy accounts", "http://127.0.0.1:8317/management.html");
+                ui.hyperlink_to("Proxy accounts", format!("{}/management.html", proxy_base()));
             });
         });
     }
@@ -740,10 +804,45 @@ impl Dock {
                 });
         });
         ui.add_space(12.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Restore defaults").clicked() {
-                self.prefs = Preferences::default();
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Restore defaults").clicked() {
+                    self.prefs = Preferences::default();
+                }
+            });
+        });
+        ui.separator();
+        ui.label(egui::RichText::new("Proxy server").strong());
+        ui.label(
+            egui::RichText::new("Leave the address empty to use the local Docker proxy.")
+                .size(11.0)
+                .color(Color32::from_gray(153)),
+        );
+        ui.add(egui::TextEdit::singleline(&mut self.proxy_url).hint_text("https://server:8317"));
+        ui.add(
+            egui::TextEdit::singleline(&mut self.proxy_key)
+                .hint_text("Management key")
+                .password(true),
+        );
+        ui.horizontal(|ui| {
+            if ui.button("Save").clicked() {
+                self.proxy_message = match save_proxy(&self.proxy_url, &self.proxy_key) {
+                    Ok(()) => {
+                        self.refresh(ui.ctx().clone(), true, &[]);
+                        if self.proxy_url.trim().is_empty() {
+                            "Using the local Docker proxy.".into()
+                        } else {
+                            "Saved. Accounts reload from this server.".into()
+                        }
+                    }
+                    Err(error) => error,
+                };
             }
+            ui.label(
+                egui::RichText::new(&self.proxy_message)
+                    .size(11.0)
+                    .color(Color32::from_gray(153)),
+            );
         });
     }
 
@@ -1134,13 +1233,13 @@ impl eframe::App for Dock {
                         Ok(snapshot) => {
                             self.accounts = snapshot.accounts;
                             self.hidden = snapshot.hidden;
+                            self.error = snapshot.warning;
                             self.hovered = self.hovered.as_ref().and_then(|hovered| {
                                 self.accounts
                                     .iter()
                                     .find(|account| account.id == hovered.id)
                                     .cloned()
                             });
-                            self.error = None;
                         }
                         Err(error) => self.error = Some(error),
                     }
@@ -1449,7 +1548,7 @@ impl eframe::App for Dock {
                 egui::ViewportId::from_hash_of("settings"),
                 egui::ViewportBuilder::default()
                     .with_title("Mako Capacity — Settings")
-                    .with_inner_size([390.0, 430.0])
+                    .with_inner_size([390.0, 580.0])
                     .with_resizable(false),
                 |ctx, _| {
                     if ctx.input(|i| i.viewport().close_requested()) {
@@ -1509,6 +1608,9 @@ mod tests {
             confirm_delete: None,
             show_hidden: false,
             queued_action: vec![],
+            proxy_url: setting("PROXY_URL"),
+            proxy_key: setting("PROXY_MANAGEMENT_KEY"),
+            proxy_message: String::new(),
             prefs: Preferences::default(),
             error: None,
             refreshing: false,
@@ -1540,7 +1642,7 @@ mod tests {
             egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(
                     Pos2::ZERO,
-                    Vec2::new(390.0, 478.0),
+                    Vec2::new(390.0, 620.0),
                 )),
                 events,
                 ..Default::default()

@@ -64,6 +64,7 @@ struct CapacitySnapshot: Codable {
     let updatedAt: Double
     let accounts: [CapacityAccount]
     let hidden: [String: String]?
+    let warning: String?
 }
 
 @MainActor
@@ -137,7 +138,7 @@ final class CapacityStore: ObservableObject {
                 DispatchQueue.main.async {
                     self?.accounts = snapshot.accounts
                     self?.hidden = snapshot.hidden ?? [:]
-                    self?.error = nil
+                    self?.error = snapshot.warning
                     self?.finishRefresh()
                 }
             } catch {
@@ -445,7 +446,9 @@ struct OverviewView: View {
             HStack {
                 Text("Usage refreshes every 5 minutes. Credentials stay with your provider apps and proxies.")
                 Spacer()
-                Button("Proxy accounts") { NSWorkspace.shared.open(URL(string: "http://127.0.0.1:8317/management.html")!) }
+                Button("Proxy accounts") {
+                    if let url = URL(string: ProxySettings.base + "/management.html") { NSWorkspace.shared.open(url) }
+                }
             }.font(.caption).foregroundStyle(.secondary)
         }
         .padding(24)
@@ -597,9 +600,54 @@ struct RailView: View {
     }
 }
 
+/// Shared with the collector and CLI: ~/.mako-capacity/settings.json.
+enum ProxySettings {
+    static var file: URL {
+        let home = ProcessInfo.processInfo.environment["MAKO_CAPACITY_HOME"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mako-capacity")
+        return home.appendingPathComponent("settings.json")
+    }
+    static func read() -> [String: Any] {
+        (try? Data(contentsOf: file)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+    }
+    /// The CLIProxyAPI address: a configured remote server, else the local Docker port.
+    static var base: String {
+        let settings = read()
+        if let url = settings["PROXY_URL"] as? String, !url.isEmpty { return url }
+        return "http://127.0.0.1:\(settings["CLAUDE_PROXY_PORT"] as? String ?? "8317")"
+    }
+    /// Save a remote proxy, or clear it with an empty URL. Returns an error message or nil.
+    static func save(url rawURL: String, key: String) -> String? {
+        let url = rawURL.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var settings = read()
+        if url.isEmpty {
+            settings["PROXY_URL"] = nil
+            settings["PROXY_MANAGEMENT_KEY"] = nil
+        } else {
+            guard let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme ?? ""), parsed.host != nil else {
+                return "Use an address like https://server:8317."
+            }
+            guard !key.trimmingCharacters(in: .whitespaces).isEmpty else { return "A remote proxy needs its management key." }
+            settings["PROXY_URL"] = url
+            settings["PROXY_MANAGEMENT_KEY"] = key.trimmingCharacters(in: .whitespaces)
+        }
+        do {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]).write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            return "Could not save settings: \(error.localizedDescription)"
+        }
+        return nil
+    }
+}
+
 struct DockSettingsView: View {
     @ObservedObject var store: CapacityStore
     var attach: (String) -> Void
+    @State private var proxyURL = ProxySettings.read()["PROXY_URL"] as? String ?? ""
+    @State private var proxyKey = ProxySettings.read()["PROXY_MANAGEMENT_KEY"] as? String ?? ""
+    @State private var proxyMessage = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("Dock settings").font(.title2.bold())
@@ -626,6 +674,25 @@ struct DockSettingsView: View {
                 Button("Restore defaults") {
                     store.dockScale = 1; store.dockLength = 820; store.roundIcons = false
                     store.showNames = true; store.dockOpacity = 1; attach("right")
+                }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Proxy server").font(.headline)
+                Text("Leave the address empty to use the local Docker proxy.").font(.caption).foregroundStyle(.secondary)
+                TextField("https://server:8317", text: $proxyURL).textFieldStyle(.roundedBorder)
+                SecureField("Management key", text: $proxyKey).textFieldStyle(.roundedBorder)
+                HStack {
+                    Text(proxyMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Save") {
+                        if let error = ProxySettings.save(url: proxyURL, key: proxyKey) {
+                            proxyMessage = error
+                        } else {
+                            proxyMessage = proxyURL.isEmpty ? "Using the local Docker proxy." : "Saved. Accounts reload from this server."
+                            store.refresh(force: true)
+                        }
+                    }
                 }
             }
         }.padding(26).frame(width: 390).background(Color(nsColor: .windowBackgroundColor)).preferredColorScheme(.dark)

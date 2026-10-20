@@ -47,5 +47,23 @@ class SetupTests(unittest.TestCase):
                 self.assertEqual(run.call_args.kwargs['env']['CLAUDE_PROXY_PORT'], '18317')
 
 
+    def test_remote_proxy_is_saved_only_after_it_answers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            with patch.object(cli, 'STATE', state), patch.object(cli, 'SETTINGS', state / 'settings.json'), \
+                    patch.dict(os.environ, {}, clear=True):
+                with patch.object(cli, 'management', return_value={'files': [{}, {}]}):
+                    cli.use_proxy('https://proxy.example.test:8317/', 'key')
+                self.assertEqual(cli.remote(), 'https://proxy.example.test:8317')
+                with patch.object(cli, 'management', side_effect=RuntimeError('HTTP 401')):
+                    with self.assertRaises(RuntimeError):
+                        cli.use_proxy('https://other.example.test', 'wrong')
+                self.assertEqual(cli.remote(), 'https://proxy.example.test:8317')
+                with self.assertRaises(ValueError):
+                    cli.use_proxy('ftp://proxy.example.test', 'key')
+                cli.use_proxy('local', '')
+                self.assertEqual(cli.remote(), '')
+
+
 if __name__ == '__main__':
     unittest.main()

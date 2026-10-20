@@ -11,6 +11,11 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = Path(os.environ.get('MAKO_CAPACITY_HOME', Path.home() / '.mako-capacity')).expanduser().resolve()
@@ -94,6 +99,74 @@ routing:
     SETTINGS.write_text(json.dumps(saved, indent=2) + '\n')
     SETTINGS.chmod(0o600)
     print(f'Configuration: {STATE}', flush=True)
+
+
+def remote():
+    """The proxy URL when CLIProxyAPI runs on another machine, else an empty string."""
+    return settings().get('PROXY_URL', '').rstrip('/')
+
+
+def management(path, body=None):
+    request = urllib.request.Request(
+        remote() + '/v0/management/' + path, data=None if body is None else json.dumps(body).encode(),
+        headers={'Authorization': 'Bearer ' + settings().get('PROXY_MANAGEMENT_KEY', ''),
+                 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f'Proxy refused {path.split("?")[0]} (HTTP {error.code}); check the management key.') from error
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'Proxy at {remote()} is not reachable: {error}') from error
+
+
+def use_proxy(url, key):
+    """Save a remote proxy (or 'local' for Docker), then check that the management API answers."""
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    saved = settings()
+    if url == 'local':
+        saved.pop('PROXY_URL', None)
+        saved.pop('PROXY_MANAGEMENT_KEY', None)
+    else:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+            raise ValueError('Proxy URL must look like https://host:8317')
+        if not key:
+            raise ValueError('A remote proxy needs its management key (--key).')
+        saved.update(PROXY_URL=url.rstrip('/'), PROXY_MANAGEMENT_KEY=key)
+    previous = SETTINGS.read_text() if SETTINGS.exists() else '{}\n'
+    SETTINGS.write_text(json.dumps(saved, indent=2) + '\n')
+    SETTINGS.chmod(0o600)
+    if url == 'local':
+        print('Using the local Docker proxy.')
+        return
+    try:
+        files = management('auth-files').get('files', [])
+    except RuntimeError:
+        SETTINGS.write_text(previous)  # Keep the last working proxy when the new one fails.
+        raise
+    print(f'Using {remote()}: {len(files)} logins found.')
+    if parsed.scheme == 'http' and parsed.hostname not in ('127.0.0.1', 'localhost', '::1'):
+        print('Warning: plain http sends account tokens unencrypted; use https or an SSH tunnel.')
+
+
+def remote_login(provider):
+    """Sign in through the remote proxy's OAuth flow: open the link, then paste the callback URL."""
+    start = management(('anthropic' if provider == 'claude' else 'codex') + '-auth-url?is_webui=true')
+    print('Open this link and sign in:\n' + start['url'])
+    webbrowser.open(start['url'])
+    print('The browser then fails to load a localhost page. That is expected.')
+    callback = input('Paste the full URL from the address bar: ').strip()
+    management('oauth-callback', {'provider': 'anthropic' if provider == 'claude' else 'codex',
+                                  'redirect_url': callback})
+    for _ in range(30):
+        status = management('get-auth-status?state=' + urllib.parse.quote(start['state'])).get('status')
+        if status != 'wait':
+            break
+        time.sleep(1)
+    if status != 'ok':
+        raise RuntimeError(f'Login did not finish (status {status}).')
+    print('Signed in. The dock shows the account on its next refresh.')
 
 
 def docker():
@@ -192,18 +265,27 @@ def main():
     install = commands.add_parser('install', help='initialize proxies, install dock and CLI, start everything')
     install.add_argument('--rust-ui', action='store_true', help='use the portable Rust UI on macOS too')
     install.add_argument('--app-only', action='store_true', help='use existing proxy sources without starting Docker')
+    install.add_argument('--proxy-url', help='use a CLIProxyAPI on another machine instead of Docker')
+    install.add_argument('--key', default=os.environ.get('PROXY_MANAGEMENT_KEY', ''), help='its management key')
     commands.add_parser('init', help='generate proxy configuration without starting anything')
     commands.add_parser('up', help='start proxies and open installed dock')
     commands.add_parser('down', help='remove this stack’s containers; keep account data and app')
     commands.add_parser('status', help='show proxy container status')
     commands.add_parser('doctor', help='check macOS, build tools, Docker, and configured paths')
     commands.add_parser('open', help='open the dock')
+    proxy = commands.add_parser('proxy', help='use a CLIProxyAPI on another machine, or "local" for Docker')
+    proxy.add_argument('url', help='for example https://server:8317, or local')
+    proxy.add_argument('--key', default=os.environ.get('PROXY_MANAGEMENT_KEY', ''), help='the remote management key')
     logs = commands.add_parser('logs', help='show the last 100 proxy log lines')
     logs.add_argument('service', nargs='?', choices=['claude-proxy'])
     login = commands.add_parser('login', help='add a provider account')
     login.add_argument('provider', choices=['claude', 'codex', 'cursor'])
     args = parser.parse_args()
-    if args.command == 'init':
+    if args.command == 'install' and args.proxy_url:
+        use_proxy(args.proxy_url, args.key)
+    if args.command == 'proxy':
+        use_proxy(args.url, args.key)
+    elif args.command == 'init':
         initialize()
     elif args.command == 'install':
         if args.rust_ui:
@@ -213,14 +295,19 @@ def main():
             SETTINGS.write_text(json.dumps(saved, indent=2) + '\n')
         native_tools()
         install_codeburn()
-        if not args.app_only:
+        local = not args.app_only and not remote()
+        if local:
             docker()
             initialize()
         install_app()
-        if not args.app_only:
+        if local:
             compose('up', '-d')
         start_app()
         print('Add accounts: mako-capacity login claude / codex / cursor')
+    elif args.command in ('up', 'down', 'status', 'logs') and remote():
+        if args.command == 'up':
+            start_app()
+        print(f'The proxy runs at {remote()}; manage it on that machine.')
     elif args.command == 'up':
         native_tools()
         docker()
@@ -237,6 +324,9 @@ def main():
             compose('logs', '--tail', '100', *([args.service] if args.service else []))
         else:
             compose('down' if args.command == 'down' else 'ps')
+    elif args.command == 'doctor' and remote():
+        native_tools()
+        print(f'Proxy {remote()}: {len(management("auth-files").get("files", []))} logins.')
     elif args.command == 'doctor':
         native_tools()
         docker()
@@ -255,6 +345,8 @@ def main():
     elif args.provider == 'cursor':
         need('cursor-agent')
         run(shutil.which('cursor-agent'), 'login', env=dict(os.environ, **({'AGENT_CLI_CREDENTIAL_STORE': 'file'} if platform.system() != 'Darwin' else {})))
+    elif remote():
+        remote_login(args.provider)
     else:
         docker()
         initialize()

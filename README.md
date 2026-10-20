@@ -13,6 +13,13 @@ bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
 Screenshots use demo accounts.
 
+> [!WARNING]
+> **Windows and Linux are untested.** The developer has only run Mako Capacity on
+> macOS. The Windows and Linux builds compile and pass the automated checks in
+> GitHub Actions, but nobody has installed or used them on a real machine yet.
+> Hands-on testing on both is on the [roadmap](#roadmap). Please open an issue if
+> something breaks.
+
 The original Swift/AppKit renderer remains the default on macOS to preserve its
 appearance and menu-bar integration. Windows and Linux use the native Rust/egui
 port in `native/`, with the same dock geometry and assets. Quota collection and
@@ -178,8 +185,9 @@ only be hidden. Hidden IDs live in `~/.mako-capacity/hidden.json`.
 Herdr users can dock the capacity view beside their panes.
 
 ![Herdr widget docked on the right of a tab](docs/images/herdr-docked.png)
-It shows a progress ring per account (Kitty graphics, with a text fallback), a
-bar per quota window, and reset countdowns. It reads the same snapshot as the
+
+It shows a progress ring per account, a bar per quota window, and reset
+countdowns. It reads the same snapshot as the
 dock and skips accounts hidden in the dashboard.
 
 ```sh
@@ -198,7 +206,15 @@ a short name. From 50 columns it adds the plan,
 email, notes and today's local usage when the pane is tall enough. If accounts do
 not fit the height, each keeps only its tightest quota bar.
 `MAKO_CAPACITY_WIDTH` sets the starting width (default 36). In the pane, `r` forces a refresh, `p` pins or
-unpins and `q` closes it. Set `MAKO_CAPACITY_RINGS=0` to force the text fallback.
+unpins and `q` closes it.
+
+The rings are images drawn with the Kitty graphics protocol. They need a terminal
+that supports it, such as [Ghostty](https://ghostty.org), Kitty or WezTerm, and
+`kitty_graphics = true` under `[experimental]` in Herdr's config. This also applies
+when you attach to Herdr over SSH: the terminal on the machine you type on draws
+the rings. Other terminals, such as Termux, macOS Terminal or iTerm2, can show the
+rings without their icons, or no rings at all. Set `MAKO_CAPACITY_RINGS=0` to use
+the text layout instead.
 
 To keep the widget in view everywhere, pin it:
 
@@ -253,6 +269,37 @@ On PowerShell, set `$env:CLAUDE_PROXY_PORT` before `.\capacity.cmd install`. The
 port choice persists. Logins need their OAuth callback ports free: **54545** for
 Claude and **1455** for Codex. A `—` in the dock includes an explanation in the
 hover bubble.
+
+## Proxy on another machine
+
+CLIProxyAPI can run on a server instead of in Docker on this computer. Point Mako
+at it with the server address and its management key (the `MANAGEMENT_PASSWORD`
+from that server's `management.env`):
+
+```sh
+mako-capacity proxy https://server:8317 --key MANAGEMENT_KEY
+mako-capacity proxy local                     # back to the local Docker proxy
+./capacity install --proxy-url https://server:8317 --key MANAGEMENT_KEY   # new install, no Docker
+```
+
+`proxy` checks that the server answers before it saves anything; a wrong key keeps
+the last working setting. The same fields are in the dock's **Settings** under
+**Proxy server**. Leave the address empty to use the local proxy.
+
+With a remote proxy:
+
+- The dock reads logins through the management API and keeps a private copy in
+  `~/.mako-capacity/remote-auths/` (owner-only permissions), so it still shows the
+  last known accounts if the server is unreachable. A banner names the problem.
+- `mako-capacity login claude` and `login codex` print a sign-in link. After you
+  sign in, paste the address from the browser's address bar at the prompt.
+- **Delete from proxy** removes the login on the server.
+- `up`, `down`, `status` and `logs` do not manage the server; run those there.
+
+The management API returns account tokens. Use `https`, or reach the server
+through an SSH tunnel or a private network such as Tailscale. The server needs
+`allow-remote: true` under `management:` in its `config.yaml`, which this setup
+writes by default.
 
 ## Storage and existing proxies
 
@@ -330,6 +377,12 @@ The portable binary embeds its Python helpers and provider assets. Its UI thread
 never waits for quota requests or CodeBurn indexing. GitHub Actions runs Rust and
 Python checks on macOS, Windows, and Ubuntu. A deterministic native UI preview can
 be launched with `--preview /path/to/snapshot.json` for visual verification.
+
+## Roadmap
+
+- Install and use the portable dock on Windows and Linux, and fix what breaks.
+- Test the Herdr widget on Linux.
+- Test a CLIProxyAPI running on a separate server, not only on the same machine.
 
 ## Credits and licenses
 

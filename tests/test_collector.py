@@ -1,5 +1,7 @@
 import importlib.util
 import base64
+import io
+import os
 import json
 from pathlib import Path
 import tempfile
@@ -7,6 +9,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import urllib.error
+import urllib.parse
 
 spec = importlib.util.spec_from_file_location('collector', Path(__file__).parents[1] / 'collector.py')
 collector = importlib.util.module_from_spec(spec)
@@ -242,6 +245,38 @@ class CapacityParsingTests(unittest.TestCase):
             self.assertEqual(rows[0][1][1], {'Authorization': 'Bearer private-codex', 'ChatGPT-Account-Id': 'acct'})
             self.assertNotIn('private-', json.dumps([entry for entry, _ in rows]))
 
+    def test_remote_proxy_logins_are_mirrored_privately_and_reused(self):
+        files = {'claude-a.json': {'type': 'claude', 'organization_uuid': 'org', 'email': 'a@example.test',
+                                   'access_token': 'private-claude', 'refresh_token': 'r'}}
+        calls = []
+
+        def urlopen(request, timeout):
+            calls.append(request.full_url)
+            self.assertEqual(request.get_header('Authorization'), 'Bearer remote-key')
+            if request.full_url.endswith('/v0/management/auth-files'):
+                body = {'files': [{'name': name, 'type': row['type'], 'modtime': 't1'} for name, row in files.items()]}
+            else:
+                body = files[urllib.parse.unquote(request.full_url.split('name=')[1])]
+            return io.BytesIO(json.dumps(body).encode())
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            setup = home / '.mako-capacity'
+            setup.mkdir()
+            (setup / 'settings.json').write_text(json.dumps({
+                'PROXY_URL': 'https://proxy.example.test:8317/', 'PROXY_MANAGEMENT_KEY': 'remote-key'}))
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector.urllib.request, 'urlopen', side_effect=urlopen), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                first = [entry for entry, _ in collector.discover() if entry['provider'] == 'Claude']
+                second = [entry for entry, _ in collector.discover() if entry['provider'] == 'Claude']
+            mirror = setup / 'remote-auths/claude-a.json'
+            self.assertEqual([entry['email'] for entry in first], ['a@example.test'])
+            self.assertEqual(first[0]['id'], second[0]['id'])
+            self.assertEqual(sum('download' in url for url in calls), 1)
+            self.assertTrue(all(url.startswith('https://proxy.example.test:8317/v0/management/') for url in calls))
+            if os.name != 'nt':
+                self.assertEqual(mirror.stat().st_mode & 0o777, 0o600)
+
     def test_hidden_accounts_leave_the_snapshot_until_restored(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -272,7 +307,7 @@ class CapacityParsingTests(unittest.TestCase):
             requests = []
             with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
                     patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)), \
-                    patch.object(collector.urllib.request, 'urlopen', side_effect=lambda request, timeout: requests.append(request) or SimpleNamespace(close=lambda: None)):
+                    patch.object(collector.urllib.request, 'urlopen', side_effect=lambda request, timeout: requests.append(request) or io.BytesIO(b"{}")):
                 for entry, _ in collector.discover()[:2]:
                     collector.change_account('delete', entry['id'])
 

@@ -43,6 +43,65 @@ def proxy_path(key, legacy):
     return Path(setting(key, HOME / legacy)).expanduser()
 
 
+def proxy_base():
+    """CLIProxyAPI address: PROXY_URL for a proxy on another machine, else the local Docker port."""
+    return setting('PROXY_URL', '').rstrip('/') or 'http://127.0.0.1:' + str(setting('CLAUDE_PROXY_PORT', '8317'))
+
+
+def management(path, method='GET'):
+    """Call the CLIProxyAPI management API and return its JSON reply."""
+    key = setting('PROXY_MANAGEMENT_KEY', '')
+    if not key:
+        env = proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'management.env'
+        found = re.search(r'^MANAGEMENT_PASSWORD=(.+)$', env.read_text() if env.exists() else '', re.M)
+        key = found.group(1).strip() if found else ''
+    if not key:
+        raise RuntimeError('Proxy management key not found; set it in Mako settings.')
+    request = urllib.request.Request(proxy_base() + '/v0/management/' + path, method=method,
+                                     headers={'Authorization': 'Bearer ' + key})
+    with urllib.request.urlopen(request, timeout=12) as response:
+        return json.load(response)
+
+
+WARNINGS = []  # ponytail: module-level, one collector run per process.
+
+
+def remote_auths():
+    """Mirror a remote proxy's login files into a private folder and return it.
+
+    Only files whose modification time changed are downloaded again. If the
+    proxy is unreachable, the last mirror stays in use.
+    """
+    mirror = setup_dir() / 'remote-auths'
+    mirror.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        files = management('auth-files').get('files', [])
+    except urllib.error.HTTPError as error:
+        WARNINGS.append(f'Proxy at {proxy_base()} refused the management key (HTTP {error.code}).')
+        return mirror
+    except (OSError, ValueError, RuntimeError) as error:
+        WARNINGS.append(f'Proxy at {proxy_base()} is not reachable; showing the last known logins.')
+        return mirror
+    index = read_json(mirror / '.index.json')
+    names = set()
+    for row in files:
+        name = row.get('name') or ''
+        if not name.endswith('.json') or '/' in name or row.get('type') not in ('claude', 'codex'):
+            continue
+        names.add(name)
+        if index.get(name) != row.get('modtime') or not (mirror / name).exists():
+            try:
+                write_private(mirror / name, management('auth-files/download?name=' + urllib.parse.quote(name)))
+                index[name] = row.get('modtime')
+            except (OSError, ValueError, RuntimeError):
+                continue
+    for path in mirror.glob('*.json'):
+        if path.name not in names:
+            path.unlink()
+    write_private(mirror / '.index.json', {name: index[name] for name in names if name in index})
+    return mirror
+
+
 def iso_timestamp(value):
     if isinstance(value, (int, float)):
         return float(value)
@@ -187,7 +246,7 @@ def discover():
         identity = row.get('organizationUuid') or row.get('email') or slot
         title = row.get('title') or row.get('name')
         saved[identity] = (account('Claude', row.get('email'), identity, title, source='Claude saved account'), None)
-    auths = proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'auths'
+    auths = remote_auths() if setting('PROXY_URL', '') else proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'auths'
     # A proxy deletion must not resurrect an account from the legacy backup.
     claude = {} if auths.is_dir() else saved.copy()
     for path in sorted(auths.glob('*.json')):
@@ -222,7 +281,9 @@ def discover():
             headers['ChatGPT-Account-Id'] = row['account_id']
         codex[identity] = (entry, ('https://chatgpt.com/backend-api/wham/usage', headers) if headers else None)
     # The separate Codex proxy is legacy: read it only while CLIProxyAPI has no Codex login.
-    rows = [] if codex else read_json(proxy_path('CODEX_PROXY_DIR', 'codex-proxy') / 'data/accounts.json').get('accounts', [])
+    # A remote proxy replaces the default local folder; an explicit CODEX_PROXY_DIR still applies.
+    legacy = not codex and (not setting('PROXY_URL', '') or setting('CODEX_PROXY_DIR', ''))
+    rows = read_json(proxy_path('CODEX_PROXY_DIR', 'codex-proxy') / 'data/accounts.json').get('accounts', []) if legacy else []
     for row in rows:
         identity = row.get('accountId') or row.get('email') or row.get('id')
         label = PLANS.get(row.get('planType'), row.get('planType') or '')
@@ -319,14 +380,14 @@ def delete_from_proxy(entry):
     """Remove an account through its proxy's API so the running proxy forgets it too."""
     ref = entry.get('proxyRef')
     if entry['source'] == 'CLI proxy' and ref:
-        env = (proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'management.env')
-        password = re.search(r'^MANAGEMENT_PASSWORD=(.+)$', env.read_text() if env.exists() else '', re.M)
-        if not password:
-            raise RuntimeError('Proxy management password not found; delete it in the proxy dashboard.')
-        url = 'http://127.0.0.1:{}/v0/management/auth-files?name={}'.format(
-            setting('CLAUDE_PROXY_PORT', '8317'), urllib.parse.quote(ref))
-        headers = {'Authorization': 'Bearer ' + password.group(1).strip()}
-    elif entry['provider'] == 'Codex' and ref:
+        try:
+            management('auth-files?name=' + urllib.parse.quote(ref), method='DELETE')
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(f'The proxy refused the delete (HTTP {error.code}).') from error
+        except (OSError, ValueError) as error:
+            raise RuntimeError('The proxy is not reachable; start it and try again.') from error
+        return
+    if entry['provider'] == 'Codex' and ref:
         config = proxy_path('CODEX_PROXY_DIR', 'codex-proxy') / 'data/local.yaml'
         key = re.search(r'^\s*proxy_api_key:\s*["\']?([^"\'\s#]+)', config.read_text() if config.exists() else '', re.M)
         headers = {'Authorization': 'Bearer ' + key.group(1)} if key and key.group(1) != 'null' else {}
@@ -374,7 +435,8 @@ def collect(force=False, include_usage=True):
         usage = cached_usage.get('providers', {}) if cached_usage.get('day') == dt.date.today().isoformat() else {}
     for entry in result:
         entry['localUsage'] = usage.get(entry['provider'], {'status': 'partial', 'message': 'Indexing local usage…'})
-    snapshot = {'updatedAt': time.time(), 'accounts': result, 'hidden': hidden}
+    snapshot = {'updatedAt': time.time(), 'accounts': result, 'hidden': hidden,
+                'warning': ' '.join(WARNINGS) or None}
     write_private(CACHE, snapshot)
     CACHE.parent.chmod(0o700)
     return snapshot
