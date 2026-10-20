@@ -3,6 +3,7 @@ __pycache__/
 *-snapshot.json
 *.png
 !Resources/*.png
+!docs/images/*.png
 screenshots/
 *.layout.json
 *.pyc

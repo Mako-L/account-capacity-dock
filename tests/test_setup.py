@@ -35,16 +35,16 @@ class SetupTests(unittest.TestCase):
             state = Path(directory)
             custom = (state / 'custom proxy').resolve()
             with patch.object(cli, 'STATE', state), patch.object(cli, 'SETTINGS', state / 'settings.json'), \
-                    patch.dict(os.environ, {'CLAUDE_PROXY_DIR': str(custom), 'CODEX_PROXY_PORT': '18080'}, clear=True):
+                    patch.dict(os.environ, {'CLAUDE_PROXY_DIR': str(custom), 'CLAUDE_PROXY_PORT': '18317'}, clear=True):
                 cli.initialize()
             with patch.object(cli, 'STATE', state), patch.object(cli, 'SETTINGS', state / 'settings.json'), \
                     patch.dict(os.environ, {}, clear=True):
                 self.assertEqual(cli.paths()['CLAUDE_PROXY_DIR'], str(custom))
-                self.assertEqual(cli.settings()['CODEX_PROXY_PORT'], '18080')
+                self.assertEqual(cli.settings()['CLAUDE_PROXY_PORT'], '18317')
                 with patch.object(cli, 'run') as run:
                     cli.compose('up', '-d')
                 self.assertEqual(run.call_args.kwargs['env']['CLAUDE_PROXY_DIR'], str(custom))
-                self.assertEqual(run.call_args.kwargs['env']['CODEX_PROXY_PORT'], '18080')
+                self.assertEqual(run.call_args.kwargs['env']['CLAUDE_PROXY_PORT'], '18317')
 
 
 if __name__ == '__main__':

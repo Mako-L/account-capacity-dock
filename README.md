@@ -1,9 +1,17 @@
 # Mako Capacity
 
-A capacity dock for **every Claude and Codex proxy account**, plus your active
-**Cursor CLI account**. It keeps the original black dock, curved edge flares,
-quota rings, provider icons, account labels, and inward-facing hover bubbles
-inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
+A capacity dock for **every Claude and Codex account in your local CLIProxyAPI**,
+plus your active **Cursor CLI account**. It keeps the original black dock, curved
+edge flares, quota rings, provider icons, account labels, and inward-facing hover
+bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
+
+<p align="center">
+  <img src="docs/images/dock.png" alt="The dock with a hover card: rings show percent used per account" width="420">
+</p>
+
+![All accounts: a card per account with quota bars, reset times and today's local usage](docs/images/all-accounts.png)
+
+Screenshots use demo accounts.
 
 The original Swift/AppKit renderer remains the default on macOS to preserve its
 appearance and menu-bar integration. Windows and Linux use the native Rust/egui
@@ -61,8 +69,8 @@ Add that CLI directory to your persistent user PATH for future terminals. You ca
 also keep using `./capacity` or `.\capacity.cmd` from the checkout.
 
 `install` creates private proxy directories and random Claude API/management
-keys, installs CodeBurn, builds and installs the dock, starts the Claude and Codex
-containers, and opens the app. Re-running setup preserves existing proxy
+keys, installs CodeBurn, builds and installs the dock, starts the CLIProxyAPI
+container (it serves Claude and Codex), and opens the app. Re-running setup preserves existing proxy
 credentials and configuration. Add accounts next; setup cannot authenticate your
 provider accounts for you. Keep this checkout because the installed CLI launcher
 references `scripts/capacity.py`.
@@ -81,7 +89,7 @@ original Swift source and `build.sh` remain available.
 
 ```sh
 mako-capacity login claude   # repeat for each Claude account
-mako-capacity login codex    # open the Codex account dashboard
+mako-capacity login codex    # repeat for each ChatGPT account
 mako-capacity login cursor   # requires the separately installed Cursor CLI
 ```
 
@@ -111,8 +119,8 @@ Windows dock needs to be able to read its `cli-config.json` and `auth.json`.
 
 **Cursor supports one active CLI identity.** Multiple Cursor account inventories,
 account rotation, and Cursor traffic proxying are not provided by this stack.
-Claude and Codex can show multiple accounts because their proxies maintain local
-account inventories. Refresh the dock after signing in.
+Claude and Codex can show multiple accounts because the proxy keeps a local
+account inventory. Refresh the dock after signing in.
 
 ## Token usage and dollar cost on hover
 
@@ -168,6 +176,8 @@ only be hidden. Hidden IDs live in `~/.mako-capacity/hidden.json`.
 ## Herdr widget
 
 Herdr users can dock the capacity view beside their panes.
+
+![Herdr widget docked on the right of a tab](docs/images/herdr-docked.png)
 It shows a progress ring per account (Kitty graphics, with a text fallback), a
 bar per quota window, and reset countdowns. It reads the same snapshot as the
 dock and skips accounts hidden in the dashboard.
@@ -176,6 +186,11 @@ dock and skips accounts hidden in the dashboard.
 herdr plugin link "$PWD/herdr-plugin"
 herdr plugin action invoke open-right --plugin mako-capacity   # or open-left
 ```
+
+<p align="center">
+  <img src="docs/images/herdr-compact.png" alt="Narrow widget: ring, percent and name" width="160">
+  <img src="docs/images/herdr-wide.png" alt="Wide widget: plan, email, every quota window and today's usage" width="620">
+</p>
 
 The layout follows the pane width: under 12 columns it shows only the rings,
 centred. Under 30 columns it shows the ring (with the provider icon), percent and
@@ -214,17 +229,16 @@ tab_bar_right = [{ type = "command", command = "python3 \"$HOME/Documents/GitHub
 ## Operations and troubleshooting
 
 ```sh
-mako-capacity up                  # start proxies and open the dock
+mako-capacity up                  # start the proxy and open the dock
 mako-capacity open                # open only the dock
-mako-capacity status              # show this stack's containers
-mako-capacity logs                # last 100 lines of both proxy logs
-mako-capacity logs claude-proxy
+mako-capacity status              # show this stack's container
+mako-capacity logs                # last 100 proxy log lines
 mako-capacity doctor              # check native tools, CodeBurn, Docker, configuration
 mako-capacity down                # remove containers; retain account data
 ```
 
-`down` stops this stack's containers; quit the dock separately. Containers use
-`restart: unless-stopped` and return when Docker starts. Add the installed app to
+`down` stops this stack's container; quit the dock separately. The container uses
+`restart: unless-stopped` and returns when Docker starts. Add the installed app to
 your operating system's startup/login items if you want the dock at login.
 
 If Docker cannot connect, start its daemon/Desktop app. If a port is already
@@ -232,14 +246,13 @@ allocated, stop the conflicting service or select different host ports before
 installation. On macOS/Linux:
 
 ```sh
-CLAUDE_PROXY_PORT=18317 CODEX_PROXY_PORT=18080 CODEX_CALLBACK_PORT=11455 ./capacity install
+CLAUDE_PROXY_PORT=18317 ./capacity install
 ```
 
-On PowerShell, set `$env:CLAUDE_PROXY_PORT`, `$env:CODEX_PROXY_PORT`, and
-`$env:CODEX_CALLBACK_PORT` before `.\capacity.cmd install`. Port choices persist;
-`login codex` opens the chosen dashboard port. If the OAuth flow still targets
-1455, keep the default callback port or complete the callback manually through
-the dashboard. A `—` in the dock includes an explanation in the hover bubble.
+On PowerShell, set `$env:CLAUDE_PROXY_PORT` before `.\capacity.cmd install`. The
+port choice persists. Logins need their OAuth callback ports free: **54545** for
+Claude and **1455** for Codex. A `—` in the dock includes an explanation in the
+hover bubble.
 
 ## Storage and existing proxies
 
@@ -248,9 +261,8 @@ New installations keep persistent data under `~/.mako-capacity/` (on Windows,
 
 | Directory/file | Contents |
 | --- | --- |
-| `claude-proxy/auths/` | Claude OAuth credentials managed by CLIProxyAPI |
-| `claude-proxy/config.yaml`, `management.env`, `client-key` | Claude configuration and generated local keys |
-| `codex-proxy/data/`, `codex-proxy/config/`, `codex-proxy/.env` | Codex accounts and configuration |
+| `claude-proxy/auths/` | Claude and Codex OAuth credentials managed by CLIProxyAPI |
+| `claude-proxy/config.yaml`, `management.env`, `client-key` | Proxy configuration and generated local keys |
 | `settings.json` | Proxy paths, ports, runtime paths, renderer selection |
 | `dependencies/`, `codeburn-cache/` | Installed CodeBurn and its separate accounting cache |
 
@@ -260,26 +272,30 @@ The credential-free snapshots are stored in:
 - Windows: `%LOCALAPPDATA%\mako-capacity\`.
 - Linux: `${XDG_CACHE_HOME:-~/.cache}/mako-capacity/`.
 
-Proxy data is private: do not commit it or share it in logs. Both APIs and callback
-ports bind to **127.0.0.1**. Claude's management endpoint allows requests from the
+Proxy data is private: do not commit it or share it in logs. The API and callback
+ports bind to **127.0.0.1**. The management endpoint allows requests from the
 Docker bridge and requires the random password in `management.env`; its optional
 dashboard is `http://localhost:8317/management.html`. `client-key` separately
 authenticates API traffic. Setup does not change model routing in your shell or
 editor. Credential renewal remains with the upstream tools.
 
-Already running proxies? Install the dock and CodeBurn without starting Docker:
+Already running a proxy? Install the dock and CodeBurn without starting Docker:
 
 ```sh
 ./capacity install --app-only
 ```
 
-Without configured proxy paths, the collector reads `~/claude-proxy/auths/` and
-`~/codex-proxy/data/accounts.json`. To persist custom existing locations first:
+Without a configured proxy path, the collector reads `~/claude-proxy/auths/`. To
+persist a custom existing location first:
 
 ```sh
-CLAUDE_PROXY_DIR="$HOME/claude-proxy" CODEX_PROXY_DIR="$HOME/codex-proxy" ./capacity init
+CLAUDE_PROXY_DIR="$HOME/claude-proxy" ./capacity init
 ./capacity install --app-only
 ```
+
+An older separate [Codex Proxy](https://github.com/icebear0828/codex-proxy) still
+works as a read-only source: set `CODEX_PROXY_DIR` and the dock reads its
+`data/accounts.json` until CLIProxyAPI has a Codex login.
 
 `init` preserves existing files and does not start containers. The saved Claude
 inventory in `~/.claude-swap-backup/sequence.json` supplies labels for matching
@@ -288,11 +304,11 @@ deleted proxy accounts stay removed, even when they remain in that backup.
 The dock and All accounts view check the local inventory every ten seconds.
 [.env.example](.env.example) lists optional path, port, and memory settings.
 
-Both proxy images in [deploy/compose.yaml](deploy/compose.yaml) are pinned by
+The proxy image in [deploy/compose.yaml](deploy/compose.yaml) is pinned by
 digest. Pull this repository and re-run `install` to update the app. Upgrading
-proxy images requires changing their Compose digests and running `up`; account
+the proxy image requires changing its Compose digest and running `up`; account
 data survives container replacement. Back up the private data before upstream
-upgrades. Codex Proxy's separate non-commercial terms apply to its container.
+upgrades.
 
 ## Development and checks
 
@@ -327,8 +343,8 @@ LLimit app. This repository is separate from both full apps.
 | --- | --- | --- |
 | [CodeBurn](https://github.com/getagentseal/codeburn), AgentSeal | Original dock design, geometry, icons, quota conventions, token/cost accounting dependency | MIT; [bundled notice](Resources/CodeBurn-LICENSE.txt); npm package includes third-party notices |
 | [LLimit](https://github.com/githajae/LLimit), githajae | Cursor quota labels/rounding and cube icon | MIT; [bundled notice](Resources/LLimit-LICENSE.txt) |
-| [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), Router-For.ME and contributors | Claude OAuth account store and Docker service | [MIT](https://github.com/router-for-me/CLIProxyAPI/blob/main/LICENSE) |
-| [Codex Proxy](https://github.com/icebear0828/codex-proxy), IceBear and contributors | Codex account dashboard and Docker service | [Non-commercial upstream terms](https://github.com/icebear0828/codex-proxy/blob/master/README_EN.md#-license) |
+| [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), Router-For.ME and contributors | Claude and Codex OAuth account store and Docker service | [MIT](https://github.com/router-for-me/CLIProxyAPI/blob/main/LICENSE) |
+| [Herdr](https://herdr.dev) | Terminal workspace that hosts the optional widget | Separately installed; Herdr terms apply |
 | [egui/eframe](https://github.com/emilk/egui), Emil Ernerfeldt and contributors | Native Rust rendering/window integration | MIT or Apache-2.0 |
 | [serde](https://serde.rs/), [serde_json](https://github.com/serde-rs/json) | Rust snapshot decoding and settings | MIT or Apache-2.0 |
 | [dirs](https://github.com/dirs-dev/dirs-rs) | Native platform directory locations | MIT or Apache-2.0 |

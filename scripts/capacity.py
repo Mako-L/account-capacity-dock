@@ -42,7 +42,7 @@ def settings():
 def paths():
     saved = settings()
     return {key: str(Path(os.environ.get(key, saved.get(key, STATE / name))).expanduser().resolve())
-            for key, name in [('CLAUDE_PROXY_DIR', 'claude-proxy'), ('CODEX_PROXY_DIR', 'codex-proxy')]}
+            for key, name in [('CLAUDE_PROXY_DIR', 'claude-proxy')]}
 
 
 def write_new(path, content):
@@ -58,8 +58,8 @@ def write_new(path, content):
 def initialize():
     os.umask(0o077)
     dirs = paths()
-    claude, codex = Path(dirs['CLAUDE_PROXY_DIR']), Path(dirs['CODEX_PROXY_DIR'])
-    for folder in [STATE, claude, claude / 'auths', claude / 'logs', codex, codex / 'data', codex / 'config']:
+    claude = Path(dirs['CLAUDE_PROXY_DIR'])
+    for folder in [STATE, claude, claude / 'auths', claude / 'logs']:
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
     key = secrets.token_urlsafe(32)
     write_new(claude / 'client-key', key + '\n')
@@ -84,14 +84,13 @@ routing:
   session-affinity: true
   session-affinity-ttl: "1h"
 ''')
-    write_new(codex / '.env', 'CODEX_PLATFORM=linux\n')
     saved = settings()
     saved.update(dirs)
-    if os.environ.get('CURSOR_DIR'):
-        saved['CURSOR_DIR'] = str(Path(os.environ['CURSOR_DIR']).expanduser().resolve())
-    for key, default in [('CODEX_PROXY_PORT', '8080'), ('CLAUDE_PROXY_PORT', '8317'),
-                         ('CODEX_CALLBACK_PORT', '1455')]:
-        saved[key] = os.environ.get(key, saved.get(key, default))
+    # CURSOR_DIR, and CODEX_PROXY_DIR for a legacy Codex Proxy inventory, are read-only paths.
+    for key in ('CURSOR_DIR', 'CODEX_PROXY_DIR'):
+        if os.environ.get(key):
+            saved[key] = str(Path(os.environ[key]).expanduser().resolve())
+    saved['CLAUDE_PROXY_PORT'] = os.environ.get('CLAUDE_PROXY_PORT', saved.get('CLAUDE_PROXY_PORT', '8317'))
     SETTINGS.write_text(json.dumps(saved, indent=2) + '\n')
     SETTINGS.chmod(0o600)
     print(f'Configuration: {STATE}', flush=True)
@@ -200,7 +199,7 @@ def main():
     commands.add_parser('doctor', help='check macOS, build tools, Docker, and configured paths')
     commands.add_parser('open', help='open the dock')
     logs = commands.add_parser('logs', help='show the last 100 proxy log lines')
-    logs.add_argument('service', nargs='?', choices=['claude-proxy', 'codex-proxy'])
+    logs.add_argument('service', nargs='?', choices=['claude-proxy'])
     login = commands.add_parser('login', help='add a provider account')
     login.add_argument('provider', choices=['claude', 'codex', 'cursor'])
     args = parser.parse_args()
