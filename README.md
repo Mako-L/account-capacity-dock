@@ -1,100 +1,341 @@
 # Mako Capacity
 
-A separate native macOS app inspired by CodeBurn's Capacity Dock, showing **every
-Claude, Codex, and Cursor account together**. Its black dock attaches flush to the
-right edge of the screen, with quota rings, percentages, account labels, and
-inward-facing detail bubbles.
+A capacity dock for **every Claude and Codex proxy account**, plus your active
+**Cursor CLI account**. It keeps the original black dock, curved edge flares,
+quota rings, provider icons, account labels, and inward-facing hover bubbles
+inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
-## Use
+The original Swift/AppKit renderer remains the default on macOS to preserve its
+appearance and menu-bar integration. Windows and Linux use the native Rust/egui
+port in `native/`, with the same dock geometry and assets. Quota collection and
+CodeBurn accounting run separately from rendering; a slow first usage scan does
+not hold up the dock's quota refresh.
 
-Launch **Mako Capacity.app**. The capacity dock appears on the right edge; it stays
-above ordinary windows and follows you across Spaces. Hover an account to see its
-email, quota windows, reset countdowns, and connection status. Click an account
-to open the overview with all accounts visible together.
+## Prerequisites
 
-Drag the dock by its handle to move it along the edge. Drop it within 48 points
-of any screen edge to attach there, or pull it away to float. Position and edge
-are remembered. The menu-bar gauge offers **Attach to screen → Right**, show/hide,
-refresh, overview, and quit. Closing the overview leaves the dock running.
+On every platform, install Git, **Python 3.9+**, **Node.js 22.13+** (including npm),
+and Docker with **Compose v2**. Start Docker before running the complete setup.
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) is suitable for
+macOS and Windows; Windows needs its Linux container engine. Linux can use Docker
+Engine plus the Compose plugin.
 
-Click the dock's **gear** (or choose **Dock settings…** from the menu-bar gauge)
-to adjust size, length, circular or rounded-square icons, account labels,
-background opacity, and screen edge. Changes apply immediately and persist across
-launches. Short docks scroll to keep every account accessible. **Restore defaults**
-returns to the original right-edge appearance. Settings also open with Command-comma.
+| Platform | Native build requirements |
+| --- | --- |
+| macOS 14+, Intel or Apple Silicon | Xcode Command Line Tools: `xcode-select --install` |
+| Windows 10/11 | [Rust stable](https://rustup.rs/) and Visual Studio Build Tools with **Desktop development with C++** |
+| Linux desktop | Rust stable, a C toolchain, pkg-config, X11/Wayland/OpenGL development libraries |
 
-The dock reports **percent used**. Claude and Codex use the most constrained
-reported quota window. Cursor matches the custom LLimit display: **Models**,
-**Other**, and **Grok** appear separately on the rail, with full names and each
-reset time in the overview and hover details. Its ring represents Cursor Models.
-Missing capacity is shown as `—`, with an explanation in the detail
-bubble. Exhausted and disconnected accounts remain visible.
-
-## Account sources
-
-- **Claude:** reads the saved account inventory from `~/.claude-swap-backup/`
-  and OAuth access tokens owned by the proxy in `~/claude-proxy/auths/`.
-  Accounts are deduplicated by organization identity. Saved accounts without a
-  usable proxy login remain visible with a reconnect message.
-- **Codex:** reads every account in `~/codex-proxy/data/accounts.json`, including
-  cached quota as a fallback, then fetches current usage using the access token.
-- **Cursor:** reads the Cursor CLI identity from `~/.cursor/cli-config.json` and
-  its access token from the macOS Keychain (`cursor-access-token`, `cursor-user`).
-  If launched with `AGENT_CLI_CREDENTIAL_STORE=file`, it uses `~/.cursor/auth.json`
-  instead. Usage is queried for that CLI login through `GetCurrentPeriodUsage`
-  and `GetSandUsageStatus`, matching LLimit's message percentages, rounding,
-  Cursor Models / Other Models / Grok Bot breakdown, and optional on-demand spend.
-  The editor's login is independent.
-
-The app never rotates refresh tokens, signs you in, switches accounts, or routes
-model traffic. Credential lifecycle remains with the existing apps and proxies.
-The local snapshot contains account metadata and capacity, never tokens. Network
-usage checks run at most every five minutes; refresh can request an earlier read,
-but respects rate-limit backoff. Failed reads keep previous capacity visible with
-a stale status. Authentication failures clear quota so it cannot look live.
-
-Add Claude accounts in the Claude proxy dashboard. Add Codex accounts in the Codex
-proxy. Sign in to Cursor CLI with `cursor-agent login`. The next inventory refresh picks up new
-proxy accounts automatically. A saved account without a login remains visible.
-
-## Build
-
-Requires macOS 14+, Xcode Command Line Tools (Swift and Python 3), and the account
-sources above. There are no package dependencies.
+For Debian/Ubuntu Linux:
 
 ```sh
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libgl1-mesa-dev libx11-dev \
+  libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libxkbcommon-dev libwayland-dev
+```
+
+The installer installs the pinned **CodeBurn 0.9.25** dependency locally under
+`~/.mako-capacity/dependencies`; it does not replace your global CodeBurn install.
+Python and Node paths are saved so the installed dock can run outside your shell.
+
+## Install and start everything
+
+macOS or Linux:
+
+```sh
+git clone https://github.com/Mako-L/account-capacity-dock.git
+cd account-capacity-dock
+./capacity install
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/Mako-L/account-capacity-dock.git
+cd account-capacity-dock
+.\capacity.cmd install
+$env:Path = "$HOME\.local\bin;$env:Path"
+```
+
+Add that CLI directory to your persistent user PATH for future terminals. You can
+also keep using `./capacity` or `.\capacity.cmd` from the checkout.
+
+`install` creates private proxy directories and random Claude API/management
+keys, installs CodeBurn, builds and installs the dock, starts the Claude and Codex
+containers, and opens the app. Re-running setup preserves existing proxy
+credentials and configuration. Add accounts next; setup cannot authenticate your
+provider accounts for you. Keep this checkout because the installed CLI launcher
+references `scripts/capacity.py`.
+
+Installed UI locations:
+
+- macOS: `~/Applications/Mako Capacity.app`.
+- Windows: `%USERPROFILE%\.mako-capacity\bin\mako-capacity.exe`.
+- Linux: `~/.mako-capacity/bin/mako-capacity`.
+
+To use the Rust renderer on macOS as well, install Rust and run
+`./capacity install --rust-ui`. This choice persists in `settings.json`. The
+original Swift source and `build.sh` remain available.
+
+## Add your accounts
+
+```sh
+mako-capacity login claude   # repeat for each Claude account
+mako-capacity login codex    # open the Codex account dashboard
+mako-capacity login cursor   # requires the separately installed Cursor CLI
+```
+
+**Claude:** an interactive temporary container prints an authorization URL. Open
+it in your browser and sign in to the intended account. The localhost callback
+uses port **54545**; paste the full callback URL at the prompt if requested.
+Credentials are saved in the persistent `auths/` directory. Repeat for each
+account; the proxy watches that directory.
+
+**Codex:** `mako-capacity login codex` works the same way through CLIProxyAPI,
+with the callback on port **1455**. Codex logins land in the same `auths/`
+directory. Point Codex at `http://127.0.0.1:8317/v1` with the key in `client-key`.
+To ask for the fast tier on a model, add a `requests.payload.override` rule that
+sets `service_tier: ultrafast` for it. The separate Codex Proxy is legacy: the
+dock reads its `accounts.json` only while CLIProxyAPI has no Codex login.
+
+**Cursor:** install the [Cursor CLI](https://cursor.com/docs/cli/installation),
+then use `mako-capacity login cursor` or `cursor-agent login`. The CLI identity is
+independent of the editor login. macOS reads the token from Keychain
+(`cursor-access-token`, `cursor-user`); Windows/Linux use the CLI's file store at
+`~/.cursor/auth.json`. The login command selects file storage outside macOS.
+
+For Cursor CLI in Windows WSL, sign in inside WSL with
+`AGENT_CLI_CREDENTIAL_STORE=file cursor-agent login`, then configure `CURSOR_DIR`
+to the distro's accessible `.cursor` directory when initializing setup. The
+Windows dock needs to be able to read its `cli-config.json` and `auth.json`.
+
+**Cursor supports one active CLI identity.** Multiple Cursor account inventories,
+account rotation, and Cursor traffic proxying are not provided by this stack.
+Claude and Codex can show multiple accounts because their proxies maintain local
+account inventories. Refresh the dock after signing in.
+
+## Token usage and dollar cost on hover
+
+Every account's hover bubble and overview card include **today's local token
+usage** and **API-equivalent USD cost** from CodeBurn, with separate input, output,
+cache-read, and cache-write counts. Cursor uses CodeBurn's `cursor-agent` source,
+so its CLI usage is separate from editor usage. Cursor's provider-reported
+on-demand spend is shown separately for its billing cycle.
+
+CodeBurn reads session logs on this machine. Those logs do not identify which
+proxy account handled a request, so the cards clearly say **all local accounts**:
+these are provider/tool totals, repeated for matching accounts, and must not be
+summed across account cards. They are not account-specific billing totals, quota
+percentages converted to tokens, or your subscription invoice.
+
+Missing counters remain `—`. Estimated usage, incomplete indexing, missing model
+prices, and stale results are labeled. The first CodeBurn scan can take several
+minutes on a large session history. Quota checks continue while it runs, and
+later usage refreshes reuse CodeBurn's cache. Only the selected summary fields
+are saved in Mako Capacity's cache; transcripts and tokens used for authentication
+are not copied into its snapshot.
+
+## Use the dock
+
+Hover an account for its quota windows, reset countdowns, status, token usage,
+and cost. Click an account or the grid button to open all accounts. The gear
+opens settings for scale, circular/rounded-square icons, account labels,
+opacity, and screen edge. The dock fits the number of accounts automatically and
+scrolls when the list exceeds the screen. The chosen icon shape applies in the
+dock, hover details, and all-accounts view. Scroll edges use soft gradient shadows
+inspired by Bubo’s `ShadowScrollView`: shadows appear only where there is more
+content to scroll. Settings persist across launches.
+
+The original macOS renderer also offers its menu-bar gauge, Command-comma,
+drag-to-edge attachment, and positioning across Spaces. The portable renderer
+uses native windows, a drag handle, dock settings, and a right-click menu for
+refresh/quit. On Wayland, the compositor controls placement and always-on-top
+behavior; the portable dock starts floating. X11 is recommended when you need
+precise edge attachment. System font rendering can differ between platforms.
+
+The ring reports **percent used**. Claude and Codex use their most constrained
+quota window. Cursor's ring represents **Cursor Models**; **Other Models** and
+**Grok Bot** appear separately on the rail and in detail. Exhausted, disconnected,
+and unknown-capacity accounts remain visible.
+
+To remove an account, use its card in **All accounts** (the `⋯` menu on macOS, the
+buttons under the card in the portable renderer). **Hide** removes the account from Mako
+only and keeps its credentials; **Hidden** in the header restores it. **Delete from
+proxy** asks for confirmation, then removes the credentials through the proxy
+API; sign in again to add the account back. The Cursor CLI login can
+only be hidden. Hidden IDs live in `~/.mako-capacity/hidden.json`.
+
+## Herdr widget
+
+Herdr users can dock the capacity view beside their panes.
+It shows a progress ring per account (Kitty graphics, with a text fallback), a
+bar per quota window, and reset countdowns. It reads the same snapshot as the
+dock and skips accounts hidden in the dashboard.
+
+```sh
+herdr plugin link "$PWD/herdr-plugin"
+herdr plugin action invoke open-right --plugin mako-capacity   # or open-left
+```
+
+The layout follows the pane width: under 12 columns it shows only the rings,
+centred. Under 30 columns it shows the ring (with the provider icon), percent and
+a short name. From 50 columns it adds the plan,
+email, notes and today's local usage when the pane is tall enough. If accounts do
+not fit the height, each keeps only its tightest quota bar.
+`MAKO_CAPACITY_WIDTH` sets the starting width (default 36). In the pane, `r` forces a refresh, `p` pins or
+unpins and `q` closes it. Set `MAKO_CAPACITY_RINGS=0` to force the text fallback.
+
+To keep the widget in view everywhere, pin it:
+
+```sh
+herdr plugin action invoke pin-right --plugin mako-capacity   # or pin-left
+herdr plugin action invoke unpin --plugin mako-capacity
+```
+
+In the widget, `p` pins or unpins it on its current side. Anywhere in Herdr, bind the
+`toggle-pin` action to a key, for example in `~/.config/herdr/config.toml`:
+
+```toml
+[[keys.command]]
+key = "prefix+alt+p"
+type = "shell"
+command = "herdr plugin action invoke toggle-pin --plugin mako-capacity"
+```
+
+While pinned, one widget moves into each tab you focus, so only one widget process
+runs. Widgets and the tab bar line share one collector run per minute. For a one-line summary instead, add this to `[ui]` in `~/.config/herdr/config.toml`, then run
+`herdr server reload-config`. The tab bar of every workspace then shows the percent
+used per account (`✳` Claude, `◎` Codex, `⬡` Cursor) with a pie (`○◔◑◕●`), updated every minute:
+
+```toml
+tab_bar_right = [{ type = "command", command = "python3 \"$HOME/Documents/GitHub/account-capacity-dock/herdr-plugin/capacity.py\" --status", interval_seconds = 60, timeout_seconds = 30 }]
+```
+
+## Operations and troubleshooting
+
+```sh
+mako-capacity up                  # start proxies and open the dock
+mako-capacity open                # open only the dock
+mako-capacity status              # show this stack's containers
+mako-capacity logs                # last 100 lines of both proxy logs
+mako-capacity logs claude-proxy
+mako-capacity doctor              # check native tools, CodeBurn, Docker, configuration
+mako-capacity down                # remove containers; retain account data
+```
+
+`down` stops this stack's containers; quit the dock separately. Containers use
+`restart: unless-stopped` and return when Docker starts. Add the installed app to
+your operating system's startup/login items if you want the dock at login.
+
+If Docker cannot connect, start its daemon/Desktop app. If a port is already
+allocated, stop the conflicting service or select different host ports before
+installation. On macOS/Linux:
+
+```sh
+CLAUDE_PROXY_PORT=18317 CODEX_PROXY_PORT=18080 CODEX_CALLBACK_PORT=11455 ./capacity install
+```
+
+On PowerShell, set `$env:CLAUDE_PROXY_PORT`, `$env:CODEX_PROXY_PORT`, and
+`$env:CODEX_CALLBACK_PORT` before `.\capacity.cmd install`. Port choices persist;
+`login codex` opens the chosen dashboard port. If the OAuth flow still targets
+1455, keep the default callback port or complete the callback manually through
+the dashboard. A `—` in the dock includes an explanation in the hover bubble.
+
+## Storage and existing proxies
+
+New installations keep persistent data under `~/.mako-capacity/` (on Windows,
+`%USERPROFILE%\.mako-capacity\`):
+
+| Directory/file | Contents |
+| --- | --- |
+| `claude-proxy/auths/` | Claude OAuth credentials managed by CLIProxyAPI |
+| `claude-proxy/config.yaml`, `management.env`, `client-key` | Claude configuration and generated local keys |
+| `codex-proxy/data/`, `codex-proxy/config/`, `codex-proxy/.env` | Codex accounts and configuration |
+| `settings.json` | Proxy paths, ports, runtime paths, renderer selection |
+| `dependencies/`, `codeburn-cache/` | Installed CodeBurn and its separate accounting cache |
+
+The credential-free snapshots are stored in:
+
+- macOS: `~/Library/Application Support/Mako Capacity/`.
+- Windows: `%LOCALAPPDATA%\mako-capacity\`.
+- Linux: `${XDG_CACHE_HOME:-~/.cache}/mako-capacity/`.
+
+Proxy data is private: do not commit it or share it in logs. Both APIs and callback
+ports bind to **127.0.0.1**. Claude's management endpoint allows requests from the
+Docker bridge and requires the random password in `management.env`; its optional
+dashboard is `http://localhost:8317/management.html`. `client-key` separately
+authenticates API traffic. Setup does not change model routing in your shell or
+editor. Credential renewal remains with the upstream tools.
+
+Already running proxies? Install the dock and CodeBurn without starting Docker:
+
+```sh
+./capacity install --app-only
+```
+
+Without configured proxy paths, the collector reads `~/claude-proxy/auths/` and
+`~/codex-proxy/data/accounts.json`. To persist custom existing locations first:
+
+```sh
+CLAUDE_PROXY_DIR="$HOME/claude-proxy" CODEX_PROXY_DIR="$HOME/codex-proxy" ./capacity init
+./capacity install --app-only
+```
+
+`init` preserves existing files and does not start containers. The saved Claude
+inventory in `~/.claude-swap-backup/sequence.json` supplies labels for matching
+proxy accounts. It supplies accounts only when no proxy `auths/` directory exists;
+deleted proxy accounts stay removed, even when they remain in that backup.
+The dock and All accounts view check the local inventory every ten seconds.
+[.env.example](.env.example) lists optional path, port, and memory settings.
+
+Both proxy images in [deploy/compose.yaml](deploy/compose.yaml) are pinned by
+digest. Pull this repository and re-run `install` to update the app. Upgrading
+proxy images requires changing their Compose digests and running `up`; account
+data survives container replacement. Back up the private data before upstream
+upgrades. Codex Proxy's separate non-commercial terms apply to its container.
+
+## Development and checks
+
+```sh
+# Portable native UI (Rust stable required on macOS too):
+cargo run --locked --manifest-path native/Cargo.toml
+cargo test --locked --manifest-path native/Cargo.toml
+
+# Original macOS renderer:
 ./build.sh
 open 'build/Mako Capacity.app'
-```
 
-To open the overview on launch:
-
-```sh
-open 'build/Mako Capacity.app' --args --overview
-```
-
-To inspect the credential-free collector output:
-
-```sh
-python3 collector.py
-```
-
-To run the collector checks:
-
-```sh
+# Collector checks and credential-free JSON:
 python3 -m unittest discover -s tests -v
+python3 collector.py --skip-usage
 ```
 
-## CodeBurn attribution
+The portable binary embeds its Python helpers and provider assets. Its UI thread
+never waits for quota requests or CodeBurn indexing. GitHub Actions runs Rust and
+Python checks on macOS, Windows, and Ubuntu. A deterministic native UI preview can
+be launched with `--preview /path/to/snapshot.json` for visual verification.
 
-The dock's interaction and visual design are based on
-[CodeBurn](https://github.com/getagentseal/codeburn), licensed MIT by AgentSeal.
-Provider icons are reused under that license. Quota endpoint formats follow its
-provider adapters; the collector and native multi-account app are independent
-implementations. The adapted ring, edge flare, and detail-tail geometry retain
-CodeBurn's MIT attribution in `Resources/CodeBurn-LICENSE.txt`.
+## Credits and licenses
 
-Cursor quota interpretation and the drawn cube icon follow the custom local
-LLimit app. Its MIT attribution is included in `Resources/LLimit-LICENSE.txt`.
+Mako Capacity's code is [MIT licensed](LICENSE). The original interaction and
+visual design are based on CodeBurn's Capacity Dock. The dock shape, hover tail,
+ring geometry, provider assets, and quota conventions retain CodeBurn's MIT
+attribution. Cursor interpretation and its cube icon follow the custom local
+LLimit app. This repository is separate from both full apps.
 
-This repository is separate from the full CodeBurn app and does not replace it.
+| Project | Contribution | License / attribution |
+| --- | --- | --- |
+| [CodeBurn](https://github.com/getagentseal/codeburn), AgentSeal | Original dock design, geometry, icons, quota conventions, token/cost accounting dependency | MIT; [bundled notice](Resources/CodeBurn-LICENSE.txt); npm package includes third-party notices |
+| [LLimit](https://github.com/githajae/LLimit), githajae | Cursor quota labels/rounding and cube icon | MIT; [bundled notice](Resources/LLimit-LICENSE.txt) |
+| [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), Router-For.ME and contributors | Claude OAuth account store and Docker service | [MIT](https://github.com/router-for-me/CLIProxyAPI/blob/main/LICENSE) |
+| [Codex Proxy](https://github.com/icebear0828/codex-proxy), IceBear and contributors | Codex account dashboard and Docker service | [Non-commercial upstream terms](https://github.com/icebear0828/codex-proxy/blob/master/README_EN.md#-license) |
+| [egui/eframe](https://github.com/emilk/egui), Emil Ernerfeldt and contributors | Native Rust rendering/window integration | MIT or Apache-2.0 |
+| [serde](https://serde.rs/), [serde_json](https://github.com/serde-rs/json) | Rust snapshot decoding and settings | MIT or Apache-2.0 |
+| [dirs](https://github.com/dirs-dev/dirs-rs) | Native platform directory locations | MIT or Apache-2.0 |
+| [image](https://github.com/image-rs/image) | Provider image decoding | MIT or Apache-2.0 |
+| [Cursor CLI](https://cursor.com/docs/cli/overview), Anysphere | Cursor CLI identity and quota endpoints | Separately installed proprietary tool; Cursor terms apply |
+
+The macOS renderer uses Apple's AppKit, SwiftUI, and Combine frameworks. Collectors
+and setup use Python's standard library. Rust/Cargo, Node/npm, Docker/Compose, and
+provider services retain their own licenses and terms. This repository's MIT
+license does not relicense upstream container images or services.

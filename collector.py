@@ -14,10 +14,13 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from codeburn_usage import collect_usage
+from platform_paths import cache_dir
 
 HOME = Path.home()
-CACHE = HOME / 'Library/Application Support/Mako Capacity/snapshot.json'
+CACHE = cache_dir() / 'snapshot.json'
 SWITCHER = HOME / 'Library/Application Support/dev.hoangphan.AI-Account-Switcher'
 
 
@@ -26,6 +29,18 @@ def read_json(path, default=None):
         return json.loads(Path(path).read_text())
     except (OSError, ValueError):
         return {} if default is None else default
+
+
+def setup_dir():
+    return Path(os.environ.get('MAKO_CAPACITY_HOME', HOME / '.mako-capacity'))
+
+
+def setting(key, default):
+    return os.environ.get(key) or read_json(setup_dir() / 'settings.json').get(key) or default
+
+
+def proxy_path(key, legacy):
+    return Path(setting(key, HOME / legacy)).expanduser()
 
 
 def iso_timestamp(value):
@@ -120,24 +135,28 @@ def cursor_windows(data, sand=None):
     return result
 
 
+PLANS = {'pro': 'Pro', 'prolite': 'Pro Lite', 'promax': 'Pro Max'}
+
+
 def account(provider, email, identity, title=None, plan='', source=''):
     digest = hashlib.sha256((provider + ':' + str(identity)).encode()).hexdigest()[:16]
     return {'id': digest, 'provider': provider, 'email': email or 'Unknown account',
             'title': title or (email or 'Unknown account').split('@')[0], 'plan': plan,
             'source': source, 'status': 'unknown', 'message': '', 'windows': [],
-            'fetchedAt': None, 'nextPollAt': 0}
+            'fetchedAt': None, 'nextPollAt': 0, 'onDemandUsd': None}
 
 
 def cursor_cli_account():
-    info = read_json(HOME / '.cursor/cli-config.json').get('authInfo') or {}
+    cursor_dir = proxy_path('CURSOR_DIR', '.cursor')
+    info = read_json(cursor_dir / 'cli-config.json').get('authInfo') or {}
     email = info.get('email') or 'Cursor CLI account'
     entry = account('Cursor', email, 'cli:' + (info.get('authId') or 'signed-out'), source='Cursor CLI')
     request = None
     try:
         if os.environ.get('AGENT_CLI_CREDENTIAL_STORE') == 'memory':
             token = ''
-        elif os.environ.get('AGENT_CLI_CREDENTIAL_STORE') == 'file':
-            token = read_json(HOME / '.cursor/auth.json').get('accessToken') or ''
+        elif os.environ.get('AGENT_CLI_CREDENTIAL_STORE') == 'file' or sys.platform != 'darwin':
+            token = read_json(cursor_dir / 'auth.json').get('accessToken') or ''
         else:
             result = subprocess.run(
                 ['/usr/bin/security', 'find-generic-password', '-a', 'cursor-user',
@@ -163,19 +182,23 @@ def cursor_cli_account():
 def discover():
     result = []
     sequence = read_json(HOME / '.claude-swap-backup/sequence.json').get('accounts', {})
-    claude = {}
+    saved = {}
     for slot, row in sequence.items():
         identity = row.get('organizationUuid') or row.get('email') or slot
-        title = None
-        claude[identity] = (account('Claude', row.get('email'), identity, title, source='Claude saved account'), None)
-    for path in sorted((HOME / 'claude-proxy/auths').glob('*.json')):
+        title = row.get('title') or row.get('name')
+        saved[identity] = (account('Claude', row.get('email'), identity, title, source='Claude saved account'), None)
+    auths = proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'auths'
+    # A proxy deletion must not resurrect an account from the legacy backup.
+    claude = {} if auths.is_dir() else saved.copy()
+    for path in sorted(auths.glob('*.json')):
         row = read_json(path)
         if row.get('type') != 'claude':
             continue
         identity = row.get('organization_uuid') or row.get('email') or path.name
-        old = claude.get(identity)
+        old = claude.get(identity) or saved.get(identity)
         entry = old[0] if old else account('Claude', row.get('email'), identity)
-        entry['source'] = 'Claude proxy'
+        entry['source'] = 'CLI proxy'
+        entry['proxyRef'] = path.name
         entry['plan'] = row.get('organization_name') or ''
         token = row.get('access_token')
         previous_token = old[1] if old else None
@@ -186,13 +209,27 @@ def discover():
             claude[identity] = old or (entry, None)
     result.extend(claude.values())
     codex = {}
-    rows = read_json(HOME / 'codex-proxy/data/accounts.json').get('accounts', [])
+    for path in sorted(auths.glob('*.json')):
+        row = read_json(path)
+        if row.get('type') != 'codex':
+            continue
+        identity = row.get('account_id') or row.get('email') or path.name
+        label = PLANS.get(row.get('plan_type'), row.get('plan_type') or '')
+        entry = account('Codex', row.get('email'), identity, title=label or None, plan=label, source='CLI proxy')
+        entry['proxyRef'] = path.name
+        headers = {'Authorization': 'Bearer ' + row['access_token']} if row.get('access_token') else {}
+        if headers and row.get('account_id'):
+            headers['ChatGPT-Account-Id'] = row['account_id']
+        codex[identity] = (entry, ('https://chatgpt.com/backend-api/wham/usage', headers) if headers else None)
+    # The separate Codex proxy is legacy: read it only while CLIProxyAPI has no Codex login.
+    rows = [] if codex else read_json(proxy_path('CODEX_PROXY_DIR', 'codex-proxy') / 'data/accounts.json').get('accounts', [])
     for row in rows:
         identity = row.get('accountId') or row.get('email') or row.get('id')
-        label = {'pro': 'Pro', 'prolite': 'Pro Lite', 'promax': 'Pro Max'}.get(row.get('planType'), row.get('planType') or '')
+        label = PLANS.get(row.get('planType'), row.get('planType') or '')
         entry = account('Codex', row.get('email'), identity, title=label or None, plan=label, source='Codex proxy')
         entry['windows'] = codex_windows(row.get('cachedQuota') or {})
         entry['fetchedAt'] = iso_timestamp(row.get('quotaFetchedAt'))
+        entry['proxyRef'] = row.get('id')
         headers = {'Authorization': 'Bearer ' + row['token']} if row.get('token') else {}
         if row.get('accountId'):
             headers['ChatGPT-Account-Id'] = row['accountId']
@@ -207,10 +244,10 @@ def fetch(item, previous, force=False):
     now = time.time()
     old = previous.get(entry['id'])
     if request is None:
-        entry.update(status='loginRequired', message='Reconnect this account to read capacity.', windows=[], nextPollAt=now + 300)
+        entry.update(status='loginRequired', message='Reconnect this account to read capacity.', windows=[], onDemandUsd=None, nextPollAt=now + 300)
         return entry
     if old:
-        for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan'):
+        for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan', 'onDemandUsd'):
             if key in old:
                 entry[key] = old[key]
         if now < old.get('nextPollAt', 0) and (not force or old.get('status') == 'rateLimited'):
@@ -227,7 +264,7 @@ def fetch(item, previous, force=False):
             entry['windows'] = claude_windows(data)
         elif entry['provider'] == 'Codex':
             entry['windows'] = codex_windows(data)
-            entry['plan'] = {'pro': 'Pro', 'prolite': 'Pro Lite', 'promax': 'Pro Max'}.get(data.get('plan_type'), data.get('plan_type') or entry['plan'])
+            entry['plan'] = PLANS.get(data.get('plan_type'), data.get('plan_type') or entry['plan'])
         else:
             sand = None
             try:
@@ -237,6 +274,9 @@ def fetch(item, previous, force=False):
             except (OSError, ValueError, TimeoutError):
                 pass
             entry['windows'] = cursor_windows(data, sand)
+            spend = data.get('spendLimitUsage') or {}
+            spent = spend.get('individualUsed')
+            entry['onDemandUsd'] = spent / 100 if isinstance(spent, (int, float)) and not isinstance(spent, bool) and math.isfinite(spent) and spent >= 0 else None
             if sand:
                 entry['plan'] = sand.get('cursorPlanName') or entry['plan']
         entry.update(status='live' if entry['windows'] else 'unknown', fetchedAt=now, message='')
@@ -248,7 +288,7 @@ def fetch(item, previous, force=False):
             entry['message'] = 'Free plan · no paid usage allowance'
     except urllib.error.HTTPError as error:
         if error.code in (401, 403):
-            entry.update(status='loginRequired', message='Sign in again in the provider app or proxy.', windows=[])
+            entry.update(status='loginRequired', message='Sign in again in the provider app or proxy.', windows=[], onDemandUsd=None)
         elif error.code == 429:
             retry = error.headers.get('Retry-After')
             try:
@@ -263,26 +303,89 @@ def fetch(item, previous, force=False):
     return entry
 
 
-def collect(force=False):
-    cached = read_json(CACHE)
-    previous = {a['id']: a for a in cached.get('accounts', [])}
-    discovered = discover()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        result = list(pool.map(lambda item: fetch(item, previous, force), discovered))
-    result.sort(key=lambda a: (['Claude', 'Codex', 'Cursor'].index(a['provider']), a['title'].lower()))
-    snapshot = {'updatedAt': time.time(), 'accounts': result}
-    CACHE.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    CACHE.parent.chmod(0o700)
-    handle, name = tempfile.mkstemp(dir=CACHE.parent, prefix='.snapshot-')
+def write_private(path, data):
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    handle, name = tempfile.mkstemp(dir=path.parent, prefix='.' + path.stem + '-')
     try:
         with os.fdopen(handle, 'w') as stream:
-            json.dump(snapshot, stream, separators=(',', ':'))
-        os.replace(name, CACHE)
+            json.dump(data, stream, separators=(',', ':'))
+        os.replace(name, path)
     finally:
         if os.path.exists(name):
             os.unlink(name)
+
+
+def delete_from_proxy(entry):
+    """Remove an account through its proxy's API so the running proxy forgets it too."""
+    ref = entry.get('proxyRef')
+    if entry['source'] == 'CLI proxy' and ref:
+        env = (proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy') / 'management.env')
+        password = re.search(r'^MANAGEMENT_PASSWORD=(.+)$', env.read_text() if env.exists() else '', re.M)
+        if not password:
+            raise RuntimeError('Proxy management password not found; delete it in the proxy dashboard.')
+        url = 'http://127.0.0.1:{}/v0/management/auth-files?name={}'.format(
+            setting('CLAUDE_PROXY_PORT', '8317'), urllib.parse.quote(ref))
+        headers = {'Authorization': 'Bearer ' + password.group(1).strip()}
+    elif entry['provider'] == 'Codex' and ref:
+        config = proxy_path('CODEX_PROXY_DIR', 'codex-proxy') / 'data/local.yaml'
+        key = re.search(r'^\s*proxy_api_key:\s*["\']?([^"\'\s#]+)', config.read_text() if config.exists() else '', re.M)
+        headers = {'Authorization': 'Bearer ' + key.group(1)} if key and key.group(1) != 'null' else {}
+        url = 'http://127.0.0.1:{}/auth/accounts/{}'.format(
+            setting('CODEX_PROXY_PORT', '8080'), urllib.parse.quote(ref, safe=''))
+    else:
+        raise RuntimeError('This account has no proxy entry to delete; hide it instead.')
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, headers=headers, method='DELETE'), timeout=12).close()
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f'{entry["provider"]} proxy refused the delete (HTTP {error.code}).') from error
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'{entry["provider"]} proxy is not reachable; start it and try again.') from error
+
+
+def change_account(action, account_id):
+    """Hide, restore, or permanently delete one account by its snapshot id."""
+    hidden = read_json(setup_dir() / 'hidden.json')
+    if action == 'restore':
+        hidden.pop(account_id, None)
+    else:
+        entry = next((e for e, _ in discover() if e['id'] == account_id), None)
+        if entry is None:
+            raise RuntimeError('Account not found; it may already be removed.')
+        if action == 'delete':
+            delete_from_proxy(entry)
+            hidden.pop(account_id, None)
+        else:
+            hidden[account_id] = f"{entry['provider']} · {entry['title']} · {entry['email']}"
+    write_private(setup_dir() / 'hidden.json', hidden)
+
+
+def collect(force=False, include_usage=True):
+    cached = read_json(CACHE)
+    previous = {a['id']: a for a in cached.get('accounts', [])}
+    hidden = read_json(setup_dir() / 'hidden.json')
+    discovered = [item for item in discover() if item[0]['id'] not in hidden]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        result = list(pool.map(lambda item: fetch(item, previous, force), discovered))
+    result.sort(key=lambda a: (['Claude', 'Codex', 'Cursor'].index(a['provider']), a['title'].lower()))
+    if include_usage:
+        usage = collect_usage(force)
+    else:
+        cached_usage = read_json(cache_dir() / 'codeburn-usage.json')
+        usage = cached_usage.get('providers', {}) if cached_usage.get('day') == dt.date.today().isoformat() else {}
+    for entry in result:
+        entry['localUsage'] = usage.get(entry['provider'], {'status': 'partial', 'message': 'Indexing local usage…'})
+    snapshot = {'updatedAt': time.time(), 'accounts': result, 'hidden': hidden}
+    write_private(CACHE, snapshot)
+    CACHE.parent.chmod(0o700)
     return snapshot
 
 
 if __name__ == '__main__':
-    print(json.dumps(collect('--refresh' in sys.argv), separators=(',', ':')))
+    for flag in ('--hide', '--restore', '--delete'):
+        if flag in sys.argv:
+            try:
+                change_account(flag[2:], sys.argv[sys.argv.index(flag) + 1])
+            except (RuntimeError, IndexError, OSError) as error:
+                print(error, file=sys.stderr)
+                sys.exit(1)
+    print(json.dumps(collect('--refresh' in sys.argv, '--skip-usage' not in sys.argv), separators=(',', ':')))

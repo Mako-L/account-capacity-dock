@@ -21,6 +21,9 @@ struct CapacityAccount: Codable, Identifiable {
     let message: String
     let windows: [CapacityWindow]
     let fetchedAt: Double?
+    let localUsage: LocalUsage?
+    let onDemandUsd: Double?
+    let proxyRef: String?
     var used: Double? { provider == "Cursor" ? windows.first(where: { $0.label == "Cursor Models" })?.used : windows.map(\.used).max() }
     var limitingWindow: String { windows.max(by: { $0.used < $1.used })?.label ?? "Unknown" }
     var accent: Color { provider == "Claude" ? .orange : provider == "Codex" ? .mint : .purple }
@@ -37,14 +40,36 @@ struct CapacityAccount: Codable, Identifiable {
     }
 }
 
+struct LocalUsage: Codable {
+    let tokens: Double?
+    let inputTokens: Double?
+    let outputTokens: Double?
+    let cacheReadTokens: Double?
+    let cacheWriteTokens: Double?
+    let costUsd: Double?
+    let estimated: Bool?
+    let unpricedModels: Int?
+    let status: String
+    let fetchedAt: Double?
+    let message: String?
+}
+
+func formatCount(_ value: Double) -> String {
+    if value >= 1_000_000 { return String(format: "%.1fM", value / 1_000_000) }
+    if value >= 1_000 { return String(format: "%.1fK", value / 1_000) }
+    return String(format: "%.0f", value)
+}
+
 struct CapacitySnapshot: Codable {
     let updatedAt: Double
     let accounts: [CapacityAccount]
+    let hidden: [String: String]?
 }
 
 @MainActor
 final class CapacityStore: ObservableObject {
     @Published var accounts: [CapacityAccount] = []
+    @Published var hidden: [String: String] = [:]
     @Published var refreshing = false
     @Published var error: String?
     @Published var dockEdge = UserDefaults.standard.string(forKey: "dockEdge") ?? "right"
@@ -64,47 +89,83 @@ final class CapacityStore: ObservableObject {
         didSet { UserDefaults.standard.set(dockOpacity, forKey: "dockOpacity") }
     }
     private var timer: Timer?
+    private var usageProcess: Process?
+    private var queuedAction: [String] = []
 
     init() {
         let cache = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Mako Capacity/snapshot.json")
         if let data = try? Data(contentsOf: cache), let snapshot = try? JSONDecoder().decode(CapacitySnapshot.self, from: data) {
             accounts = snapshot.accounts
+            hidden = snapshot.hidden ?? [:]
         }
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        refreshUsage()
+        timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
     }
 
-    func refresh(force: Bool = false) {
-        guard !refreshing else { return }
+    /// `action` is a collector flag and account id, such as ["--hide", id].
+    func refresh(force: Bool = false, action: [String] = []) {
+        refreshUsage()
+        guard !refreshing else {
+            // A background poll is running: keep the user's action for the next run.
+            if !action.isEmpty { queuedAction = action }
+            return
+        }
         refreshing = true
         let script = Bundle.main.resourceURL!.appendingPathComponent("collector.py")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let process = Process()
             let output = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-            process.arguments = [script.path] + (force ? ["--refresh"] : [])
+            let errors = Pipe()
+            process.arguments = [script.path, "--skip-usage"] + (force ? ["--refresh"] : []) + action
             process.standardOutput = output
-            process.standardError = FileHandle.nullDevice
+            process.standardError = errors
             do {
                 try process.run()
                 let data = output.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
-                guard process.terminationStatus == 0 else { throw NSError(domain: "Collector", code: Int(process.terminationStatus)) }
+                guard process.terminationStatus == 0 else {
+                    let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    throw NSError(domain: "Collector", code: Int(process.terminationStatus),
+                                  userInfo: action.isEmpty || message.isEmpty ? [:] : [NSLocalizedDescriptionKey: message])
+                }
                 let snapshot = try JSONDecoder().decode(CapacitySnapshot.self, from: data)
                 DispatchQueue.main.async {
                     self?.accounts = snapshot.accounts
+                    self?.hidden = snapshot.hidden ?? [:]
                     self?.error = nil
-                    self?.refreshing = false
+                    self?.finishRefresh()
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.error = "Could not update accounts. Previous readings remain visible."
-                    self?.refreshing = false
+                    let detail = (error as NSError).userInfo[NSLocalizedDescriptionKey] as? String
+                    self?.error = detail ?? "Could not update accounts. Previous readings remain visible."
+                    self?.finishRefresh()
                 }
             }
         }
+    }
+
+    private func finishRefresh() {
+        refreshing = false
+        let action = queuedAction
+        queuedAction = []
+        if !action.isEmpty { refresh(action: action) }
+    }
+
+    func refreshUsage() {
+        guard usageProcess?.isRunning != true else { return }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        process.arguments = [Bundle.main.resourceURL!.appendingPathComponent("codeburn_usage.py").path]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        usageProcess = process
+        try? process.run()
     }
 }
 
@@ -194,11 +255,12 @@ struct AccountRing: View {
 struct AccountCard: View {
     let account: CapacityAccount
     var showAllWindows = true
+    var roundIcons = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(account.provider.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(account.accent)
             HStack(spacing: 12) {
-                AccountRing(account: account, size: 40)
+                AccountRing(account: account, size: 40, dockStyle: true, round: roundIcons)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(account.title).font(.headline)
                 }
@@ -236,6 +298,47 @@ struct AccountCard: View {
                     Text(account.message).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Divider().overlay(.white.opacity(0.08))
+                Text("Today · local \(account.provider == "Cursor" ? "Cursor CLI" : account.provider) usage")
+                    .font(.system(size: 11, weight: .semibold))
+                HStack {
+                    Text("Tokens\(account.localUsage?.estimated == true ? " (estimated)" : "")")
+                    Spacer()
+                    Text(account.localUsage?.tokens.map(formatCount) ?? "—").monospacedDigit()
+                }
+                HStack {
+                    Text("API-equivalent cost")
+                    Spacer()
+                    Text(account.localUsage?.costUsd.map { String(format: "$%.2f", $0) } ?? "—").monospacedDigit()
+                }
+                if let usage = account.localUsage, usage.tokens != nil {
+                    Text("Input \(usage.inputTokens.map(formatCount) ?? "—") · Output \(usage.outputTokens.map(formatCount) ?? "—")\nCache read \(usage.cacheReadTokens.map(formatCount) ?? "—") · Write \(usage.cacheWriteTokens.map(formatCount) ?? "—")")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                Text("CodeBurn · all local accounts · not your bill")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                if let usage = account.localUsage {
+                    if usage.status != "live" {
+                        Text(usage.status == "partial" ? "Indexing · totals are incomplete" : usage.message?.isEmpty == false ? usage.message! : "Cached · \(age(usage.fetchedAt))")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    if (usage.unpricedModels ?? 0) > 0 {
+                        Text("Some models have no price; cost is incomplete.")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Usage unavailable · install CodeBurn with the setup CLI.")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                if let spend = account.onDemandUsd {
+                    HStack {
+                        Text("On-demand · billing cycle")
+                        Spacer()
+                        Text(String(format: "$%.2f", spend)).monospacedDigit()
+                    }
+                }
+            }.font(.caption)
             HStack {
                 Text(account.source)
                 Spacer()
@@ -248,8 +351,55 @@ struct AccountCard: View {
     }
 }
 
+// Scroll-edge gradients follow Bubo's ShadowScrollView behavior.
+private struct ScrollContentFrame: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+struct ShadowScrollView<Content: View>: View {
+    var axis: Axis.Set = .vertical
+    var showsIndicators = true
+    @ViewBuilder var content: () -> Content
+    @State private var coordinateID = UUID()
+    @State private var contentFrame: CGRect = .zero
+    var body: some View {
+        GeometryReader { viewport in
+            let horizontal = axis == .horizontal
+            let offset = max(0, horizontal ? -contentFrame.minX : -contentFrame.minY)
+            let contentSize = horizontal ? contentFrame.width : contentFrame.height
+            let viewportSize = horizontal ? viewport.size.width : viewport.size.height
+            let overflow = max(0, contentSize - viewportSize)
+            ScrollView(axis, showsIndicators: showsIndicators) {
+                content().background(GeometryReader { geometry in
+                    Color.clear.preference(key: ScrollContentFrame.self,
+                        value: geometry.frame(in: .named(coordinateID)))
+                })
+            }
+            .coordinateSpace(name: coordinateID)
+            .onPreferenceChange(ScrollContentFrame.self) { contentFrame = $0 }
+            .overlay(alignment: horizontal ? .leading : .top) {
+                LinearGradient(colors: [.black.opacity(0.18), .clear],
+                    startPoint: horizontal ? .leading : .top, endPoint: horizontal ? .trailing : .bottom)
+                    .frame(width: horizontal ? min(36, viewportSize / 2) : nil,
+                           height: horizontal ? nil : min(36, viewportSize / 2))
+                    .opacity(overflow > 0.5 ? min(1, offset / 24) : 0)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: horizontal ? .trailing : .bottom) {
+                LinearGradient(colors: [.clear, .black.opacity(0.18)],
+                    startPoint: horizontal ? .leading : .top, endPoint: horizontal ? .trailing : .bottom)
+                    .frame(width: horizontal ? min(36, viewportSize / 2) : nil,
+                           height: horizontal ? nil : min(36, viewportSize / 2))
+                    .opacity(overflow - offset > 24 ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
 struct OverviewView: View {
     @ObservedObject var store: CapacityStore
+    @State private var pendingDelete: CapacityAccount?
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
@@ -259,6 +409,13 @@ struct OverviewView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if !store.hidden.isEmpty {
+                    Menu("Hidden (\(store.hidden.count))") {
+                        ForEach(store.hidden.sorted(by: { $0.value < $1.value }), id: \.key) { id, label in
+                            Button("Restore \(label)") { store.refresh(action: ["--restore", id]) }
+                        }
+                    }.fixedSize()
+                }
                 Button { store.refresh(force: true) } label: {
                     Label(store.refreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
                 }.disabled(store.refreshing).keyboardShortcut("r", modifiers: .command)
@@ -267,10 +424,20 @@ struct OverviewView: View {
             if store.accounts.isEmpty {
                 ProgressView("Discovering your accounts…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                ShadowScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 220), spacing: 16, alignment: .top), count: 4), alignment: .leading, spacing: 16) {
                         ForEach(store.accounts) { account in
-                            AccountCard(account: account, showAllWindows: false)
+                            AccountCard(account: account, showAllWindows: false, roundIcons: store.roundIcons)
+                                .overlay(alignment: .topTrailing) {
+                                    Menu {
+                                        Button("Hide from Mako") { store.refresh(action: ["--hide", account.id]) }
+                                        if account.proxyRef != nil {
+                                            Button("Delete from \(account.provider) proxy…", role: .destructive) { pendingDelete = account }
+                                        }
+                                    } label: { Image(systemName: "ellipsis") }
+                                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                                    .help("Remove account").padding(12)
+                                }
                         }
                     }
                 }
@@ -278,11 +445,16 @@ struct OverviewView: View {
             HStack {
                 Text("Usage refreshes every 5 minutes. Credentials stay with your provider apps and proxies.")
                 Spacer()
-                Button("Claude accounts") { NSWorkspace.shared.open(URL(string: "http://127.0.0.1:8317/management.html")!) }
-                Button("Codex accounts") { NSWorkspace.shared.open(URL(string: "http://127.0.0.1:8080")!) }
+                Button("Proxy accounts") { NSWorkspace.shared.open(URL(string: "http://127.0.0.1:8317/management.html")!) }
             }.font(.caption).foregroundStyle(.secondary)
         }
         .padding(24)
+        .alert("Delete \(pendingDelete?.email ?? "account")?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), presenting: pendingDelete) { account in
+            Button("Delete", role: .destructive) { store.refresh(action: ["--delete", account.id]) }
+            Button("Cancel", role: .cancel) {}
+        } message: { account in
+            Text("This removes the credentials from the \(account.provider) proxy. You cannot undo it. Sign in again to add the account back.")
+        }
         .frame(minWidth: 1040, minHeight: 550)
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(.dark)
@@ -397,7 +569,7 @@ struct RailView: View {
             if horizontal {
                 HStack(spacing: 8) {
                     Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundStyle(.secondary).help("Drag to attach to a screen edge")
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ShadowScrollView(axis: .horizontal, showsIndicators: false) {
                         HStack(spacing: 8) { ForEach(store.accounts) { cell($0) } }
                     }
                     Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill") }.buttonStyle(.plain)
@@ -407,7 +579,7 @@ struct RailView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "line.3.horizontal").font(.system(size: 12)).foregroundStyle(.secondary)
                         .padding(.top, store.dockEdge == "floating" ? 12 : 32).help("Drag to attach to a screen edge")
-                    ScrollView(showsIndicators: false) {
+                    ShadowScrollView(showsIndicators: false) {
                         VStack(spacing: 6) { ForEach(store.accounts) { cell($0) } }.padding(.horizontal, 12)
                     }
                     HStack(spacing: 14) {
@@ -436,11 +608,7 @@ struct DockSettingsView: View {
                 Text("Size · \(Int((store.dockScale * 100).rounded()))%")
                 Slider(value: $store.dockScale, in: 0.65...1.4, step: 0.05)
             }
-            VStack(alignment: .leading) {
-                Text("Length · \(Int(store.dockLength)) pt")
-                Slider(value: $store.dockLength, in: 400...1100, step: 20)
-                Text("Accounts scroll when the dock is shorter than the list.").font(.caption).foregroundStyle(.secondary)
-            }
+            Text("The dock fits your accounts and scrolls when needed.").font(.caption).foregroundStyle(.secondary)
             Picker("Icon shape", selection: $store.roundIcons) {
                 Text("Rounded square").tag(false)
                 Text("Circle").tag(true)
@@ -470,6 +638,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var overview: NSWindow!
     var rail: NSPanel!
     var detail: NSPanel?
+    var detailAccountID: String?
     var settings: NSWindow?
     var layoutSubscription: AnyCancellable?
     var statusItem: NSStatusItem!
@@ -486,6 +655,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         overview.center()
         overview.setFrameAutosaveName("MakoCapacityOverview")
         rail = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 88, height: 820), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        rail.hasShadow = false
         rail.isOpaque = false
         rail.backgroundColor = .clear
         rail.level = .floating
@@ -495,8 +665,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         rail.delegate = self
         positionRail(edge: store.dockEdge)
         rail.contentView = NSHostingView(rootView: RailView(store: store, showOverview: { [weak self] in self?.showOverview() }, showSettings: { [weak self] in self?.showSettings() }, hover: { [weak self] in self?.showDetail($0) }))
-        layoutSubscription = Publishers.CombineLatest(store.$dockScale, store.$dockLength)
-            .dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.repositionRail() }
+        layoutSubscription = Publishers.CombineLatest3(store.$dockScale, store.$showNames, store.$accounts)
+            .dropFirst().receive(on: RunLoop.main).sink { [weak self] _, _, accounts in
+                guard let self else { return }
+                if let id = self.detailAccountID, !accounts.contains(where: { $0.id == id }) {
+                    self.detail?.orderOut(nil)
+                    self.detailAccountID = nil
+                }
+                self.repositionRail()
+            }
         rail.orderFrontRegardless()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mako Capacity")
@@ -569,7 +746,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         UserDefaults.standard.set(edge, forKey: "dockEdge")
         let horizontal = edge == "top" || edge == "bottom"
         let scale = store.dockScale
-        let size = horizontal ? NSSize(width: min(store.dockLength * scale, screen.visibleFrame.width), height: 114 * scale) : NSSize(width: 88 * scale, height: min(store.dockLength * scale, screen.visibleFrame.height - 24))
+        let count = max(1, store.accounts.count)
+        let padding: CGFloat = edge == "floating" ? 12 : 32
+        let cells = store.accounts.reduce(CGFloat(0)) { total, account in
+            total + (store.showNames ? 78 : 66) + (account.provider == "Cursor" ? CGFloat(max(3, account.windows.count) - 2) * 16 : 0)
+        }
+        let length = horizontal ? CGFloat(130 + count * 72 + (count - 1) * 8) : padding * 2 + 44 + max(cells, store.showNames ? 78 : 66) + CGFloat((count - 1) * 6)
+        let size = horizontal ? NSSize(width: min(length * scale, screen.visibleFrame.width), height: 114 * scale) : NSSize(width: 88 * scale, height: min(length * scale, screen.visibleFrame.height - 24))
         let offset = UserDefaults.standard.object(forKey: "dockOffset") as? Double ?? 0.5
         var origin = NSPoint(x: screen.visibleFrame.minX + (screen.visibleFrame.width - size.width) * offset,
                              y: screen.visibleFrame.minY + (screen.visibleFrame.height - size.height) * offset)
@@ -590,6 +773,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func windowDidMove(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window === rail, !placingRail else { return }
+        closeDetailWork?.cancel()
+        detail?.orderOut(nil)
         scheduleDocking()
     }
 
@@ -626,8 +811,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
             return
         }
+        detailAccountID = account.id
         if detail == nil {
             detail = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            detail?.hasShadow = false
             detail?.isOpaque = false
             detail?.backgroundColor = .clear
             detail?.level = .floating
@@ -635,7 +822,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             detail?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         }
         let pointsLeft = store.dockEdge == "left"
-        let content = AccountCard(account: account).frame(width: 330).padding(8)
+        let content = AccountCard(account: account, roundIcons: store.roundIcons).frame(width: 330).padding(8)
             .padding(pointsLeft ? .leading : .trailing, 20)
             .background(DetailBubble(pointsLeft: pointsLeft).fill(Color(white: 0.065)))
             .onHover { [weak self] inside in if inside { self?.closeDetailWork?.cancel() } else { self?.showDetail(nil) } }

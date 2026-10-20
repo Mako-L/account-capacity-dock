@@ -5,4 +5,11 @@ __pycache__/
 !Resources/*.png
 screenshots/
 *.layout.json
+*.pyc
+.env
 .DS_Store
+.mako-capacity/
+native/target/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

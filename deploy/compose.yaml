@@ -1,0 +1,34 @@
+name: mako-capacity
+
+services:
+  claude-proxy:
+    image: eceasy/cli-proxy-api@sha256:7d7203c06b4f5fd844adbc8cc8be1965e92f7e292ef169146cb9321812587a65
+    restart: unless-stopped
+    network_mode: bridge
+    env_file:
+      - ${CLAUDE_PROXY_DIR}/management.env
+    ports:
+      - "127.0.0.1:${CLAUDE_PROXY_PORT:-8317}:8317"
+    volumes:
+      - ${CLAUDE_PROXY_DIR}/config.yaml:/CLIProxyAPI/config.yaml
+      - ${CLAUDE_PROXY_DIR}/auths:/root/.cli-proxy-api
+      - ${CLAUDE_PROXY_DIR}/logs:/CLIProxyAPI/logs
+
+  codex-proxy:
+    image: ghcr.io/icebear0828/codex-proxy@sha256:e698cb3d2482f7f74bc6eff0b13910935e9ce38cfeb22a8f6daef58555d404ef
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "127.0.0.1:${CODEX_PROXY_PORT:-8080}:8080"
+      - "127.0.0.1:${CODEX_CALLBACK_PORT:-1455}:1455"
+    volumes:
+      - ${CODEX_PROXY_DIR}/data:/app/data
+      - ${CODEX_PROXY_DIR}/config:/app/config
+    env_file:
+      - ${CODEX_PROXY_DIR}/.env
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      CODEX_PROXY_HOST: 0.0.0.0
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=512}
+    mem_limit: ${MEM_LIMIT:-768m}

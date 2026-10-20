@@ -6,6 +6,8 @@ mkdir -p "$capacity_app/Contents/MacOS" "$capacity_app/Contents/Resources"
 swiftc -swift-version 5 -parse-as-library -O -framework AppKit -framework SwiftUI -framework Combine \
   "$capacity_root/App.swift" -o "$capacity_app/Contents/MacOS/MakoCapacity"
 cp "$capacity_root/collector.py" "$capacity_app/Contents/Resources/collector.py"
+cp "$capacity_root/codeburn_usage.py" "$capacity_app/Contents/Resources/codeburn_usage.py"
+cp "$capacity_root/platform_paths.py" "$capacity_app/Contents/Resources/platform_paths.py"
 cp "$capacity_root/Resources/"* "$capacity_app/Contents/Resources/"
 cp "$capacity_root/Info.plist" "$capacity_app/Contents/Info.plist"
 swiftc "$capacity_root/Icon.swift" -o "$capacity_root/build/generate-icon"

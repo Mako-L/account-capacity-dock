@@ -1,0 +1,56 @@
+id = "mako-capacity"
+name = "Mako Capacity"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Percent used for every Claude, Codex and Cursor account, docked beside your panes."
+platforms = ["macos", "linux"]
+
+[[panes]]
+id = "capacity"
+title = "Capacity"
+placement = "split"
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/capacity.py\""]
+
+[[actions]]
+id = "open-right"
+title = "Mako Capacity: dock on the right"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" right"]
+
+[[actions]]
+id = "open-left"
+title = "Mako Capacity: dock on the left"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" left"]
+
+[[actions]]
+id = "pin-right"
+title = "Mako Capacity: pin on the right in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin right"]
+
+[[actions]]
+id = "pin-left"
+title = "Mako Capacity: pin on the left in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left"]
+
+[[actions]]
+id = "toggle-pin"
+title = "Mako Capacity: pin or unpin"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" toggle"]
+
+[[actions]]
+id = "unpin"
+title = "Mako Capacity: unpin"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" unpin"]
+
+[[events]]
+on = "tab.focused"
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" ensure"]
+
+[[events]]
+on = "workspace.focused"
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" ensure"]

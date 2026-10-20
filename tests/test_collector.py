@@ -14,10 +14,35 @@ spec.loader.exec_module(collector)
 
 
 class CapacityParsingTests(unittest.TestCase):
+    def test_discovery_reads_installed_proxy_paths_without_shell_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            setup = home / '.mako-capacity'
+            setup.mkdir()
+            claude = home / 'custom claude/auths'
+            codex = home / 'custom codex/data'
+            claude.mkdir(parents=True)
+            codex.mkdir(parents=True)
+            (setup / 'settings.json').write_text(json.dumps({
+                'CLAUDE_PROXY_DIR': str(claude.parent), 'CODEX_PROXY_DIR': str(codex.parent)}))
+            (claude / 'account.json').write_text(json.dumps({
+                'type': 'claude', 'organization_uuid': 'org', 'email': 'claude@example.test',
+                'access_token': 'private-claude'}))
+            (codex / 'accounts.json').write_text(json.dumps({'accounts': [{
+                'accountId': 'codex', 'email': 'codex@example.test', 'token': 'private-codex'}]}))
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                rows = [entry for entry, _ in collector.discover()]
+            self.assertEqual([entry['provider'] for entry in rows], ['Claude', 'Codex', 'Cursor'])
+            self.assertEqual(rows[0]['email'], 'claude@example.test')
+            self.assertEqual(rows[1]['email'], 'codex@example.test')
+            self.assertNotIn('private-', json.dumps(rows))
+
     def test_cursor_cli_uses_cli_identity_and_keychain_not_editor(self):
         claims = {'sub': 'auth0|cli-user', 'exp': collector.time.time() + 3600}
         token = 'header.' + base64.urlsafe_b64encode(json.dumps(claims).encode()).decode() + '.signature'
         with patch.object(collector, 'read_json', return_value={'authInfo': {'email': 'cli@example.test', 'authId': claims['sub']}}), \
+                patch.object(collector.sys, 'platform', 'darwin'), \
                 patch.dict(collector.os.environ, {'AGENT_CLI_CREDENTIAL_STORE': 'default'}), \
                 patch.object(collector.subprocess, 'run', return_value=SimpleNamespace(stdout=token)) as keychain:
             entry, request = collector.cursor_cli_account()
@@ -40,7 +65,7 @@ class CapacityParsingTests(unittest.TestCase):
     def test_cursor_cli_file_store_does_not_use_stale_profile_or_keychain(self):
         token = 'header.' + base64.urlsafe_b64encode(json.dumps({'sub': 'auth0|new-user', 'exp': collector.time.time()+3600}).encode()).decode() + '.signature'
         with patch.dict(collector.os.environ, {'AGENT_CLI_CREDENTIAL_STORE': 'file'}), \
-                patch.object(collector, 'read_json', side_effect=[{'authInfo': {'email': 'old@example.test', 'authId': 'auth0|old-user'}}, {'accessToken': token}]), \
+                patch.object(collector, 'read_json', side_effect=[{}, {'authInfo': {'email': 'old@example.test', 'authId': 'auth0|old-user'}}, {'accessToken': token}]), \
                 patch.object(collector.subprocess, 'run') as keychain:
             entry, request = collector.cursor_cli_account()
         keychain.assert_not_called()
@@ -151,9 +176,109 @@ class CapacityParsingTests(unittest.TestCase):
             with patch.object(collector, 'HOME', home), patch.object(collector.subprocess, 'run', side_effect=OSError):
                 discovered = collector.discover()
             rows = [row for row, _ in discovered if row['provider'] == 'Claude']
-            self.assertEqual(len(rows), 2)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]['email'], 'test@example.test')
             self.assertNotIn('private-access', json.dumps(rows))
             self.assertNotIn('private-refresh', json.dumps(rows))
+
+    def test_proxy_deletion_removes_saved_and_cached_account_from_snapshot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            backup = home / '.claude-swap-backup'
+            backup.mkdir()
+            (backup / 'sequence.json').write_text(json.dumps({'accounts': {
+                '1': {'organizationUuid': 'org', 'email': 'test@example.test', 'title': 'Work'},
+            }}))
+            auths = home / 'claude-proxy/auths'
+            auths.mkdir(parents=True)
+            credential = auths / 'account.json'
+            credential.write_text(json.dumps({'type': 'claude', 'organization_uuid': 'org',
+                                             'email': 'test@example.test'}))
+            cache = home / 'cache/snapshot.json'
+            with patch.object(collector, 'HOME', home), patch.object(collector, 'CACHE', cache), \
+                    patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cache_dir', return_value=cache.parent), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                before = collector.collect(include_usage=False)
+                self.assertEqual([a['title'] for a in before['accounts'] if a['provider'] == 'Claude'], ['Work'])
+
+                credential.unlink()
+                after = collector.collect(include_usage=False)
+
+            self.assertEqual([a['provider'] for a in after['accounts']], ['Cursor'])
+            self.assertEqual(json.loads(cache.read_text())['accounts'], after['accounts'])
+            self.assertTrue((backup / 'sequence.json').exists())
+
+    def test_saved_accounts_remain_available_without_a_proxy_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            backup = home / '.claude-swap-backup'
+            backup.mkdir()
+            (backup / 'sequence.json').write_text(json.dumps({'accounts': {
+                '1': {'organizationUuid': 'org', 'email': 'saved@example.test'},
+            }}))
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                rows = [entry for entry, _ in collector.discover() if entry['provider'] == 'Claude']
+
+            self.assertEqual([row['email'] for row in rows], ['saved@example.test'])
+            self.assertEqual(rows[0]['source'], 'Claude saved account')
+
+    def test_codex_logins_in_cliproxy_replace_the_legacy_codex_proxy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / 'claude-proxy/auths').mkdir(parents=True)
+            (home / 'claude-proxy/auths/codex-a.json').write_text(json.dumps({
+                'type': 'codex', 'account_id': 'acct', 'email': 'a@example.test', 'plan_type': 'promax',
+                'access_token': 'private-codex'}))
+            (home / 'codex-proxy/data').mkdir(parents=True)
+            (home / 'codex-proxy/data/accounts.json').write_text(json.dumps({'accounts': [{
+                'id': 'old', 'accountId': 'legacy', 'email': 'b@example.test', 'token': 'private-legacy'}]}))
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                rows = [item for item in collector.discover() if item[0]['provider'] == 'Codex']
+
+            self.assertEqual([(entry['title'], entry['proxyRef']) for entry, _ in rows], [('Pro Max', 'codex-a.json')])
+            self.assertEqual(rows[0][1][1], {'Authorization': 'Bearer private-codex', 'ChatGPT-Account-Id': 'acct'})
+            self.assertNotIn('private-', json.dumps([entry for entry, _ in rows]))
+
+    def test_hidden_accounts_leave_the_snapshot_until_restored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            cache = home / 'cache/snapshot.json'
+            cursor = collector.account('Cursor', 'cursor@example.test', 'cli')
+            with patch.object(collector, 'HOME', home), patch.object(collector, 'CACHE', cache), \
+                    patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cache_dir', return_value=cache.parent), \
+                    patch.object(collector, 'cursor_cli_account', side_effect=lambda: (dict(cursor), None)):
+                collector.change_account('hide', cursor['id'])
+                hidden = collector.collect(include_usage=False)
+                collector.change_account('restore', cursor['id'])
+                restored = collector.collect(include_usage=False)
+
+            self.assertEqual(hidden['accounts'], [])
+            self.assertEqual(list(hidden['hidden']), [cursor['id']])
+            self.assertEqual([a['id'] for a in restored['accounts']], [cursor['id']])
+
+    def test_delete_uses_each_proxy_api_with_its_local_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / 'claude-proxy/auths').mkdir(parents=True)
+            (home / 'claude-proxy/management.env').write_text('MANAGEMENT_PASSWORD=claude-secret\n')
+            (home / 'claude-proxy/auths/claude-a.json').write_text(json.dumps({
+                'type': 'claude', 'organization_uuid': 'org', 'email': 'a@example.test'}))
+            (home / 'claude-proxy/auths/codex-b.json').write_text(json.dumps({
+                'type': 'codex', 'account_id': 'codex', 'email': 'b@example.test'}))
+            requests = []
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)), \
+                    patch.object(collector.urllib.request, 'urlopen', side_effect=lambda request, timeout: requests.append(request) or SimpleNamespace(close=lambda: None)):
+                for entry, _ in collector.discover()[:2]:
+                    collector.change_account('delete', entry['id'])
+
+            self.assertEqual([(r.get_method(), r.full_url, r.get_header('Authorization')) for r in requests], [
+                ('DELETE', 'http://127.0.0.1:8317/v0/management/auth-files?name=claude-a.json', 'Bearer claude-secret'),
+                ('DELETE', 'http://127.0.0.1:8317/v0/management/auth-files?name=codex-b.json', 'Bearer claude-secret')])
 
 
 if __name__ == '__main__':
