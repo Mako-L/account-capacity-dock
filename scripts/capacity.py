@@ -271,6 +271,9 @@ def main():
     commands.add_parser('status', help='show proxy container status')
     commands.add_parser('doctor', help='check macOS, build tools, Docker, and configured paths')
     commands.add_parser('open', help='open the dock')
+    ui = commands.add_parser('ui', help='dock, All accounts and Settings on GPUIX, in a window or the terminal')
+    ui.add_argument('view', nargs='?', choices=['dock', 'accounts', 'settings'], default='dock')
+    ui.add_argument('--terminal', action='store_true', help='draw inside this terminal (Ghostty or kitty, also over SSH)')
     proxy = commands.add_parser('proxy', help='use a CLIProxyAPI on another machine, or "local" for Docker')
     proxy.add_argument('url', help='for example https://server:8317, or local')
     proxy.add_argument('--key', default=os.environ.get('PROXY_MANAGEMENT_KEY', ''), help='the remote management key')
@@ -314,6 +317,14 @@ def main():
         start_app()
     elif args.command == 'open':
         start_app()
+    elif args.command == 'ui':
+        need('bun')
+        app = ROOT / 'gpuix-app'
+        if not (app / 'node_modules').is_dir():
+            run('bun', 'install', '--frozen-lockfile', cwd=app)
+        env = dict(os.environ, **({'GPUIX_TERMINAL': '1'} if args.terminal else {}))
+        os.chdir(app)
+        os.execvpe('bun', ['bun', 'app.tsx', f'--view={args.view}'], env)
     elif args.command in ('down', 'status', 'logs'):
         docker()
         if not SETTINGS.exists():

@@ -1,0 +1,21 @@
+{
+  "name": "mako-capacity-gpuix",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun app.tsx",
+    "terminal": "GPUIX_TERMINAL=1 bun app.tsx",
+    "dev": "bun --hot app.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gpuix/native": "0.11.0",
+    "@gpuix/react": "0.11.0",
+    "react": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "@types/react": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

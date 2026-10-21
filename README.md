@@ -209,6 +209,26 @@ proxy** asks for confirmation, then removes the credentials through the proxy
 API; sign in again to add the account back. The Cursor CLI login can
 only be hidden. Hidden IDs live in `~/.mako-capacity/hidden.json`.
 
+## Terminal and GPUIX app
+
+`gpuix-app/` is the same dock, All accounts and Settings built on
+[GPUIX](https://github.com/remorses/gpuix) (React on Zed's GPU renderer). It opens
+as a native window, or draws inside the terminal you start it from:
+
+```sh
+mako-capacity ui                        # native window
+mako-capacity ui accounts --terminal    # inside Ghostty or kitty, also over SSH
+ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
+```
+
+It needs [Bun](https://bun.sh); the first run installs its packages. The terminal
+mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
+in tmux. It reads the same snapshot and uses the same collector actions (Hide,
+Delete, Restore, proxy server) as the other renderers. GPUIX is pre-1.0, so the
+versions are pinned exactly in `gpuix-app/package.json`.
+
+![The GPUIX app: the dock with a hover card](docs/images/gpuix-dock.png)
+
 ## Herdr widget
 
 Herdr users can dock the capacity view beside their panes.
