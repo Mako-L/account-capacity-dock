@@ -364,6 +364,45 @@ def fetch(item, previous, force=False):
     return entry
 
 
+WINDOW_MINUTES = {'5-hour': 300, 'Daily': 1440, 'Weekly': 10080}
+
+
+def iso(timestamp):
+    return dt.datetime.fromtimestamp(timestamp, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if timestamp else None
+
+
+def expiring_first_quota(accounts):
+    """Quota readings for the Expiring First routing plugin (schema expiring-first.quota.v1)."""
+    rows = []
+    for entry in accounts:
+        if entry.get('source') != 'CLI proxy' or not entry.get('proxyRef') or not entry.get('fetchedAt'):
+            continue
+        windows = []
+        for window in entry['windows']:
+            base, _, scope = window['label'].partition(' · ')
+            # 'Weekly · OAuth' limits OAuth apps, not a model, so it cannot be scoped by model name.
+            if base not in WINDOW_MINUTES or scope == 'OAuth':
+                continue
+            item = {'kind': window['label'].lower().replace(' · ', '-'), 'window_minutes': WINDOW_MINUTES[base],
+                    'used_percent': window['used'], 'resets_at': iso(window.get('resetAt'))}
+            if scope:
+                item['models'] = [scope.lower()]
+            windows.append(item)
+        if windows:
+            rows.append({'auth_id': entry['proxyRef'], 'provider': entry['provider'].lower(),
+                         'updated_at': iso(entry['fetchedAt']), 'windows': windows})
+    return {'schema': 'expiring-first.quota.v1', 'generated_at': iso(time.time()), 'accounts': rows}
+
+
+def quota_file():
+    """Where the local proxy's plugins read quota: QUOTA_FILE, else <proxy dir>/state/quota.json."""
+    if setting('QUOTA_FILE', ''):
+        return Path(setting('QUOTA_FILE', '')).expanduser()
+    proxy = proxy_path('CLAUDE_PROXY_DIR', 'claude-proxy')
+    # A remote proxy cannot read a file on this machine.
+    return None if setting('PROXY_URL', '') or not (proxy / 'auths').is_dir() else proxy / 'state/quota.json'
+
+
 def write_private(path, data):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     handle, name = tempfile.mkstemp(dir=path.parent, prefix='.' + path.stem + '-')
@@ -439,6 +478,14 @@ def collect(force=False, include_usage=True):
                 'warning': ' '.join(WARNINGS) or None}
     write_private(CACHE, snapshot)
     CACHE.parent.chmod(0o700)
+    target = quota_file()
+    if target:
+        try:
+            write_private(target, expiring_first_quota(result))
+            # The proxy container may run as another user; the file holds no credentials.
+            target.chmod(0o644)
+        except OSError:
+            pass
     return snapshot
 
 

@@ -64,7 +64,7 @@ def initialize():
     os.umask(0o077)
     dirs = paths()
     claude = Path(dirs['CLAUDE_PROXY_DIR'])
-    for folder in [STATE, claude, claude / 'auths', claude / 'logs']:
+    for folder in [STATE, claude, claude / 'auths', claude / 'logs', claude / 'plugins', claude / 'state']:
         folder.mkdir(parents=True, exist_ok=True, mode=0o700)
     key = secrets.token_urlsafe(32)
     write_new(claude / 'client-key', key + '\n')

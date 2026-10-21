@@ -13,3 +13,6 @@ services:
       - ${CLAUDE_PROXY_DIR}/config.yaml:/CLIProxyAPI/config.yaml
       - ${CLAUDE_PROXY_DIR}/auths:/root/.cli-proxy-api
       - ${CLAUDE_PROXY_DIR}/logs:/CLIProxyAPI/logs
+      - ${CLAUDE_PROXY_DIR}/plugins:/CLIProxyAPI/plugins
+      # Mako Capacity writes quota.json here for routing plugins such as Expiring First.
+      - ${CLAUDE_PROXY_DIR}/state:/CLIProxyAPI/state:ro

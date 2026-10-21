@@ -277,6 +277,21 @@ class CapacityParsingTests(unittest.TestCase):
             if os.name != 'nt':
                 self.assertEqual(mirror.stat().st_mode & 0o777, 0o600)
 
+    def test_expiring_first_quota_file_uses_auth_ids_and_window_lengths(self):
+        entry = dict(collector.account('Claude', 'a@example.test', 'org'), source='CLI proxy', proxyRef='claude-a.json',
+                     fetchedAt=0, windows=[{'label': '5-hour', 'used': 3, 'resetAt': None},
+                                           {'label': 'Weekly', 'used': 41, 'resetAt': 3600},
+                                           {'label': 'Weekly · Fable', 'used': 0, 'resetAt': None},
+                                           {'label': 'Weekly · OAuth', 'used': 5, 'resetAt': None}])
+        unlisted = dict(collector.account('Cursor', '', 'cli'), source='Cursor CLI', fetchedAt=0)
+        quota = collector.expiring_first_quota([entry, unlisted])
+        self.assertEqual(quota['schema'], 'expiring-first.quota.v1')
+        self.assertEqual([a['auth_id'] for a in quota['accounts']], ['claude-a.json'])
+        self.assertEqual([(w['window_minutes'], w['used_percent'], w['resets_at'], w.get('models'))
+                          for w in quota['accounts'][0]['windows']],
+                         [(300, 3, None, None), (10080, 41, '1970-01-01T01:00:00Z', None), (10080, 0, None, ['fable'])])
+        self.assertNotIn('token', json.dumps(quota))
+
     def test_hidden_accounts_leave_the_snapshot_until_restored(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

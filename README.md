@@ -93,6 +93,34 @@ To use the Rust renderer on macOS as well, install Rust and run
 `./capacity install --rust-ui`. This choice persists in `settings.json`. The
 original Swift source and `build.sh` remain available.
 
+### Install with an AI assistant
+
+Paste this prompt into Claude Code, Codex, Cursor or another coding assistant that
+can run commands on your computer. It checks the prerequisites, asks how your proxy
+runs, and walks you through each step.
+
+<details>
+<summary>Show the install prompt</summary>
+
+```text
+Help me install Mako Capacity (https://github.com/Mako-L/account-capacity-dock) on this computer.
+
+1. Check what I have: operating system and version, Git, Python 3.9+, Node.js 22.13+, and Docker with Compose v2 (running). On Windows and Linux, also check for the Rust toolchain. Tell me what is missing and how to install it. Wait for my yes before you install anything system-wide.
+2. Ask me where my CLIProxyAPI runs: in Docker on this machine, already running on this machine, or on another server.
+3. Clone the repository and follow its README for my answer:
+   - Docker on this machine: ./capacity install (Windows: .\capacity.cmd install)
+   - Proxy already running here: ./capacity install --app-only
+   - Proxy on another server: ./capacity install --proxy-url URL --key KEY (ask me for both)
+4. Help me add accounts with: mako-capacity login claude, login codex and login cursor. I complete each browser sign-in myself.
+5. If I use Herdr, install the widget: herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
+6. If my proxy has the Expiring First plugin, point its quota_file at Mako's quota.json, as the README describes.
+7. Check that it works: run mako-capacity doctor, and confirm the dock shows my accounts.
+
+Never print, paste or commit tokens, keys, or files from the proxy's auths folder. Ask me before any command that deletes data or restarts Docker containers.
+```
+
+</details>
+
 ## Add your accounts
 
 ```sh
@@ -272,6 +300,33 @@ On PowerShell, set `$env:CLAUDE_PROXY_PORT` before `.\capacity.cmd install`. The
 port choice persists. Logins need their OAuth callback ports free: **54545** for
 Claude and **1455** for Codex. A `—` in the dock includes an explanation in the
 hover bubble.
+
+## Recommended: Expiring First routing
+
+[Expiring First](https://github.com/magoz/cpa-expiring-first) is a CLIProxyAPI
+plugin that sends each request to the account whose weekly quota resets soonest
+and still has quota left. Quota that would reset unused is spent first. It needs
+fresh quota readings, and Mako Capacity writes them: every collector run saves
+`state/quota.json` in the proxy folder, in the plugin's `expiring-first.quota.v1`
+format. The file holds quota percentages and reset times only, no credentials.
+
+1. Install **Expiring First** from the plugin store in the proxy dashboard
+   (`http://localhost:8317/management.html`).
+2. Point it at Mako's file in the proxy's `config.yaml`:
+
+   ```yaml
+   plugins:
+     enabled: true
+     configs:
+       expiring-first:
+         enabled: true
+         quota_file: /CLIProxyAPI/state/quota.json
+   ```
+
+The Docker setup mounts that folder read-only at `/CLIProxyAPI/state`. If you run
+the proxy another way, set `QUOTA_FILE` in `~/.mako-capacity/settings.json` to a
+path the proxy can read. A remote proxy needs its own copy of the file, so Mako
+does not write one in remote mode.
 
 ## Proxy on another machine
 
