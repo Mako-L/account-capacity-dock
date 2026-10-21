@@ -10,11 +10,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            asset: Mako-Capacity-macOS.zip
+            asset: Mako-Capacity-macOS.dmg
           - os: windows-latest
-            asset: mako-capacity-windows-x64.zip
+            asset: mako-capacity-windows-x64.exe
           - os: ubuntu-latest
-            asset: mako-capacity-linux-x64.tar.gz
+            asset: mako-capacity-linux-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,21 +30,20 @@ jobs:
         run: |
           MAKO_UNIVERSAL=1 ./build.sh
           lipo -archs "build/Mako Capacity.app/Contents/MacOS/MakoCapacity"
-          ditto -c -k --keepParent "build/Mako Capacity.app" "${{ matrix.asset }}"
+          # A disk image with the app and an Applications shortcut to drag it onto.
+          mkdir dmg
+          ditto "build/Mako Capacity.app" "dmg/Mako Capacity.app"
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "Mako Capacity" -srcfolder dmg -ov -format UDZO "${{ matrix.asset }}"
       - if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cargo build --locked --release --manifest-path native/Cargo.toml
-          New-Item -ItemType Directory dist | Out-Null
-          Copy-Item native/target/release/mako-capacity.exe, LICENSE dist/
-          Copy-Item Resources/*-LICENSE.txt dist/
-          Compress-Archive -Path dist/* -DestinationPath "${{ matrix.asset }}"
+          Copy-Item native/target/release/mako-capacity.exe "${{ matrix.asset }}"
       - if: runner.os == 'Linux'
         run: |
           cargo build --locked --release --manifest-path native/Cargo.toml
-          mkdir dist
-          cp native/target/release/mako-capacity LICENSE Resources/*-LICENSE.txt dist/
-          tar -czf "${{ matrix.asset }}" -C dist .
+          cp native/target/release/mako-capacity "${{ matrix.asset }}"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
@@ -62,6 +61,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Plain binaries carry no licence files, so the notices ship as one text asset.
+          cat LICENSE Resources/CodeBurn-LICENSE.txt Resources/LLimit-LICENSE.txt > assets/LICENSES.txt
           cd assets
           sha256sum * > SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" * --title "Mako Capacity $GITHUB_REF_NAME" \

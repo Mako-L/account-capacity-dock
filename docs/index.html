@@ -37,7 +37,16 @@
   .brand img { width: 28px; height: 28px; border-radius: 7px; }
   nav a { color: var(--muted); text-decoration: none; margin-left: 24px; font-size: 15px; }
   nav a:hover, nav a:focus-visible { color: var(--text); }
-  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 64px; align-items: center; padding: 48px 0 64px; }
+  body { padding-right: 104px; }
+  .hero { text-align: center; padding: 56px 0 72px; }
+  .hero .lede { margin-left: auto; margin-right: auto; }
+  .hero .providers, .hero .buttons { justify-content: center; }
+  .hint { color: var(--muted); font-size: 14px; margin: 20px 0 0; }
+  .hero-shot {
+    position: relative; margin: 40px auto 0; max-width: 1040px; border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03), 0 -20px 140px rgba(48,209,88,.10);
+  }
   h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; margin: 0 0 20px; letter-spacing: -0.02em; }
   .lede { color: var(--muted); font-size: 19px; margin: 0 0 32px; max-width: 34em; }
   .providers { display: flex; gap: 16px; margin: 0 0 32px; padding: 0; list-style: none; font-size: 15px; color: var(--muted); }
@@ -55,7 +64,69 @@
   .button small { font-weight: 400; opacity: 0.8; }
   .button:hover { filter: brightness(1.1); }
   .button:focus-visible, nav a:focus-visible, .copy:focus-visible { outline: 3px solid #64a8ff; outline-offset: 3px; }
-  .hero-shot { justify-self: center; max-width: 380px; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
+  /* Live clone of the dock: geometry from native/src/design.rs. */
+  .dock { position: fixed; top: 50%; right: 0; width: 88px; transform: translateY(-50%); z-index: 20; }
+  .dock svg.surface { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 30px 0 32px 8px; }
+  .dock .handle { width: 18px; height: 12px; margin-bottom: 6px; display: grid; gap: 3px; }
+  .dock .handle i { display: block; height: 2px; border-radius: 1px; background: #8e8e93; }
+  .cell { all: unset; box-sizing: border-box; width: 72px; padding: 6px 0 4px; border-radius: 12px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .cell:hover, .cell:focus-visible, .cell[aria-expanded="true"] { background: rgba(255,255,255,.07); }
+  .cell:focus-visible { outline: 2px solid #64a8ff; }
+  .ring { position: relative; width: 46px; height: 46px; }
+  .ring svg { position: absolute; inset: 0; }
+  .ring img, .ring .cube { position: absolute; inset: 13px; width: 20px; height: 20px; }
+  .cell .pct { font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .cell .name { font-size: 11px; color: #9a9aa2; max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell .models { font-size: 10px; color: #9a9aa2; width: 64px; display: grid; grid-template-columns: 1fr auto; line-height: 1.35; }
+  .dock .tools { display: flex; gap: 18px; margin-top: 8px; color: #e6e6ea; }
+  .bubble {
+    position: fixed; right: 100px; width: 330px; z-index: 21; padding: 18px 20px; border-radius: 18px;
+    background: #1c1c1c; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    opacity: 0; transform: translateX(8px); pointer-events: none; transition: opacity .16s, transform .16s;
+  }
+  .bubble.open { opacity: 1; transform: none; pointer-events: auto; }
+  .bubble::after {
+    content: ""; position: absolute; right: -8px; top: var(--tail, 50%); width: 14px; height: 14px;
+    background: #1c1c1c; border: 1px solid rgba(255,255,255,.12); border-left: 0; border-bottom: 0;
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .bubble .prov { font-size: 11px; letter-spacing: .04em; margin: 0 0 12px; }
+  .bubble .head { display: flex; align-items: center; gap: 12px; }
+  .bubble .head .title { flex: 1; font-weight: 600; }
+  .bubble .head .big { font-size: 28px; font-weight: 600; }
+  .bubble .email { color: #9a9aa2; font-size: 13px; margin: 10px 0 12px; }
+  .bubble .row { display: flex; justify-content: space-between; font-size: 13px; margin: 0 0 4px; }
+  .bubble .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.09); overflow: hidden; margin: 0 0 4px; }
+  .bubble .bar i { display: block; height: 100%; border-radius: 3px; }
+  .bubble .reset { font-size: 11px; color: #9a9aa2; margin: 0 0 12px; }
+  .bubble .msg { font-size: 13px; color: #9a9aa2; margin: 0 0 12px; }
+  .bubble .usage { border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; font-size: 12px; color: #c9c9cf; }
+  .bubble .usage div { display: flex; justify-content: space-between; }
+  .bubble .src { margin-top: 10px; font-size: 11px; color: #8a8a94; }
+  @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
+  /* Short screens: the dock scrolls instead of running off the top and bottom. */
+  .dock .items { max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none; }
+  .dock .items::-webkit-scrollbar { display: none; }
+  /* Phones: the dock moves to the bottom edge, as the app can, and the card opens above it. */
+  @media (max-width: 760px) {
+    body { padding-right: 0; padding-bottom: 96px; }
+    .wrap { padding: 0 16px; }
+    .dock { top: auto; bottom: 0; left: 0; right: 0; width: auto; transform: none;
+      background: #111; border-top: 1px solid rgba(255,255,255,.12); border-radius: 18px 18px 0 0; }
+    .dock svg.surface, .dock .handle, .dock .tools, .cell .name, .cell .models { display: none; }
+    .dock .items { flex-direction: row; justify-content: flex-start; gap: 4px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+      max-height: none; overflow-x: auto; overflow-y: hidden; }
+    .cell { width: 58px; flex: none; }
+    .cell .pct { font-size: 13px; }
+    .ring { width: 40px !important; height: 40px !important; }
+    .ring img, .ring .cube { inset: 11px; width: 18px; height: 18px; }
+    .bubble { left: 12px; right: 12px; top: auto !important; bottom: 96px; width: auto; max-height: calc(100vh - 120px); overflow-y: auto;
+      transform: translateY(8px); }
+    .bubble.open { transform: none; }
+    .bubble::after { display: none; }
+  }
   section { padding: 64px 0; border-top: 1px solid var(--border); }
   h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; letter-spacing: -0.01em; }
   .section-lede { color: var(--muted); margin: 0 0 32px; max-width: 42em; }
@@ -69,6 +140,8 @@
   .download h3 { margin: 0 0 4px; }
   .download p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
   .code { position: relative; margin: 12px 0 0; }
+  code { overflow-wrap: anywhere; }
+  pre code { overflow-wrap: normal; }
   pre {
     margin: 0; padding: 16px 64px 16px 16px; background: #0a0a0c; border: 1px solid var(--border);
     border-radius: 10px; overflow-x: auto; font: 14px/1.6 var(--mono); color: #e4e4e8;
@@ -88,11 +161,20 @@
   .note strong { color: #ffe9ad; }
   footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); }
   footer a { color: var(--text); }
+  @media (max-width: 560px) {
+    nav a:not([href^="https"]) { display: none; }
+    .hero { padding: 32px 0 48px; }
+    .lede { font-size: 17px; }
+    .buttons .button { flex: 1 1 100%; justify-content: center; }
+    .hero-shot { margin-top: 28px; border-radius: 12px; }
+    section { padding: 48px 0; }
+    pre { font-size: 13px; }
+  }
   @media (max-width: 880px) {
-    .hero, .herdr { grid-template-columns: 1fr; gap: 40px; }
+    .herdr { grid-template-columns: 1fr; gap: 32px; }
+    .herdr > .shot:last-child { max-width: 180px; justify-self: center; }
     .features, .downloads, .steps { grid-template-columns: 1fr; }
-    nav a { margin-left: 16px; }
-    .hero-shot { max-width: 320px; }
+    nav a { margin-left: 14px; }
   }
 </style>
 </head>
@@ -110,24 +192,22 @@
 
   <main>
     <div class="hero">
-      <div>
-        <h1>Every AI account's capacity, one glance away</h1>
-        <p class="lede">A dock that shows how much of each quota you have used, when it resets, and what today's work cost. It reads your accounts locally and never routes your prompts.</p>
-        <ul class="providers" aria-label="Supported providers">
-          <li class="claude">Claude</li><li class="codex">Codex</li><li class="cursor">Cursor</li>
-        </ul>
-        <div class="buttons">
-          <a class="button primary" id="primary-download" href="#download">Download 1.0</a>
-          <a class="button" href="https://github.com/Mako-L/account-capacity-dock">View source</a>
-        </div>
+      <h1>Every AI account's capacity, one glance away</h1>
+      <p class="lede">A dock that shows how much of each quota you have used, when it resets, and what today's work cost. It reads your accounts locally and never routes your prompts.</p>
+      <ul class="providers" aria-label="Supported providers">
+        <li class="claude">Claude</li><li class="codex">Codex</li><li class="cursor">Cursor</li>
+      </ul>
+      <div class="buttons">
+        <a class="button primary" id="primary-download" href="#download">Download 1.0</a>
+        <a class="button" href="https://github.com/Mako-L/account-capacity-dock">View source</a>
       </div>
-      <img class="hero-shot" src="images/dock.png" width="594" height="900" alt="The dock: a ring per account showing percent used, with a hover card for one account">
+      <p class="hint">Hover the dock on the right edge, just like the app.</p>
+      <div class="hero-shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts"></div>
     </div>
 
     <section aria-labelledby="overview-title">
       <h2 id="overview-title">All accounts, one view</h2>
       <p class="section-lede">Rings turn yellow at 70%, orange at 85% and red at the limit. Every card shows each quota window, its reset time and today's local token use.</p>
-      <div class="shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts" loading="lazy"></div>
       <div class="features">
         <div class="card"><h3>Quota rings</h3><p>Percent used on the tightest window: 5-hour, weekly or per model. Exhausted and disconnected accounts stay visible.</p></div>
         <div class="card"><h3>Cost on hover</h3><p>Today's tokens and API-equivalent cost from CodeBurn, with input, output and cache counts.</p></div>
@@ -145,21 +225,21 @@
         <div class="card download">
           <h3>macOS</h3>
           <p>macOS 14 or newer, Apple Silicon and Intel.</p>
-          <a class="button primary" data-os="mac" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/Mako-Capacity-macOS.zip">Download for macOS <small>.zip</small></a>
+          <a class="button primary" data-os="mac" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/Mako-Capacity-macOS.dmg">Download for macOS <small>.dmg</small></a>
         </div>
         <div class="card download">
           <h3>Windows</h3>
           <p>Windows 10 and 11, 64-bit.</p>
-          <a class="button" data-os="win" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-windows-x64.zip">Download for Windows <small>.zip</small></a>
+          <a class="button" data-os="win" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-windows-x64.exe">Download for Windows <small>.exe</small></a>
         </div>
         <div class="card download">
           <h3>Linux</h3>
-          <p>Desktop Linux, 64-bit, X11 or Wayland.</p>
-          <a class="button" data-os="linux" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-linux-x64.tar.gz">Download for Linux <small>.tar.gz</small></a>
+          <p>Desktop Linux, 64-bit, X11 or Wayland. Run <code>chmod +x</code> on it once.</p>
+          <a class="button" data-os="linux" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-linux-x64">Download for Linux <small>binary</small></a>
         </div>
       </div>
       <p class="note"><strong>Windows and Linux are untested by hand.</strong> They build and pass the automated checks, but nobody has used them on a real machine yet. Hands-on testing is on the roadmap. <a href="https://github.com/Mako-L/account-capacity-dock/issues">Report a problem</a>.</p>
-      <p class="section-lede" style="margin-top:24px">The macOS app is not notarised. After you move it to Applications, run this once, or right-click the app and choose <strong>Open</strong>:</p>
+      <p class="section-lede" style="margin-top:24px">The macOS app is not notarised. Open the disk image and drag the app to Applications. Then run this once, or right-click the app and choose <strong>Open</strong>:</p>
       <div class="code"><pre><code>xattr -dr com.apple.quarantine "/Applications/Mako Capacity.app"</code></pre></div>
     </section>
 
@@ -213,7 +293,108 @@ herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
     <p>Mako Capacity is MIT licensed. The dock design is based on <a href="https://github.com/getagentseal/codeburn">CodeBurn</a>'s Capacity Dock; Cursor quota conventions follow <a href="https://github.com/githajae/LLimit">LLimit</a>. Screenshots use demo accounts. Claude, Codex and Cursor are trademarks of their owners; this project is not affiliated with them.</p>
   </footer>
 </div>
+<aside class="dock" aria-label="Live demo of the dock, with demo accounts">
+  <svg class="surface" aria-hidden="true"><path id="dock-path" fill="#111" stroke="rgba(255,255,255,.12)" stroke-width="1"/></svg>
+  <div class="items" id="dock-items">
+    <div class="handle" aria-hidden="true"><i></i><i></i><i></i></div>
+  </div>
+</aside>
+<div class="bubble" id="bubble" role="tooltip"></div>
 <script>
+  // Demo accounts for the live dock clone. Same rules as the app: ring = most constrained window
+  // (Cursor: Cursor Models), green under 70%, yellow from 70, orange from 85, red at 100.
+  const H = 3600 * 1000, now = Date.now();
+  const ACCOUNTS = [
+    { p: 'Claude', t: 'studio', e: 'studio@example.com', s: 'Available', w: [['5-hour', 22, 3.1], ['Weekly', 38, 109]] },
+    { p: 'Claude', t: 'research', e: 'research@example.com', s: 'Available', w: [['5-hour', 64, 1.3], ['Weekly', 81, 46]] },
+    { p: 'Claude', t: 'side-project', e: 'side@example.com', s: 'At limit', w: [['5-hour', 100, 0.5], ['Weekly', 100, 14]] },
+    { p: 'Claude', t: 'archive', e: 'archive@example.com', s: 'Reconnect', w: [], m: 'Sign in again in the provider app or proxy.' },
+    { p: 'Codex', t: 'Pro Max', e: 'builder@example.com', s: 'Available', plan: 'Pro Max', w: [['Weekly', 12, 149]] },
+    { p: 'Codex', t: 'Pro', e: 'reviewer@example.com', s: 'Available', plan: 'Pro', w: [['5-hour', 47, 2.4], ['Weekly', 73, 59]] },
+    { p: 'Cursor', t: 'cursor', e: 'dev@example.com', s: 'Available', plan: 'Pro', w: [['Cursor Models', 28, 400], ['Other Models', 9, 400], ['Grok Bot', 3, 20]] },
+  ];
+  const TODAY = { Claude: ['48.2M', '$41.87'], Codex: ['3.4M', '$6.12'], Cursor: ['0', '$0.00'] };
+  const PROVIDER = { Claude: '#e69860', Codex: '#5cd6b3', Cursor: '#b384f2' };
+  const used = a => a.p === 'Cursor' ? a.w[0][1] : a.w.length ? Math.max(...a.w.map(w => w[1])) : null;
+  const signal = a => a.s === 'Reconnect' ? '#ff9f0a' : used(a) >= 100 ? '#ff453a' : used(a) >= 85 ? '#ff9f0a' : used(a) >= 70 ? '#ffd60a' : '#30d158';
+  const reset = h => { const m = Math.round(h * 60); return m < 60 ? `Resets in ${m}m` : m < 1440 ? `Resets in ${Math.floor(m / 60)}h ${m % 60}m` : `Resets in ${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
+  // Rounded-square ring that starts at the top centre and runs clockwise, like the app.
+  const RING = 'M23 3 H34 Q43 3 43 12 V34 Q43 43 34 43 H12 Q3 43 3 34 V12 Q3 3 12 3 Z';
+  const CUBE = '<svg class="cube" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 .13 1.89 5.68 1.47 6.4v11.19l.42.72 9.61 5.55h1l9.61-5.55.42-.72V6.4l-.42-.72L12.5.13Z"/><path fill="#111" d="M2.66 6.34h18.55l.3.51-9.28 16.07-.23-.06V12.34l-.3-.51-9.11-5.26Z"/></svg>';
+  const ring = (a, size) => `<div class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 46 46" aria-hidden="true">
+      <path d="${RING}" fill="none" stroke="#2c2c2e" stroke-width="5"/>
+      <path d="${RING}" fill="none" stroke="${signal(a)}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="${used(a) || 0} 100" style="${used(a) ? '' : 'display:none'}"/>
+    </svg>${a.p === 'Cursor' ? CUBE : `<img src="images/${a.p.toLowerCase()}.png" alt="">`}</div>`;
+
+  const items = document.getElementById('dock-items');
+  ACCOUNTS.forEach((a, i) => {
+    const pct = used(a) == null ? '—' : used(a) + '%';
+    const cell = document.createElement('button');
+    cell.className = 'cell';
+    cell.setAttribute('aria-label', `${a.p} ${a.t}: ${pct} used, ${a.s}`);
+    cell.setAttribute('aria-expanded', 'false');
+    cell.innerHTML = ring(a, 46) + (a.p === 'Cursor'
+      ? `<div class="models">${a.w.map(w => `<span>${w[0].split(' ')[0].replace('Cursor', 'Models')}</span><b style="color:${w[1] >= 70 ? '#ffd60a' : '#30d158'}">${w[1]}%</b>`).join('')}</div>`
+      : `<span class="pct" style="color:${signal(a)}">${pct}</span><span class="name">${a.t}</span>`);
+    cell.addEventListener('mouseenter', () => { if (matchMedia('(hover: hover)').matches) show(i, cell); });
+    // Keyboard focus only: a tap also focuses the button, and the click below toggles the card.
+    cell.addEventListener('focus', () => { if (cell.matches(':focus-visible')) show(i, cell); });
+    cell.addEventListener('click', () => bubble.classList.contains('open') && current === i ? hide() : show(i, cell));
+    items.appendChild(cell);
+  });
+  items.insertAdjacentHTML('beforeend', `<div class="tools" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 18 18"><g fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="2"/><rect x="10" y="1" width="7" height="7" rx="2"/><rect x="1" y="10" width="7" height="7" rx="2"/><rect x="10" y="10" width="7" height="7" rx="2"/></g></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+  </div>`);
+
+  // The dock outline from design.rs: flares into the screen edge at top and bottom.
+  const dock = document.querySelector('.dock');
+  function drawDock() {
+    const w = 88, h = dock.offsetHeight;
+    if (!h || matchMedia('(max-width: 760px)').matches) return;
+    document.getElementById('dock-path').setAttribute('d',
+      `M${w} 0 Q${w} 26 ${w - 26} 26 L24 24 Q0 24 0 48 L0 ${h - 48} Q0 ${h - 24} 24 ${h - 24} L${w - 26} ${h - 24} Q${w} ${h - 26} ${w} ${h} Z`);
+    dock.querySelector('svg.surface').setAttribute('viewBox', `0 0 ${w} ${h}`);
+    dock.querySelector('svg.surface').setAttribute('preserveAspectRatio', 'none');
+  }
+  drawDock(); addEventListener('resize', drawDock);
+
+  const bubble = document.getElementById('bubble');
+  let current = -1, closeTimer;
+  function show(i, cell) {
+    clearTimeout(closeTimer);
+    document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', String(c === cell)));
+    current = i;
+    const a = ACCOUNTS[i], pct = used(a) == null ? '—' : used(a) + '%';
+    bubble.innerHTML = `<p class="prov" style="color:${PROVIDER[a.p]}">${a.p.toUpperCase()}</p>
+      <div class="head">${ring(a, 40)}<span class="title">${a.t}</span><span class="big" style="color:${signal(a)}">${pct}</span></div>
+      <p class="email">${a.e}</p>
+      <div class="row"><span>${a.plan || a.p}</span><span style="color:${signal(a)}">${a.s}</span></div>
+      <div style="height:10px"></div>
+      ${a.w.length ? a.w.map(w => `<div class="row"><span>${w[0]}</span><span>${w[1]}% used</span></div>
+        <div class="bar"><i style="width:${w[1]}%;background:${w[1] >= 100 ? '#ff453a' : PROVIDER[a.p]}"></i></div>
+        <p class="reset">${reset(w[2])}</p>`).join('') : `<p class="msg">${a.m}</p>`}
+      <div class="usage"><div><b>Today · local ${a.p === 'Cursor' ? 'Cursor CLI' : a.p} usage</b></div>
+        <div><span>Tokens</span><span>${TODAY[a.p][0]}</span></div>
+        <div><span>API-equivalent cost</span><span>${TODAY[a.p][1]}</span></div></div>
+      <p class="src">${a.p === 'Cursor' ? 'Cursor CLI' : 'CLI proxy'} · demo account</p>`;
+    if (matchMedia('(max-width: 760px)').matches) { bubble.classList.add('open'); return; }
+    const r = cell.getBoundingClientRect(), b = bubble.offsetHeight;
+    const top = Math.min(Math.max(12, r.top + r.height / 2 - b / 2), innerHeight - b - 12);
+    bubble.style.top = top + 'px';
+    bubble.style.setProperty('--tail', (r.top + r.height / 2 - top) + 'px');
+    bubble.classList.add('open');
+  }
+  function hide() {
+    bubble.classList.remove('open'); current = -1;
+    document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', 'false'));
+  }
+  dock.addEventListener('mouseleave', () => { closeTimer = setTimeout(hide, 250); });
+  bubble.addEventListener('mouseenter', () => clearTimeout(closeTimer));
+  bubble.addEventListener('mouseleave', () => { closeTimer = setTimeout(hide, 250); });
+  addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  document.addEventListener('click', e => { if (!e.target.closest('.dock, .bubble')) hide(); });
+
   // Highlight the download for the visitor's system, and add copy buttons to code blocks.
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   const os = /win/i.test(platform) ? 'win' : /linux|x11/i.test(platform) ? 'linux' : /mac/i.test(platform) ? 'mac' : '';
