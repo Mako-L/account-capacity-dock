@@ -202,8 +202,6 @@ def install_app():
         info = plistlib.loads((ROOT / 'Info.plist').read_bytes())
         if not use_swift:
             info.pop('CFBundleIconFile', None)
-        info['CFBundleVersion'] = '2'
-        info['CFBundleShortVersionString'] = '0.2.0'
         (destination / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
         shutil.copytree(ROOT / 'Resources', destination / 'Contents/Resources', dirs_exist_ok=True)
         run('codesign', '--force', '--deep', '--sign', '-', destination)

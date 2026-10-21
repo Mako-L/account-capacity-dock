@@ -3,8 +3,20 @@ set -eu
 capacity_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 capacity_app="$capacity_root/build/Mako Capacity.app"
 mkdir -p "$capacity_app/Contents/MacOS" "$capacity_app/Contents/Resources"
-swiftc -swift-version 5 -parse-as-library -O -framework AppKit -framework SwiftUI -framework Combine \
-  "$capacity_root/App.swift" -o "$capacity_app/Contents/MacOS/MakoCapacity"
+capacity_swift() {
+  swiftc -swift-version 5 -parse-as-library -O -framework AppKit -framework SwiftUI -framework Combine \
+    "$@" "$capacity_root/App.swift"
+}
+if [ "${MAKO_UNIVERSAL:-0}" = 1 ]; then
+  # Release builds run on Apple Silicon and Intel Macs.
+  for capacity_arch in arm64 x86_64; do
+    capacity_swift -target "$capacity_arch-apple-macos14.0" -o "$capacity_root/build/MakoCapacity-$capacity_arch"
+  done
+  lipo -create -output "$capacity_app/Contents/MacOS/MakoCapacity" \
+    "$capacity_root/build/MakoCapacity-arm64" "$capacity_root/build/MakoCapacity-x86_64"
+else
+  capacity_swift -o "$capacity_app/Contents/MacOS/MakoCapacity"
+fi
 cp "$capacity_root/collector.py" "$capacity_app/Contents/Resources/collector.py"
 cp "$capacity_root/codeburn_usage.py" "$capacity_app/Contents/Resources/codeburn_usage.py"
 cp "$capacity_root/platform_paths.py" "$capacity_app/Contents/Resources/platform_paths.py"

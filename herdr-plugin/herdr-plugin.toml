@@ -1,6 +1,6 @@
 id = "mako-capacity"
 name = "Mako Capacity"
-version = "0.1.0"
+version = "1.0.0"
 min_herdr_version = "0.8.0"
 description = "Percent used for every Claude, Codex and Cursor account, docked beside your panes."
 platforms = ["macos", "linux"]

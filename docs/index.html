@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mako Capacity</title>
+<meta name="description" content="See how much capacity is left on every Claude, Codex and Cursor account, in one dock.">
+<link rel="icon" href="images/icon.png">
+<style>
+  :root {
+    --bg: #111113;
+    --surface: #1c1c1f;
+    --surface-2: #26262a;
+    --border: #2f2f34;
+    --text: #f2f2f4;
+    --muted: #a3a3ab;
+    --accent: #30d158;
+    --accent-text: #08210f;
+    --claude: #e69860;
+    --codex: #5cd6b3;
+    --cursor: #b384f2;
+    --radius: 14px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  a { color: inherit; }
+  img { max-width: 100%; height: auto; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  header.top { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { display: flex; gap: 10px; align-items: center; font-weight: 600; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 24px; font-size: 15px; }
+  nav a:hover, nav a:focus-visible { color: var(--text); }
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 64px; align-items: center; padding: 48px 0 64px; }
+  h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; margin: 0 0 20px; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); font-size: 19px; margin: 0 0 32px; max-width: 34em; }
+  .providers { display: flex; gap: 16px; margin: 0 0 32px; padding: 0; list-style: none; font-size: 15px; color: var(--muted); }
+  .providers li::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+  .providers .claude::before { background: var(--claude); }
+  .providers .codex::before { background: var(--codex); }
+  .providers .cursor::before { background: var(--cursor); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+  .button {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 12px 20px;
+    border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .button small { font-weight: 400; opacity: 0.8; }
+  .button:hover { filter: brightness(1.1); }
+  .button:focus-visible, nav a:focus-visible, .copy:focus-visible { outline: 3px solid #64a8ff; outline-offset: 3px; }
+  .hero-shot { justify-self: center; max-width: 380px; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
+  section { padding: 64px 0; border-top: 1px solid var(--border); }
+  h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; letter-spacing: -0.01em; }
+  .section-lede { color: var(--muted); margin: 0 0 32px; max-width: 42em; }
+  .shot { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; background: var(--surface); }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  .card h3 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .herdr { display: grid; grid-template-columns: 1fr 200px; gap: 32px; align-items: start; }
+  .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .download h3 { margin: 0 0 4px; }
+  .download p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
+  .code { position: relative; margin: 12px 0 0; }
+  pre {
+    margin: 0; padding: 16px 64px 16px 16px; background: #0a0a0c; border: 1px solid var(--border);
+    border-radius: 10px; overflow-x: auto; font: 14px/1.6 var(--mono); color: #e4e4e8;
+  }
+  pre .c { color: #8a8a94; }
+  .copy {
+    position: absolute; top: 8px; right: 8px; min-width: 44px; min-height: 32px; padding: 4px 10px;
+    border-radius: 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    font: 13px/1 inherit; cursor: pointer;
+  }
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .steps h3 { margin: 0; font-size: 17px; }
+  .note {
+    margin-top: 32px; padding: 16px 20px; border-radius: 10px; border: 1px solid #6b5418;
+    background: #2a2210; color: #f5dd9d; font-size: 15px;
+  }
+  .note strong { color: #ffe9ad; }
+  footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); }
+  footer a { color: var(--text); }
+  @media (max-width: 880px) {
+    .hero, .herdr { grid-template-columns: 1fr; gap: 40px; }
+    .features, .downloads, .steps { grid-template-columns: 1fr; }
+    nav a { margin-left: 16px; }
+    .hero-shot { max-width: 320px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#"><img src="images/icon.png" alt="">Mako Capacity</a>
+    <nav aria-label="Sections">
+      <a href="#download">Download</a>
+      <a href="#install">Install</a>
+      <a href="#herdr">Herdr</a>
+      <a href="https://github.com/Mako-L/account-capacity-dock">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>Every AI account's capacity, one glance away</h1>
+        <p class="lede">A dock that shows how much of each quota you have used, when it resets, and what today's work cost. It reads your accounts locally and never routes your prompts.</p>
+        <ul class="providers" aria-label="Supported providers">
+          <li class="claude">Claude</li><li class="codex">Codex</li><li class="cursor">Cursor</li>
+        </ul>
+        <div class="buttons">
+          <a class="button primary" id="primary-download" href="#download">Download 1.0</a>
+          <a class="button" href="https://github.com/Mako-L/account-capacity-dock">View source</a>
+        </div>
+      </div>
+      <img class="hero-shot" src="images/dock.png" width="594" height="900" alt="The dock: a ring per account showing percent used, with a hover card for one account">
+    </div>
+
+    <section aria-labelledby="overview-title">
+      <h2 id="overview-title">All accounts, one view</h2>
+      <p class="section-lede">Rings turn yellow at 70%, orange at 85% and red at the limit. Every card shows each quota window, its reset time and today's local token use.</p>
+      <div class="shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts" loading="lazy"></div>
+      <div class="features">
+        <div class="card"><h3>Quota rings</h3><p>Percent used on the tightest window: 5-hour, weekly or per model. Exhausted and disconnected accounts stay visible.</p></div>
+        <div class="card"><h3>Cost on hover</h3><p>Today's tokens and API-equivalent cost from CodeBurn, with input, output and cache counts.</p></div>
+        <div class="card"><h3>Manage accounts</h3><p>Hide an account from Mako, or delete its login from the proxy after a confirmation.</p></div>
+        <div class="card"><h3>Local or remote proxy</h3><p>Use CLIProxyAPI in Docker on this machine, or point Mako at a server with its address and key.</p></div>
+        <div class="card"><h3>Your layout</h3><p>Dock on any screen edge, scale it, round or square icons, labels on or off.</p></div>
+        <div class="card"><h3>Private by design</h3><p>Credentials stay with your proxy. The snapshot Mako keeps holds no tokens.</p></div>
+      </div>
+    </section>
+
+    <section id="download" aria-labelledby="download-title">
+      <h2 id="download-title">Download</h2>
+      <p class="section-lede">Version 1.0.0. Each build needs Python 3.9 or newer. Add accounts with CLIProxyAPI; the install steps below set it up.</p>
+      <div class="downloads">
+        <div class="card download">
+          <h3>macOS</h3>
+          <p>macOS 14 or newer, Apple Silicon and Intel.</p>
+          <a class="button primary" data-os="mac" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/Mako-Capacity-macOS.zip">Download for macOS <small>.zip</small></a>
+        </div>
+        <div class="card download">
+          <h3>Windows</h3>
+          <p>Windows 10 and 11, 64-bit.</p>
+          <a class="button" data-os="win" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-windows-x64.zip">Download for Windows <small>.zip</small></a>
+        </div>
+        <div class="card download">
+          <h3>Linux</h3>
+          <p>Desktop Linux, 64-bit, X11 or Wayland.</p>
+          <a class="button" data-os="linux" href="https://github.com/Mako-L/account-capacity-dock/releases/latest/download/mako-capacity-linux-x64.tar.gz">Download for Linux <small>.tar.gz</small></a>
+        </div>
+      </div>
+      <p class="note"><strong>Windows and Linux are untested by hand.</strong> They build and pass the automated checks, but nobody has used them on a real machine yet. Hands-on testing is on the roadmap. <a href="https://github.com/Mako-L/account-capacity-dock/issues">Report a problem</a>.</p>
+      <p class="section-lede" style="margin-top:24px">The macOS app is not notarised. After you move it to Applications, run this once, or right-click the app and choose <strong>Open</strong>:</p>
+      <div class="code"><pre><code>xattr -dr com.apple.quarantine "/Applications/Mako Capacity.app"</code></pre></div>
+    </section>
+
+    <section id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install with the setup CLI</h2>
+      <p class="section-lede">The CLI builds the app, installs CodeBurn and starts CLIProxyAPI in Docker. Prerequisites: Git, Python 3.9+, Node.js 22.13+ and Docker with Compose v2.</p>
+      <div class="steps">
+        <div>
+          <h3>macOS and Linux</h3>
+          <div class="code"><pre><code>git clone https://github.com/Mako-L/account-capacity-dock.git
+cd account-capacity-dock
+./capacity install</code></pre></div>
+        </div>
+        <div>
+          <h3>Windows PowerShell</h3>
+          <div class="code"><pre><code>git clone https://github.com/Mako-L/account-capacity-dock.git
+cd account-capacity-dock
+.\capacity.cmd install</code></pre></div>
+        </div>
+        <div>
+          <h3>Add your accounts</h3>
+          <div class="code"><pre><code>mako-capacity login claude   <span class="c"># repeat per account</span>
+mako-capacity login codex
+mako-capacity login cursor</code></pre></div>
+        </div>
+        <div>
+          <h3>Proxy on another machine</h3>
+          <div class="code"><pre><code>mako-capacity proxy https://server:8317 --key KEY
+<span class="c"># or, for a new install without Docker:</span>
+./capacity install --proxy-url https://server:8317 --key KEY</code></pre></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="herdr" aria-labelledby="herdr-title">
+      <h2 id="herdr-title">In your terminal, with Herdr</h2>
+      <p class="section-lede">The <a href="https://herdr.dev">Herdr</a> widget docks beside your panes. It shows rings only in a narrow pane and adds plans, notes and today's usage as it gets wider. Pin it, and it follows you to every tab.</p>
+      <div class="herdr">
+        <div>
+          <div class="shot"><img src="images/herdr-docked.png" width="1600" height="947" alt="Herdr widget docked on the right of a terminal tab" loading="lazy"></div>
+          <div class="code"><pre><code>herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
+herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
+          <p class="section-lede" style="margin-top:16px">The rings need a terminal with the Kitty graphics protocol, such as <a href="https://ghostty.org">Ghostty</a>, Kitty or WezTerm, and <code>kitty_graphics = true</code> in Herdr's config. Over SSH, the terminal you type in draws them.</p>
+        </div>
+        <div class="shot"><img src="images/herdr-compact.png" width="329" height="1003" alt="Narrow Herdr widget with a ring, percent and name per account" loading="lazy"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Mako Capacity is MIT licensed. The dock design is based on <a href="https://github.com/getagentseal/codeburn">CodeBurn</a>'s Capacity Dock; Cursor quota conventions follow <a href="https://github.com/githajae/LLimit">LLimit</a>. Screenshots use demo accounts. Claude, Codex and Cursor are trademarks of their owners; this project is not affiliated with them.</p>
+  </footer>
+</div>
+<script>
+  // Highlight the download for the visitor's system, and add copy buttons to code blocks.
+  const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  const os = /win/i.test(platform) ? 'win' : /linux|x11/i.test(platform) ? 'linux' : /mac/i.test(platform) ? 'mac' : '';
+  const match = os && document.querySelector(`[data-os="${os}"]`);
+  if (match) {
+    document.querySelectorAll('[data-os]').forEach(a => a.classList.toggle('primary', a === match));
+    const primary = document.getElementById('primary-download');
+    primary.href = match.href;
+    primary.textContent = match.firstChild.textContent.trim();
+  }
+  document.querySelectorAll('.code').forEach(block => {
+    const button = document.createElement('button');
+    button.className = 'copy';
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.setAttribute('aria-label', 'Copy command');
+    button.addEventListener('click', async () => {
+      const text = block.querySelector('code').innerText.split('\n').filter(line => !line.trim().startsWith('#')).map(line => line.replace(/\s+#.*$/, '')).join('\n');
+      try { await navigator.clipboard.writeText(text); button.textContent = 'Copied'; }
+      catch { button.textContent = 'Select and copy'; }
+      setTimeout(() => { button.textContent = 'Copy'; }, 1600);
+    });
+    block.appendChild(button);
+  });
+</script>
+</body>
+</html>

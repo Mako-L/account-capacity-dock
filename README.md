@@ -11,7 +11,8 @@ bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
 ![All accounts: a card per account with quota bars, reset times and today's local usage](docs/images/all-accounts.png)
 
-Screenshots use demo accounts.
+Screenshots use demo accounts. Downloads for macOS, Windows and Linux are on the
+[releases page](https://github.com/Mako-L/account-capacity-dock/releases/latest).
 
 > [!WARNING]
 > **Windows and Linux are untested.** The developer has only run Mako Capacity on
@@ -191,9 +192,11 @@ countdowns. It reads the same snapshot as the
 dock and skips accounts hidden in the dashboard.
 
 ```sh
-herdr plugin link "$PWD/herdr-plugin"
+herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
 herdr plugin action invoke open-right --plugin mako-capacity   # or open-left
 ```
+
+From a checkout, `herdr plugin link "$PWD/herdr-plugin"` installs your local copy instead.
 
 <p align="center">
   <img src="docs/images/herdr-compact.png" alt="Narrow widget: ring, percent and name" width="160">

@@ -1,0 +1,68 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            asset: Mako-Capacity-macOS.zip
+          - os: windows-latest
+            asset: mako-capacity-windows-x64.zip
+          - os: ubuntu-latest
+            asset: mako-capacity-linux-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests
+      - if: runner.os != 'macOS'
+        uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libxkbcommon-dev libwayland-dev
+      - if: runner.os == 'macOS'
+        run: |
+          MAKO_UNIVERSAL=1 ./build.sh
+          lipo -archs "build/Mako Capacity.app/Contents/MacOS/MakoCapacity"
+          ditto -c -k --keepParent "build/Mako Capacity.app" "${{ matrix.asset }}"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo build --locked --release --manifest-path native/Cargo.toml
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item native/target/release/mako-capacity.exe, LICENSE dist/
+          Copy-Item Resources/*-LICENSE.txt dist/
+          Compress-Archive -Path dist/* -DestinationPath "${{ matrix.asset }}"
+      - if: runner.os == 'Linux'
+        run: |
+          cargo build --locked --release --manifest-path native/Cargo.toml
+          mkdir dist
+          cp native/target/release/mako-capacity LICENSE Resources/*-LICENSE.txt dist/
+          tar -czf "${{ matrix.asset }}" -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          sha256sum * > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" * --title "Mako Capacity $GITHUB_REF_NAME" \
+            --notes-file ../.github/release-notes.md

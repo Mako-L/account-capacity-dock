@@ -6,8 +6,8 @@
 <key>CFBundleName</key><string>Mako Capacity</string>
 <key>CFBundleIconFile</key><string>Capacity.icns</string>
 <key>CFBundleDisplayName</key><string>Mako Capacity</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>CFBundleVersion</key><string>100</string>
+<key>CFBundleShortVersionString</key><string>1.0.0</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
