@@ -42,6 +42,8 @@
   .hero .lede { margin-left: auto; margin-right: auto; }
   .hero .providers, .hero .buttons { justify-content: center; }
   .hint { color: var(--muted); font-size: 14px; margin: 20px 0 0; }
+  .narrow-only { display: none; }
+  @media (max-width: 760px) { .wide-only { display: none; } .narrow-only { display: inline; } }
   .hero-shot {
     position: relative; margin: 40px auto 0; max-width: 1040px; border-radius: 18px; overflow: hidden;
     border: 1px solid var(--border);
@@ -67,10 +69,10 @@
   /* Live clone of the dock: geometry from native/src/design.rs. */
   .dock { position: fixed; top: 50%; right: 0; width: 88px; transform: translateY(-50%); z-index: 20; }
   .dock svg.surface { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 30px 0 32px 8px; }
+  .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 30px 0 30px 8px; }
   .dock .handle { width: 18px; height: 12px; margin-bottom: 6px; display: grid; gap: 3px; }
   .dock .handle i { display: block; height: 2px; border-radius: 1px; background: #8e8e93; }
-  .cell { all: unset; box-sizing: border-box; width: 72px; padding: 6px 0 4px; border-radius: 12px; cursor: pointer;
+  .cell { all: unset; box-sizing: border-box; width: 72px; padding: 4px 0 3px; border-radius: 12px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .cell:hover, .cell:focus-visible, .cell[aria-expanded="true"] { background: rgba(255,255,255,.07); }
   .cell:focus-visible { outline: 2px solid #64a8ff; }
@@ -106,7 +108,13 @@
   .bubble .usage div { display: flex; justify-content: space-between; }
   .bubble .src { margin-top: 10px; font-size: 11px; color: #8a8a94; }
   @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
-  /* Short screens: the dock scrolls instead of running off the top and bottom. */
+  @media (max-height: 820px) and (min-width: 761px) {
+    .cell .name { display: none; }
+    .ring { width: 40px !important; height: 40px !important; }
+    .ring img, .ring .cube { inset: 11px; width: 18px; height: 18px; }
+    .cell .pct { font-size: 13px; }
+  }
+  /* Very short screens: the dock scrolls instead of running off the top and bottom. */
   .dock .items { max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none; }
   .dock .items::-webkit-scrollbar { display: none; }
   /* Phones: the dock moves to the bottom edge, as the app can, and the card opens above it. */
@@ -114,7 +122,7 @@
     body { padding-right: 0; padding-bottom: 96px; }
     .wrap { padding: 0 16px; }
     .dock { top: auto; bottom: 0; left: 0; right: 0; width: auto; transform: none;
-      background: #111; border-top: 1px solid rgba(255,255,255,.12); border-radius: 18px 18px 0 0; }
+      background: #050505; border-top: 1px solid rgba(255,255,255,.16); border-radius: 18px 18px 0 0; }
     .dock svg.surface, .dock .handle, .dock .tools, .cell .name, .cell .models { display: none; }
     .dock .items { flex-direction: row; justify-content: flex-start; gap: 4px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
       max-height: none; overflow-x: auto; overflow-y: hidden; }
@@ -141,6 +149,7 @@
   .download p { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
   .code { position: relative; margin: 12px 0 0; }
   code { overflow-wrap: anywhere; }
+  .steps > *, .downloads > *, .features > *, .herdr > * { min-width: 0; }
   pre code { overflow-wrap: normal; }
   pre {
     margin: 0; padding: 16px 64px 16px 16px; background: #0a0a0c; border: 1px solid var(--border);
@@ -168,7 +177,9 @@
     .buttons .button { flex: 1 1 100%; justify-content: center; }
     .hero-shot { margin-top: 28px; border-radius: 12px; }
     section { padding: 48px 0; }
-    pre { font-size: 13px; }
+    pre { font-size: 12.5px; padding: 44px 14px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code { overflow-wrap: anywhere; }
+    .download .button { width: 100%; justify-content: center; }
   }
   @media (max-width: 880px) {
     .herdr { grid-template-columns: 1fr; gap: 32px; }
@@ -201,7 +212,7 @@
         <a class="button primary" id="primary-download" href="#download">Download 1.0</a>
         <a class="button" href="https://github.com/Mako-L/account-capacity-dock">View source</a>
       </div>
-      <p class="hint">Hover the dock on the right edge, just like the app.</p>
+      <p class="hint"><span class="wide-only">Hover the dock on the right edge, just like the app.</span><span class="narrow-only">Tap an account in the dock below, just like the app.</span></p>
       <div class="hero-shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts"></div>
     </div>
 
@@ -279,12 +290,12 @@ mako-capacity login cursor</code></pre></div>
       <p class="section-lede">The <a href="https://herdr.dev">Herdr</a> widget docks beside your panes. It shows rings only in a narrow pane and adds plans, notes and today's usage as it gets wider. Pin it, and it follows you to every tab.</p>
       <div class="herdr">
         <div>
-          <div class="shot"><img src="images/herdr-docked.png" width="1600" height="947" alt="Herdr widget docked on the right of a terminal tab" loading="lazy"></div>
+          <div class="shot"><img src="images/herdr-docked.png" width="1600" height="947" alt="Herdr widget docked on the right of a terminal tab"></div>
           <div class="code"><pre><code>herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
 herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
           <p class="section-lede" style="margin-top:16px">The rings need a terminal with the Kitty graphics protocol, such as <a href="https://ghostty.org">Ghostty</a>, Kitty or WezTerm, and <code>kitty_graphics = true</code> in Herdr's config. Over SSH, the terminal you type in draws them.</p>
         </div>
-        <div class="shot"><img src="images/herdr-compact.png" width="329" height="1003" alt="Narrow Herdr widget with a ring, percent and name per account" loading="lazy"></div>
+        <div class="shot"><img src="images/herdr-compact.png" width="329" height="1003" alt="Narrow Herdr widget with a ring, percent and name per account"></div>
       </div>
     </section>
   </main>
@@ -294,7 +305,7 @@ herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
   </footer>
 </div>
 <aside class="dock" aria-label="Live demo of the dock, with demo accounts">
-  <svg class="surface" aria-hidden="true"><path id="dock-path" fill="#111" stroke="rgba(255,255,255,.12)" stroke-width="1"/></svg>
+  <svg class="surface" aria-hidden="true"><path id="dock-path" fill="#050505" stroke="rgba(255,255,255,.16)" stroke-width="1"/></svg>
   <div class="items" id="dock-items">
     <div class="handle" aria-hidden="true"><i></i><i></i><i></i></div>
   </div>
