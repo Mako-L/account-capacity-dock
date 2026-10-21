@@ -223,9 +223,10 @@ ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
 
 It needs [Bun](https://bun.sh); the first run installs its packages. The terminal
 mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
-in tmux. Inside Herdr it draws, but clicks land in the wrong place: Herdr passes
-mouse positions in character cells, while GPUIX expects pixels. There, use Tab and
-Enter (every button is a Tab stop), or open the app in a plain Ghostty tab. It reads the same snapshot and uses the same collector actions (Hide,
+in tmux. Herdr forwards mouse positions in character cells while GPUIX expects
+pixels, so inside Herdr `mako-capacity ui --terminal` runs the app through
+`gpuix-app/term.py`, which converts each click and scroll to the pixel centre of
+its cell. Every button is also a Tab stop that Enter presses. It reads the same snapshot and uses the same collector actions (Hide,
 Delete, Restore, proxy server) as the other renderers. GPUIX is pre-1.0, so the
 versions are pinned exactly in `gpuix-app/package.json`.
 

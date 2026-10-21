@@ -5,6 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'herdr-plugin'))
 import capacity  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'gpuix-app'))
+import term  # noqa: E402
 
 ANSI = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]')
 
@@ -92,6 +94,12 @@ class RenderTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             capacity.collect(force=True)
             self.assertEqual(len(calls), 2)
+
+    def test_herdr_cell_mouse_reports_become_pixel_centres(self):
+        # A 160 x 50 pane drawn at 1600 x 1000 pixels: cells are 10 x 20.
+        size = (50, 160, 1600, 1000)
+        self.assertEqual(term.to_pixels(b'\x1b[<0;7;14Mx\x1b[<65;20;12M', size), b'\x1b[<0;65;270Mx\x1b[<65;195;230M')
+        self.assertEqual(term.to_pixels(b'\x1b[<0;7;14m', (50, 160, 0, 0)), b'\x1b[<0;7;14m')
 
     def test_ring_png_is_valid(self):
         png = capacity.ring_png(50, (48, 209, 88), capacity.icon_mask('Cursor', 36))
