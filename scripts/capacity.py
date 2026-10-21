@@ -323,6 +323,11 @@ def main():
         if not (app / 'node_modules').is_dir():
             run('bun', 'install', '--frozen-lockfile', cwd=app)
         env = dict(os.environ, **({'GPUIX_TERMINAL': '1'} if args.terminal else {}))
+        if args.terminal and os.environ.get('HERDR_ENV') == '1':
+            # Herdr forwards mouse reports in cells, but GPUIX reads pixel positions.
+            print('Inside Herdr, clicks land in the wrong place. Use Tab and Enter, or a plain Ghostty tab.',
+                  file=sys.stderr)
+            time.sleep(2)
         os.chdir(app)
         os.execvpe('bun', ['bun', 'app.tsx', f'--view={args.view}'], env)
     elif args.command in ('down', 'status', 'logs'):

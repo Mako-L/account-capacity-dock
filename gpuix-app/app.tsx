@@ -3,7 +3,7 @@
 // (`GPUIX_TERMINAL=1 bun app.tsx`, Ghostty or kitty, also over SSH).
 // Data and actions go through collector.py and scripts/capacity.py, like the other renderers.
 import { useEffect, useState } from 'react'
-import { render, isTerminal, useWindowSize } from '@gpuix/react'
+import { Button, render, isTerminal, useWindowSize } from '@gpuix/react'
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -108,6 +108,9 @@ function readSettings(): Record<string, string> {
   try { return JSON.parse(readFileSync(path.join(HOME, 'settings.json'), 'utf8')) } catch { return {} }
 }
 
+// Long names and emails end in an ellipsis instead of widening the card.
+const ONE_LINE = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+
 // ---- Dock ------------------------------------------------------------------
 
 function DockCell({ account, active, onHover }: { account: Account; active: boolean; onHover: () => void }) {
@@ -146,7 +149,8 @@ function Card({ account, all, onAction, confirm }: {
   const usage = account.localUsage ?? undefined
   const windows = all || account.provider === 'Cursor' ? account.windows : account.windows.slice(0, 2)
   return (
-    <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+                  minWidth: 0, overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text size={10} weight={600} color={PROVIDER[account.provider]}>{account.provider.toUpperCase()}</Text>
         {onAction && !confirm && (
@@ -157,10 +161,10 @@ function Card({ account, all, onAction, confirm }: {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Ring account={account} size={40} />
-        <Text size={15} weight={600} style={{ flexGrow: 1 }}>{account.title}</Text>
-        <Text size={25} weight={600} color={signal(account)}>{pct(account)}</Text>
+        <Text size={15} weight={600} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{account.title}</Text>
+        <Text size={25} weight={600} color={signal(account)} style={{ flexShrink: 0 }}>{pct(account)}</Text>
       </div>
-      <Text size={11} color={C.muted}>{account.email}</Text>
+      <Text size={11} color={C.muted} style={ONE_LINE}>{account.email}</Text>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <Text size={12}>{account.provider === 'Claude' || !account.plan ? account.provider : account.plan}</Text>
         <Text size={12} color={signal(account)}>{stateLabel(account)}</Text>
@@ -196,12 +200,14 @@ function Card({ account, all, onAction, confirm }: {
 
 function SmallButton({ label, onClick, danger, primary }: { label: string; onClick: () => void; danger?: boolean; primary?: boolean }) {
   return (
-    <div onClick={onClick} style={{
+    // Button: a Tab stop that Enter and Space press, so it also works where mouse input does not reach.
+    <Button onClick={onClick} style={{
       paddingTop: 4, paddingBottom: 4, paddingLeft: 10, paddingRight: 10, borderRadius: 7, cursor: 'pointer',
       backgroundColor: danger ? '#ff453a' : primary ? C.blue : '#ffffff14', hover: { backgroundColor: danger ? '#ff6359' : primary ? '#3a9bff' : '#ffffff24' },
+      focusVisible: { outlineWidth: 2, outlineColor: '#64a8ff', outlineOffset: 2 },
     }}>
       <Text size={12} weight={600} color={danger || primary ? '#ffffff' : C.text}>{label}</Text>
-    </div>
+    </Button>
   )
 }
 
@@ -261,12 +267,13 @@ function App() {
   }
 
   const tab = (id: View, label: string) => (
-    <div key={id} onClick={() => setView(id)} style={{
+    <Button key={id} onClick={() => setView(id)} style={{
       paddingTop: 6, paddingBottom: 6, paddingLeft: 12, paddingRight: 12, borderRadius: 8, cursor: 'pointer',
       backgroundColor: view === id ? '#ffffff1f' : undefined, hover: { backgroundColor: '#ffffff14' },
+      focusVisible: { outlineWidth: 2, outlineColor: '#64a8ff', outlineOffset: 2 },
     }}>
       <Text size={13} weight={view === id ? 600 : 400} color={view === id ? C.text : C.muted}>{label}</Text>
-    </div>
+    </Button>
   )
 
   return (

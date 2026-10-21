@@ -4,7 +4,7 @@ import { launch } from '@gpuix/react/automation'
 
 const snapshot = process.argv[2] ?? '/tmp/demo/snapshot.json'
 mkdirSync('screenshots', { recursive: true })
-for (const view of ['dock', 'accounts', 'settings']) {
+for (const view of (process.argv[3] ?? 'dock,accounts,settings').split(',')) {
   const app = await launch({
     command: 'bun', args: ['app.tsx', `--view=${view}`],
     env: { GPUIX_BACKGROUND: '1', MAKO_CAPACITY_SNAPSHOT: snapshot, MAKO_CAPACITY_HOME: '/tmp/demo/home/.mako-capacity' },
