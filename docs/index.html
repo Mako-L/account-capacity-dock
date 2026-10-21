@@ -37,7 +37,7 @@
   .brand img { width: 28px; height: 28px; border-radius: 7px; }
   nav a { color: var(--muted); text-decoration: none; margin-left: 24px; font-size: 15px; }
   nav a:hover, nav a:focus-visible { color: var(--text); }
-  body { padding-right: 104px; }
+  body { padding-right: 84px; }
   .hero { text-align: center; padding: 56px 0 72px; }
   .hero .lede { margin-left: auto; margin-right: auto; }
   .hero .providers, .hero .buttons { justify-content: center; }
@@ -67,24 +67,25 @@
   .button:hover { filter: brightness(1.1); }
   .button:focus-visible, nav a:focus-visible, .copy:focus-visible { outline: 3px solid #64a8ff; outline-offset: 3px; }
   /* Live clone of the dock: geometry from native/src/design.rs. */
-  .dock { position: fixed; top: 50%; right: 0; width: 88px; transform: translateY(-50%); z-index: 20; }
+  .dock { position: fixed; top: 50%; right: 0; width: 68px; transform: translateY(-50%); z-index: 20; }
   .dock svg.surface { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 30px 0 30px 8px; }
-  .dock .handle { width: 18px; height: 12px; margin-bottom: 6px; display: grid; gap: 3px; }
+  .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 30px 0 30px 6px; }
+  .dock .handle { width: 16px; height: 11px; margin-bottom: 4px; display: grid; gap: 3px; }
   .dock .handle i { display: block; height: 2px; border-radius: 1px; background: #8e8e93; }
-  .cell { all: unset; box-sizing: border-box; width: 72px; padding: 4px 0 3px; border-radius: 12px; cursor: pointer;
+  .cell { all: unset; box-sizing: border-box; width: 56px; padding: 4px 0 3px; border-radius: 12px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .cell:hover, .cell:focus-visible, .cell[aria-expanded="true"] { background: rgba(255,255,255,.07); }
   .cell:focus-visible { outline: 2px solid #64a8ff; }
-  .ring { position: relative; width: 46px; height: 46px; }
+  .ring { position: relative; width: 36px; height: 36px; }
   .ring svg { position: absolute; inset: 0; }
-  .ring img, .ring .cube { position: absolute; inset: 13px; width: 20px; height: 20px; }
-  .cell .pct { font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-  .cell .name { font-size: 11px; color: #9a9aa2; max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cell .models { font-size: 10px; color: #9a9aa2; width: 64px; display: grid; grid-template-columns: 1fr auto; line-height: 1.35; }
-  .dock .tools { display: flex; gap: 18px; margin-top: 8px; color: #e6e6ea; }
+  .ring img, .ring .cube { position: absolute; inset: 28%; width: 44%; height: 44%; }
+  .cell .pct { font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .cell .name { font-size: 9.5px; color: #9a9aa2; max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell .models { font-size: 9px; color: #9a9aa2; width: 54px; display: grid; grid-template-columns: 1fr auto; column-gap: 4px; line-height: 1.35; }
+  .dock .tools { display: flex; gap: 12px; margin-top: 6px; color: #e6e6ea; }
+  .dock .tools svg { width: 15px; height: 15px; }
   .bubble {
-    position: fixed; right: 100px; width: 330px; z-index: 21; padding: 18px 20px; border-radius: 18px;
+    position: fixed; right: 78px; width: 330px; z-index: 21; padding: 18px 20px; border-radius: 18px;
     background: #1c1c1c; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 24px 60px rgba(0,0,0,.55);
     opacity: 0; transform: translateX(8px); pointer-events: none; transition: opacity .16s, transform .16s;
   }
@@ -110,9 +111,6 @@
   @media (prefers-reduced-motion: reduce) { .bubble { transition: none; } }
   @media (max-height: 820px) and (min-width: 761px) {
     .cell .name { display: none; }
-    .ring { width: 40px !important; height: 40px !important; }
-    .ring img, .ring .cube { inset: 11px; width: 18px; height: 18px; }
-    .cell .pct { font-size: 13px; }
   }
   /* Very short screens: the dock scrolls instead of running off the top and bottom. */
   .dock .items { max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none; }
@@ -126,10 +124,9 @@
     .dock svg.surface, .dock .handle, .dock .tools, .cell .name, .cell .models { display: none; }
     .dock .items { flex-direction: row; justify-content: flex-start; gap: 4px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
       max-height: none; overflow-x: auto; overflow-y: hidden; }
-    .cell { width: 58px; flex: none; }
+    .cell { width: 52px; flex: none; }
     .cell .pct { font-size: 13px; }
-    .ring { width: 40px !important; height: 40px !important; }
-    .ring img, .ring .cube { inset: 11px; width: 18px; height: 18px; }
+    .ring { width: 38px !important; height: 38px !important; }
     .bubble { left: 12px; right: 12px; top: auto !important; bottom: 96px; width: auto; max-height: calc(100vh - 120px); overflow-y: auto;
       transform: translateY(8px); }
     .bubble.open { transform: none; }
@@ -329,12 +326,12 @@ herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
   const used = a => a.p === 'Cursor' ? a.w[0][1] : a.w.length ? Math.max(...a.w.map(w => w[1])) : null;
   const signal = a => a.s === 'Reconnect' ? '#ff9f0a' : used(a) >= 100 ? '#ff453a' : used(a) >= 85 ? '#ff9f0a' : used(a) >= 70 ? '#ffd60a' : '#30d158';
   const reset = h => { const m = Math.round(h * 60); return m < 60 ? `Resets in ${m}m` : m < 1440 ? `Resets in ${Math.floor(m / 60)}h ${m % 60}m` : `Resets in ${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
-  // Rounded-square ring that starts at the top centre and runs clockwise, like the app.
-  const RING = 'M23 3 H34 Q43 3 43 12 V34 Q43 43 34 43 H12 Q3 43 3 34 V12 Q3 3 12 3 Z';
+  // Circular ring (the app's "Circle" icon shape) that starts at the top and runs clockwise.
+  const RING = 'M23 4 a19 19 0 1 1 0 38 a19 19 0 1 1 0 -38';
   const CUBE = '<svg class="cube" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 .13 1.89 5.68 1.47 6.4v11.19l.42.72 9.61 5.55h1l9.61-5.55.42-.72V6.4l-.42-.72L12.5.13Z"/><path fill="#111" d="M2.66 6.34h18.55l.3.51-9.28 16.07-.23-.06V12.34l-.3-.51-9.11-5.26Z"/></svg>';
   const ring = (a, size) => `<div class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 46 46" aria-hidden="true">
-      <path d="${RING}" fill="none" stroke="#2c2c2e" stroke-width="5"/>
-      <path d="${RING}" fill="none" stroke="${signal(a)}" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="${used(a) || 0} 100" style="${used(a) ? '' : 'display:none'}"/>
+      <path d="${RING}" fill="none" stroke="#2c2c2e" stroke-width="4.5"/>
+      <path d="${RING}" fill="none" stroke="${signal(a)}" stroke-width="4.5" stroke-linecap="round" pathLength="100" stroke-dasharray="${used(a) || 0} 100" style="${used(a) ? '' : 'display:none'}"/>
     </svg>${a.p === 'Cursor' ? CUBE : `<img src="images/${a.p.toLowerCase()}.png" alt="">`}</div>`;
 
   const items = document.getElementById('dock-items');
@@ -344,7 +341,7 @@ herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
     cell.className = 'cell';
     cell.setAttribute('aria-label', `${a.p} ${a.t}: ${pct} used, ${a.s}`);
     cell.setAttribute('aria-expanded', 'false');
-    cell.innerHTML = ring(a, 46) + (a.p === 'Cursor'
+    cell.innerHTML = ring(a, 36) + (a.p === 'Cursor'
       ? `<div class="models">${a.w.map(w => `<span>${w[0].split(' ')[0].replace('Cursor', 'Models')}</span><b style="color:${w[1] >= 70 ? '#ffd60a' : '#30d158'}">${w[1]}%</b>`).join('')}</div>`
       : `<span class="pct" style="color:${signal(a)}">${pct}</span><span class="name">${a.t}</span>`);
     cell.addEventListener('mouseenter', () => { if (matchMedia('(hover: hover)').matches) show(i, cell); });
@@ -361,7 +358,7 @@ herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
   // The dock outline from design.rs: flares into the screen edge at top and bottom.
   const dock = document.querySelector('.dock');
   function drawDock() {
-    const w = 88, h = dock.offsetHeight;
+    const w = 68, h = dock.offsetHeight;
     if (!h || matchMedia('(max-width: 760px)').matches) return;
     document.getElementById('dock-path').setAttribute('d',
       `M${w} 0 Q${w} 26 ${w - 26} 26 L24 24 Q0 24 0 48 L0 ${h - 48} Q0 ${h - 24} 24 ${h - 24} L${w - 26} ${h - 24} Q${w} ${h - 26} ${w} ${h} Z`);
