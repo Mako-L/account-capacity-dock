@@ -101,6 +101,12 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(term.to_pixels(b'\x1b[<0;7;14Mx\x1b[<65;20;12M', size), b'\x1b[<0;65;270Mx\x1b[<65;195;230M')
         self.assertEqual(term.to_pixels(b'\x1b[<0;7;14m', (50, 160, 0, 0)), b'\x1b[<0;7;14m')
 
+    def test_relay_gives_the_app_half_the_pixels(self):
+        # The default scale is 0.5: mouse and in-band resize reports shrink to match the frame.
+        self.assertEqual(term.app_size((50, 160, 1600, 1000)), (50, 160, 800, 500))
+        self.assertEqual(term.scale_input(b'\x1b[<0;400;301Mq\x1b[48;50;160;1000;1600t'),
+                         b'\x1b[<0;200;150Mq\x1b[48;50;160;500;800t')
+
     def test_ring_png_is_valid(self):
         png = capacity.ring_png(50, (48, 209, 88), capacity.icon_mask('Cursor', 36))
         self.assertTrue(png.startswith(b'\x89PNG') and png.endswith(b'IEND\xaeB`\x82'))

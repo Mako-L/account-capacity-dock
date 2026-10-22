@@ -223,16 +223,21 @@ ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
 
 It needs [Bun](https://bun.sh); the first run installs its packages. The terminal
 mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
-in tmux. Use Herdr 0.9 or newer (`herdr update`, run outside Herdr): it passes
-pixel mouse positions and Kitty images through efficiently. Herdr 0.8 sends mouse
-positions in character cells, so on 0.8 `mako-capacity ui --terminal` runs the app
-through `gpuix-app/term.py`, which converts each click and scroll to the pixel
-centre of its cell. Every button is also a Tab stop that Enter presses.
+in tmux. Every button is also a Tab stop that Enter presses.
 
-On Herdr 0.8 the app lags: every update crosses Herdr as a whole inline frame of
-about 200 to 250 KB, so the 0.8 relay also drops plain pointer moves (set
-`MAKO_TERMINAL_HOVER=1` to keep hover effects). Herdr 0.9 hands images to Ghostty
-through local files instead.
+Inside Herdr, `mako-capacity ui --terminal` runs the app through
+`gpuix-app/term.py`. Herdr copies every frame, and it sometimes sends a frame to
+Ghostty as text: about 19 MB for a full-screen pane on a Retina screen. The relay
+cuts the lag in three ways:
+
+- It renders at half the pixel density (`MAKO_TERMINAL_SCALE=0.5`). Ghostty scales
+  each frame up to fill the pane, so frames carry a quarter of the pixels. Text is
+  a little softer. Set `MAKO_TERMINAL_SCALE=1` for full sharpness.
+- It drops plain pointer moves, which only repaint hover effects. Set
+  `MAKO_TERMINAL_HOVER=1` to keep them.
+- On Herdr 0.8, which sends mouse positions in character cells, it converts each
+  click and scroll to the pixel centre of its cell. Use Herdr 0.9 or newer if you
+  can (`herdr update`, run outside Herdr).
 
 In a narrow window or pane the app becomes the widget: under 480 px a row per
 account, under 200 px the dock's column of rings, with the dock's buttons for

@@ -334,9 +334,11 @@ def main():
             run('bun', 'install', '--frozen-lockfile', cwd=app)
         env = dict(os.environ, **({'GPUIX_TERMINAL': '1'} if args.terminal else {}))
         command = [shutil.which('bun') or 'bun', 'app.tsx', f'--view={args.view}']
-        if args.terminal and os.environ.get('HERDR_ENV') == '1' and herdr_before_0_9():
-            # Herdr 0.8 forwards mouse reports in cells, and GPUIX reads pixels: relay and convert them.
-            # Herdr 0.9 converts them itself, so relaying there would convert twice.
+        if args.terminal and os.environ.get('HERDR_ENV') == '1':
+            # Herdr copies every frame, so the relay sends smaller frames and drops hover-only motion.
+            # Herdr 0.8 also forwards mouse reports in cells, and GPUIX reads pixels: convert them there.
+            if herdr_before_0_9():
+                env['MAKO_CONVERT_MOUSE'] = '1'
             command = [sys.executable, str(app / 'term.py')] + command
         os.chdir(app)
         os.execvpe(command[0], command, env)
