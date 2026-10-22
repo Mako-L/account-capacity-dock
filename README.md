@@ -6,15 +6,15 @@ edge flares, quota rings, provider icons, account labels, and inward-facing hove
 bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
 <p align="center">
+  <a href="https://mako-l.github.io/account-capacity-dock/#video"><img src="docs/media/showreel.gif" alt="30-second film: quota rings fill, turn red at the limit and count down to the reset" width="640"></a>
+  <br><sub>Click for the full film with sound.</sub>
+</p>
+
+<p align="center">
   <img src="docs/images/dock.png" alt="The dock with a hover card: rings show percent used per account" width="420">
 </p>
 
 ![All accounts: a card per account with quota bars, reset times and today's local usage](docs/images/all-accounts.png)
-
-<p align="center">
-  <a href="https://mako-l.github.io/account-capacity-dock/#video"><img src="docs/media/showreel.gif" alt="30-second film: quota rings fill, turn red at the limit and count down to the reset" width="640"></a>
-  <br><sub>Click for the full film with sound.</sub>
-</p>
 
 Screenshots use demo accounts. Downloads for macOS, Windows and Linux are on the
 [releases page](https://github.com/Mako-L/account-capacity-dock/releases/latest).
