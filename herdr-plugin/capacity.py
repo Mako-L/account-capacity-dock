@@ -212,7 +212,7 @@ def cell_width():
     return pixels // columns if columns else 0
 
 
-def compact(accounts, width, rings, height):
+def compact(accounts, width, rings, height, names=True):
     """Narrow pane: ring (or provider dot), percent and a short name per account.
 
     Under RING_ONLY columns it shows the centred ring alone (text fallback: percent).
@@ -232,7 +232,11 @@ def compact(accounts, width, rings, height):
             lead = ' ' * indent if rings else rgb(PROVIDER.get(account['provider'], (200, 200, 200)), '●') + ' '
             placed.append((len(lines), account))
             lines.append(lead + rgb(signal_color(account, value), '—' if value is None else f'{value:.0f}%'))
-            lines.append(' ' * indent + dim(fit(account.get('title') or '?', width - indent)))
+            # The ring spans two rows, so a hidden name leaves its row blank.
+            if names:
+                lines.append(' ' * indent + dim(fit(account.get('title') or '?', width - indent)))
+            elif rings:
+                lines.append('')
             if gap:
                 lines.append('')
         if height is None or len(lines) <= height:
@@ -240,7 +244,12 @@ def compact(accounts, width, rings, height):
     return lines, placed if rings else []
 
 
-def render(snapshot, hidden, width, now, rings=False, height=None):
+def masked(accounts):
+    """Accounts without names or emails, for screen sharing: the widget then shows no name at all."""
+    return [dict(account, title='', email=None) for account in accounts]
+
+
+def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
     """Return (lines, ring rows). Plain text never exceeds width.
 
     Under 30 columns the pane is compact (ring and percent only). From 50
@@ -252,8 +261,10 @@ def render(snapshot, hidden, width, now, rings=False, height=None):
     """
     width = max(width, 4)
     accounts = [a for a in snapshot.get('accounts', []) if a.get('id') not in hidden]
+    if not names:
+        accounts = masked(accounts)
     if width < 30:
-        return compact(accounts, width, rings, height)
+        return compact(accounts, width, rings, height, names)
     extended = width >= 50
     age = int(now - snapshot['updatedAt']) // 60 if snapshot.get('updatedAt') else None
     header = 'Mako Capacity'
@@ -271,7 +282,7 @@ def render(snapshot, hidden, width, now, rings=False, height=None):
             pct = '—' if value is None else f'{value:.0f}%'
             lead = '      ' if rings else rgb(PROVIDER.get(account['provider'], (200, 200, 200)), '●') + ' '
             indent = 6 if rings else 2
-            title = fit(account.get('title') or account.get('email') or '?', width - len(pct) - indent - 1)
+            title = fit(account.get('title') or account.get('email') or '?', width - len(pct) - indent - 1) if names else ''
             gap = ' ' * (width - indent - len(title) - len(pct))
             placed.append((len(lines), account))
             lines.append(lead + title + gap + rgb(color, pct))
@@ -310,7 +321,8 @@ def render(snapshot, hidden, width, now, rings=False, height=None):
                 lines.append(dim(fit(f"Today · local {provider}: {count(usage['tokens'])} tokens{cost}", width)))
             if today:
                 lines.append('')
-        lines.append(dim(fit(f"r refresh · p {'unpin' if pinned() else 'pin'} · q quit", width)))
+        keys = f"r refresh · p {'unpin' if pinned() else 'pin'} · n {'hide' if names else 'show'} names · q quit"
+        lines.append(dim(fit(keys, width)))
         if height is None or len(lines) <= height:
             break
     return lines, placed if rings else []
@@ -323,9 +335,26 @@ def read_json(path, default):
         return default
 
 
+def home():
+    return Path(os.environ.get('MAKO_CAPACITY_HOME', Path.home() / '.mako-capacity'))
+
+
 def hidden_ids():
-    home = Path(os.environ.get('MAKO_CAPACITY_HOME', Path.home() / '.mako-capacity'))
-    return set(read_json(home / 'hidden.json', {}))
+    return set(read_json(home() / 'hidden.json', {}))
+
+
+def names_flag():
+    """Present while account names are hidden. The GPUIX app reads and sets the same file."""
+    return home() / 'hide-names'
+
+
+def toggle_names():
+    flag = names_flag()
+    if flag.exists():
+        flag.unlink()
+    else:
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.touch()
 
 
 def pin_state():
@@ -402,7 +431,7 @@ def main():
         while True:
             size = shutil.get_terminal_size()
             lines, placed = render(read_json(cache_dir() / 'snapshot.json', {}), hidden_ids(), size.columns,
-                                   time.time(), rings, size.lines)
+                                   time.time(), rings, size.lines, not names_flag().exists())
             out = '\x1b_Ga=d,d=A,q=2\x1b\\' if rings else ''
             out += '\x1b[H\x1b[2J' + '\n'.join(lines[:size.lines])
             column, offset = ring_place(size.columns, cell_width())
@@ -430,6 +459,8 @@ def main():
                     break
                 if key == 'r':
                     threading.Thread(target=poll, args=(True,), daemon=True).start()
+                if key == 'n':
+                    toggle_names()
                 if key == 'p':
                     threading.Thread(target=lambda: (toggle_pin(), wake()), daemon=True).start()
     except KeyboardInterrupt:

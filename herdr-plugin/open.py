@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Dock the capacity pane at the left or right edge of a tab, or pin it so it follows you.
 
-open.py right|left          dock in the focused tab
-open.py pin right|left      dock now, then move with you to every tab you focus
-open.py unpin               stop following and close the widget in other tabs
-open.py toggle              pin (keeping this tab's widget and its side) or unpin
-open.py ensure              event hook: move the pinned widget into the focused tab
+open.py right|left [app]      dock in the focused tab
+open.py pin right|left [app]  dock now, then move with you to every tab you focus
+open.py unpin                 stop following and close the widget in other tabs
+open.py toggle [app]          pin (keeping this tab's widget and its side) or unpin
+open.py ensure                event hook: move the pinned widget into the focused tab
+
+With app, a new widget is the GPUIX app instead of the text widget.
 
 A pinned widget is one process that moves between tabs. One copy per tab cost
 about 24 MB each and ran the collector once per copy.
@@ -33,7 +35,7 @@ def focused_pane():
         herdr('pane', 'current')['pane']['pane_id']
 
 
-def dock(side, pane, widget=None):
+def dock(side, pane, widget=None, entry='capacity'):
     """Put widget (a pane ID), or a new widget, at the side edge of pane's tab."""
     layout = herdr('pane', 'layout', '--pane', pane)['layout']
     # Split the outermost pane on that side, preferring the tallest one.
@@ -41,7 +43,7 @@ def dock(side, pane, widget=None):
     target = max(layout['panes'], key=lambda p: (edge(p), p['rect']['height']))
     total = target['rect']['width']
     share = min(max(WIDTH / total, 0.15), 0.5)
-    opened = widget or herdr('plugin', 'pane', 'open', '--plugin', 'mako-capacity', '--entrypoint', 'capacity',
+    opened = widget or herdr('plugin', 'pane', 'open', '--plugin', 'mako-capacity', '--entrypoint', entry,
                              '--placement', 'tab', '--no-focus')['plugin_pane']['pane']['pane_id']
     # ponytail: plugin panes take no split ratio, so open in a tab and move it with an exact ratio.
     ratio = 1 - share if side == 'right' else share
@@ -57,8 +59,19 @@ def widgets():
     return [p for p in herdr('pane', 'list')['panes'] if p.get('label') == LABEL]
 
 
+def pinned():
+    """(side, entrypoint) of the pinned widget; side is empty when nothing is pinned."""
+    words = (STATE.read_text().split() if STATE.exists() else []) + ['', 'capacity']
+    return words[0], words[1]
+
+
+def pin(side, entry):
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(f'{side} {entry}')
+
+
 def ensure():
-    side = STATE.read_text().strip() if STATE.exists() else ''
+    side, entry = pinned()
     if side not in ('left', 'right'):
         return
     pane = focused_pane()
@@ -73,7 +86,7 @@ def ensure():
         # Close copies left by older versions, then bring the remaining one here.
         for extra in found[1:]:
             herdr('pane', 'close', extra['pane_id'])
-        print(dock(side, pane, found[0]['pane_id'] if found else None))
+        print(dock(side, pane, found[0]['pane_id'] if found else None, entry))
 
 
 def side_of(widget, pane):
@@ -84,6 +97,8 @@ def side_of(widget, pane):
 
 
 def main(args):
+    entry = 'app' if 'app' in args else 'capacity'
+    args = [a for a in args if a != 'app']
     if args[:1] == ['ensure']:
         return ensure()
     if args[:1] == ['toggle']:
@@ -93,9 +108,8 @@ def main(args):
         tab = herdr('pane', 'layout', '--pane', pane)['layout']['tab_id']
         widget = next((w for w in widgets() if w['tab_id'] == tab), None)
         if widget is None:
-            return main(['pin', 'right'])
-        STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(side_of(widget, pane))
+            return main(['pin', 'right', entry])
+        pin(side_of(widget, pane), entry)
         return
     if args[:1] == ['unpin']:
         STATE.unlink(missing_ok=True)
@@ -106,17 +120,16 @@ def main(args):
         return
     if args[:1] == ['pin']:
         side = args[1] if len(args) > 1 else 'right'
-        STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(side)
+        pin(side, entry)
         pane = focused_pane()
         tab = herdr('pane', 'layout', '--pane', pane)['layout']['tab_id']
         found = widgets()
         for extra in found[1:]:
             herdr('pane', 'close', extra['pane_id'])
         # Re-dock even a widget in this tab, so it moves to the chosen side.
-        print(dock(side, pane, found[0]['pane_id'] if found else None))
+        print(dock(side, pane, found[0]['pane_id'] if found else None, entry))
         return
-    print(dock(args[0] if args else 'right', focused_pane()))
+    print(dock(args[0] if args else 'right', focused_pane(), entry=entry))
 
 
 if __name__ == '__main__':

@@ -11,6 +11,12 @@ title = "Capacity"
 placement = "split"
 command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/capacity.py\""]
 
+[[panes]]
+id = "app"
+title = "Capacity"
+placement = "split"
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/../scripts/capacity.py\" ui dock --terminal"]
+
 [[actions]]
 id = "open-right"
 title = "Mako Capacity: dock on the right"
@@ -34,6 +40,18 @@ id = "pin-left"
 title = "Mako Capacity: pin on the left in every tab"
 contexts = ["global", "workspace", "pane"]
 command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left"]
+
+[[actions]]
+id = "pin-app-right"
+title = "Mako Capacity: pin the app on the right in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin right app"]
+
+[[actions]]
+id = "pin-app-left"
+title = "Mako Capacity: pin the app on the left in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left app"]
 
 [[actions]]
 id = "toggle-pin"

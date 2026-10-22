@@ -249,11 +249,33 @@ versions are pinned exactly in `gpuix-app/package.json`.
 
 ## Herdr widget
 
-Herdr users can dock the capacity view beside their panes.
+Herdr users can dock the capacity view beside their panes. There are two widgets:
+the app widget (the GPUIX app above, which needs Bun) and the text widget
+(Python only).
 
-![Herdr widget docked on the right of a tab](docs/images/herdr-docked.png)
+```sh
+herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
+herdr plugin action invoke pin-app-right --plugin mako-capacity   # app widget, or pin-app-left
+```
 
-It shows a progress ring per account, a bar per quota window, and reset
+![The app widget pinned on the right of a Herdr tab](docs/images/herdr-docked.png)
+
+<img src="docs/images/herdr-compact.png" alt="The app widget in a narrow pane: rings, names hidden, pin button" width="120" align="right">
+
+The app widget shows a row per account, or a column of rings in a narrow pane. Its
+buttons at the bottom open All accounts, Settings and Refresh. Two buttons are new:
+
+- **Pin:** the widget follows you to every tab. Press it again to unpin.
+- **Eye:** hides account names and emails, so you can share your screen. The text
+  widget and Settings use the same switch.
+
+The narrow pane on the right shows names hidden.
+
+<br clear="right">
+
+### Text widget
+
+The text widget shows a progress ring per account, a bar per quota window, and reset
 countdowns. It reads the same snapshot as the
 dock and skips accounts hidden in the dashboard.
 
@@ -264,10 +286,7 @@ herdr plugin action invoke open-right --plugin mako-capacity   # or open-left
 
 From a checkout, `herdr plugin link "$PWD/herdr-plugin"` installs your local copy instead.
 
-<p align="center">
-  <img src="docs/images/herdr-compact.png" alt="Narrow widget: ring, percent and name" width="160">
-  <img src="docs/images/herdr-wide.png" alt="Wide widget: plan, email, every quota window and today's usage" width="620">
-</p>
+![Wide text widget: plan, email, every quota window and today's usage](docs/images/herdr-wide.png)
 
 The layout follows the pane width: under 12 columns it shows only the rings,
 centred. Under 30 columns it shows the ring (with the provider icon), percent and
@@ -275,7 +294,7 @@ a short name. From 50 columns it adds the plan,
 email, notes and today's local usage when the pane is tall enough. If accounts do
 not fit the height, each keeps only its tightest quota bar.
 `MAKO_CAPACITY_WIDTH` sets the starting width (default 36). In the pane, `r` forces a refresh, `p` pins or
-unpins and `q` closes it.
+unpins, `n` hides or shows account names and `q` closes it.
 
 The rings are images drawn with the Kitty graphics protocol. They need a terminal
 that supports it, such as [Ghostty](https://ghostty.org), Kitty or WezTerm, and

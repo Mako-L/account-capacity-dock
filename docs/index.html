@@ -318,15 +318,15 @@ Never print, paste or commit tokens, keys, or files from the proxy&#x27;s auths 
 
     <section id="herdr" aria-labelledby="herdr-title">
       <h2 id="herdr-title">In your terminal, with Herdr</h2>
-      <p class="section-lede">The <a href="https://herdr.dev">Herdr</a> widget docks beside your panes. It shows rings only in a narrow pane and adds plans, notes and today's usage as it gets wider. Pin it, and it follows you to every tab.</p>
+      <p class="section-lede">The <a href="https://herdr.dev">Herdr</a> widget docks beside your panes. In a narrow pane it shows a column of rings, and wider it shows a row per account. Press the pin button, and it follows you to every tab. The eye button hides account names, so you can share your screen.</p>
       <div class="herdr">
         <div>
-          <div class="shot"><img src="images/herdr-docked.png" width="1600" height="947" alt="Herdr widget docked on the right of a terminal tab"></div>
+          <div class="shot"><img src="images/herdr-docked.png" width="1600" height="919" alt="Herdr widget pinned on the right of a terminal tab, a row per account"></div>
           <div class="code"><pre><code>herdr plugin install Mako-L/account-capacity-dock/herdr-plugin
-herdr plugin action invoke pin-right --plugin mako-capacity</code></pre></div>
+herdr plugin action invoke pin-app-right --plugin mako-capacity</code></pre></div>
           <p class="section-lede" style="margin-top:16px">The rings need a terminal with the Kitty graphics protocol, such as <a href="https://ghostty.org">Ghostty</a>, Kitty or WezTerm, and <code>kitty_graphics = true</code> in Herdr's config. Over SSH, the terminal you type in draws them.</p>
         </div>
-        <div class="shot"><img src="images/herdr-compact.png" width="329" height="1003" alt="Narrow Herdr widget with a ring, percent and name per account"></div>
+        <div class="shot"><img src="images/herdr-compact.png" width="330" height="1548" alt="Narrow Herdr widget: a column of rings with names hidden, and the pin button"></div>
       </div>
     </section>
   </main>

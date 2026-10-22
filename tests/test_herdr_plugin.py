@@ -101,6 +101,12 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(term.to_pixels(b'\x1b[<0;7;14Mx\x1b[<65;20;12M', size), b'\x1b[<0;65;270Mx\x1b[<65;195;230M')
         self.assertEqual(term.to_pixels(b'\x1b[<0;7;14m', (50, 160, 0, 0)), b'\x1b[<0;7;14m')
 
+    def test_hidden_names_are_left_out(self):
+        accounts = [account('a', 'me@work', 10), account('b', 'me@home', 20), account('c', 'cx', 30, provider='Codex')]
+        self.assertEqual([a['title'] for a in capacity.masked(accounts)], ['', '', ''])
+        lines, _ = capacity.render({'accounts': accounts}, set(), 60, 0, names=False)
+        self.assertNotIn('me@work', '\n'.join(lines))
+
     def test_relay_gives_the_app_half_the_pixels(self):
         # The default scale is 0.5: mouse and in-band resize reports shrink to match the frame.
         self.assertEqual(term.app_size((50, 160, 1600, 1000)), (50, 160, 800, 500))
