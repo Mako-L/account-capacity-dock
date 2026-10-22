@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import plistlib
 import secrets
 import shlex
@@ -99,6 +100,15 @@ routing:
     SETTINGS.write_text(json.dumps(saved, indent=2) + '\n')
     SETTINGS.chmod(0o600)
     print(f'Configuration: {STATE}', flush=True)
+
+
+def herdr_before_0_9():
+    try:
+        out = subprocess.run(['herdr', '--version'], capture_output=True, text=True, timeout=5).stdout
+        major, minor = (int(n) for n in re.search(r'(\d+)\.(\d+)', out).groups())
+    except (OSError, subprocess.SubprocessError, AttributeError, ValueError):
+        return False
+    return (major, minor) < (0, 9)
 
 
 def remote():
@@ -324,8 +334,9 @@ def main():
             run('bun', 'install', '--frozen-lockfile', cwd=app)
         env = dict(os.environ, **({'GPUIX_TERMINAL': '1'} if args.terminal else {}))
         command = [shutil.which('bun') or 'bun', 'app.tsx', f'--view={args.view}']
-        if args.terminal and os.environ.get('HERDR_ENV') == '1':
-            # Herdr forwards mouse reports in cells, and GPUIX reads pixels: relay and convert them.
+        if args.terminal and os.environ.get('HERDR_ENV') == '1' and herdr_before_0_9():
+            # Herdr 0.8 forwards mouse reports in cells, and GPUIX reads pixels: relay and convert them.
+            # Herdr 0.9 converts them itself, so relaying there would convert twice.
             command = [sys.executable, str(app / 'term.py')] + command
         os.chdir(app)
         os.execvpe(command[0], command, env)

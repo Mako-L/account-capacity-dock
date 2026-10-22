@@ -223,16 +223,16 @@ ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
 
 It needs [Bun](https://bun.sh); the first run installs its packages. The terminal
 mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
-in tmux. Herdr forwards mouse positions in character cells while GPUIX expects
-pixels, so inside Herdr `mako-capacity ui --terminal` runs the app through
-`gpuix-app/term.py`, which converts each click and scroll to the pixel centre of
-its cell. Every button is also a Tab stop that Enter presses.
+in tmux. Use Herdr 0.9 or newer (`herdr update`, run outside Herdr): it passes
+pixel mouse positions and Kitty images through efficiently. Herdr 0.8 sends mouse
+positions in character cells, so on 0.8 `mako-capacity ui --terminal` runs the app
+through `gpuix-app/term.py`, which converts each click and scroll to the pixel
+centre of its cell. Every button is also a Tab stop that Enter presses.
 
-The app is faster outside Herdr. In a plain Ghostty or kitty window, GPUIX hands
-each frame over through shared memory in about 100 bytes. Inside Herdr (or over
-SSH) it must send the whole frame inline, about 200 to 250 KB per update, and
-Herdr then redraws it. The relay drops plain pointer moves to cut updates; set
-`MAKO_TERMINAL_HOVER=1` to keep hover effects.
+On Herdr 0.8 the app lags: every update crosses Herdr as a whole inline frame of
+about 200 to 250 KB, so the 0.8 relay also drops plain pointer moves (set
+`MAKO_TERMINAL_HOVER=1` to keep hover effects). Herdr 0.9 hands images to Ghostty
+through local files instead.
 
 In a narrow window or pane the app becomes the widget: under 480 px a row per
 account, under 200 px the dock's column of rings, with the dock's buttons for
