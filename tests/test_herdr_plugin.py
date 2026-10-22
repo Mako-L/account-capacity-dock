@@ -6,7 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'herdr-plugin'))
 import capacity  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'gpuix-app'))
-import term  # noqa: E402
+# The relay uses pty and termios, which Windows lacks; it only runs inside Herdr on macOS and Linux.
+term = None if sys.platform == 'win32' else __import__('term')
+UNIX_ONLY = unittest.skipIf(term is None, 'The terminal relay runs on macOS and Linux only.')
 
 ANSI = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]')
 
@@ -95,6 +97,7 @@ class RenderTests(unittest.TestCase):
             capacity.collect(force=True)
             self.assertEqual(len(calls), 2)
 
+    @UNIX_ONLY
     def test_herdr_cell_mouse_reports_become_pixel_centres(self):
         # A 160 x 50 pane drawn at 1600 x 1000 pixels: cells are 10 x 20.
         size = (50, 160, 1600, 1000)
@@ -107,6 +110,7 @@ class RenderTests(unittest.TestCase):
         lines, _ = capacity.render({'accounts': accounts}, set(), 60, 0, names=False)
         self.assertNotIn('me@work', '\n'.join(lines))
 
+    @UNIX_ONLY
     def test_relay_gives_the_app_half_the_pixels(self):
         # The default scale is 0.5: mouse and in-band resize reports shrink to match the frame.
         self.assertEqual(term.app_size((50, 160, 1600, 1000)), (50, 160, 800, 500))
