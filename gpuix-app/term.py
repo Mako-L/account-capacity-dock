@@ -22,10 +22,17 @@ import termios
 import tty
 
 MOUSE = re.compile(rb'\x1b\[<(\d+);(\d+);(\d+)([Mm])')
+KEEP_HOVER = os.environ.get('MAKO_TERMINAL_HOVER') == '1'
 
 
 def winsize(fd):
     return struct.unpack('HHHH', fcntl.ioctl(fd, termios.TIOCGWINSZ, bytes(8)))
+
+
+def drop_motion(data):
+    """Drop plain pointer motion (button code 35). Every move would repaint hover states and send
+    a whole new frame through Herdr, which made the app lag. Presses, drags and the wheel stay."""
+    return re.sub(rb'\x1b\[<35;\d+;\d+M', b'', data)
 
 
 def to_pixels(data, size):
@@ -85,6 +92,7 @@ def main(argv):
                     data, pending = data[:cut], data[cut:]
                 else:
                     pending = b''
+                data = data if KEEP_HOVER else drop_motion(data)
                 if data:
                     os.write(master, to_pixels(data, size))
     finally:

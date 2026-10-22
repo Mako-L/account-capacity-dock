@@ -226,7 +226,17 @@ mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
 in tmux. Herdr forwards mouse positions in character cells while GPUIX expects
 pixels, so inside Herdr `mako-capacity ui --terminal` runs the app through
 `gpuix-app/term.py`, which converts each click and scroll to the pixel centre of
-its cell. Every button is also a Tab stop that Enter presses. It reads the same snapshot and uses the same collector actions (Hide,
+its cell. Every button is also a Tab stop that Enter presses.
+
+The app is faster outside Herdr. In a plain Ghostty or kitty window, GPUIX hands
+each frame over through shared memory in about 100 bytes. Inside Herdr (or over
+SSH) it must send the whole frame inline, about 200 to 250 KB per update, and
+Herdr then redraws it. The relay drops plain pointer moves to cut updates; set
+`MAKO_TERMINAL_HOVER=1` to keep hover effects.
+
+In a narrow window or pane the app becomes the widget: under 480 px a row per
+account, under 200 px the dock's column of rings, with the dock's buttons for
+All accounts, Settings and Refresh at the bottom. A tap opens an account's card. It reads the same snapshot and uses the same collector actions (Hide,
 Delete, Restore, proxy server) as the other renderers. GPUIX is pre-1.0, so the
 versions are pinned exactly in `gpuix-app/package.json`.
 

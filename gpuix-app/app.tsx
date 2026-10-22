@@ -113,9 +113,9 @@ const ONE_LINE = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'elli
 
 // ---- Dock ------------------------------------------------------------------
 
-function DockCell({ account, active, onHover }: { account: Account; active: boolean; onHover: () => void }) {
+function DockCell({ account, active, onHover, onOpen }: { account: Account; active: boolean; onHover?: () => void; onOpen?: () => void }) {
   return (
-    <div onMouseEnter={onHover} onClick={onHover}
+    <div onMouseEnter={onHover} onClick={onOpen ?? onHover}
       style={{ width: 56, paddingTop: 5, paddingBottom: 4, borderRadius: 12, alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 2, cursor: 'pointer',
                backgroundColor: active ? '#ffffff12' : undefined, hover: { backgroundColor: '#ffffff12' } }}>
       <Ring account={account} size={36} />
@@ -150,7 +150,7 @@ function Card({ account, all, onAction, confirm }: {
   const windows = all || account.provider === 'Cursor' ? account.windows : account.windows.slice(0, 2)
   return (
     <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
-                  minWidth: 0, overflow: 'hidden' }}>
+                  minWidth: 0, flexShrink: 0, overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text size={10} weight={600} color={PROVIDER[account.provider]}>{account.provider.toUpperCase()}</Text>
         {onAction && !confirm && (
@@ -172,8 +172,9 @@ function Card({ account, all, onAction, confirm }: {
       {windows.length === 0 && <Text size={12} color={C.muted}>{account.message || 'Capacity unknown'}</Text>}
       {windows.map(w => (
         <div key={w.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Text size={12}>{w.label}</Text><Text size={12}>{`${Math.round(w.used)}% used`}</Text>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <Text size={12} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{w.label}</Text>
+            <Text size={12} style={{ flexShrink: 0 }}>{`${Math.round(w.used)}% used`}</Text>
           </div>
           <Bar value={w.used} color={w.used >= 100 ? C.red : PROVIDER[account.provider]} />
           <Text size={10} color={C.muted}>{w.detail ?? resetIn(w.resetAt)}</Text>
@@ -181,8 +182,8 @@ function Card({ account, all, onAction, confirm }: {
       <div style={{ height: 1, backgroundColor: '#ffffff14' }} />
       <Text size={11} weight={600}>{`Today · local ${account.provider === 'Cursor' ? 'Cursor CLI' : account.provider} usage`}</Text>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text size={12}>Tokens</Text><Text size={12}>{count(usage?.tokens)}</Text></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Text size={12}>API-equivalent cost</Text><Text size={12}>{usage?.costUsd == null ? '—' : `$${usage.costUsd.toFixed(2)}`}</Text>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <Text size={12} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>API-equivalent cost</Text><Text size={12} style={{ flexShrink: 0 }}>{usage?.costUsd == null ? '—' : `$${usage.costUsd.toFixed(2)}`}</Text>
       </div>
       <Text size={10} color={C.muted}>CodeBurn · all local accounts · not your bill</Text>
       {confirm && onAction && (
@@ -207,6 +208,44 @@ function SmallButton({ label, onClick, danger, primary }: { label: string; onCli
       focusVisible: { outlineWidth: 2, outlineColor: '#64a8ff', outlineOffset: 2 },
     }}>
       <Text size={12} weight={600} color={danger || primary ? '#ffffff' : C.text}>{label}</Text>
+    </Button>
+  )
+}
+
+// ---- Compact layout: the widget fills a narrow window or terminal pane --------
+
+// Material icons (Apache-2.0), as one-colour masks.
+const ICONS = {
+  grid: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>',
+  back: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+}
+
+function IconButton({ icon, label, onClick, active }: { icon: keyof typeof ICONS; label: string; onClick: () => void; active?: boolean }) {
+  return (
+    <Button onClick={onClick} aria-label={label} style={{
+      padding: 8, borderRadius: 10, cursor: 'pointer', backgroundColor: active ? '#ffffff1f' : undefined,
+      hover: { backgroundColor: '#ffffff14' }, focusVisible: { outlineWidth: 2, outlineColor: '#64a8ff', outlineOffset: 2 },
+    }}>
+      <svg source={ICONS[icon]} style={{ width: 18, height: 18, color: C.text }} />
+    </Button>
+  )
+}
+
+// One account per row, like the Herdr widget's middle layout. A tap opens its card.
+function WidgetRow({ account, onOpen }: { account: Account; onOpen: () => void }) {
+  return (
+    <Button onClick={onOpen} style={{
+      display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingTop: 6, paddingBottom: 6, paddingLeft: 8, paddingRight: 10,
+      borderRadius: 12, cursor: 'pointer', hover: { backgroundColor: '#ffffff12' }, focusVisible: { outlineWidth: 2, outlineColor: '#64a8ff' },
+    }}>
+      <Ring account={account} size={36} />
+      <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
+        <Text size={13} weight={600} style={ONE_LINE}>{account.title}</Text>
+        <Text size={11} color={C.muted} style={ONE_LINE}>{`${account.provider} · ${stateLabel(account)}`}</Text>
+      </div>
+      <Text size={15} weight={600} color={signal(account)} style={{ flexShrink: 0 }}>{pct(account)}</Text>
     </Button>
   )
 }
@@ -276,6 +315,73 @@ function App() {
     </Button>
   )
 
+  // Narrow windows and terminal panes get the widget itself, full screen, like the Herdr widget:
+  // under 200 px the dock column of rings, under 480 px a row per account. Icons reach the other views.
+  const compact = width > 0 && width < 480
+  const tiny = width > 0 && width < 200
+  const [opened, setOpened] = useState<string | null>(null)
+  const openedAccount = accounts.find(a => a.id === opened)
+  if (compact) {
+    const back = (title: string, onBack: () => void) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingTop: 6, paddingBottom: 6, paddingLeft: 6, paddingRight: 10 }}>
+        <IconButton icon="back" label="Back" onClick={onBack} />
+        <Text size={14} weight={600} style={ONE_LINE}>{title}</Text>
+      </div>
+    )
+    let body
+    if (view === 'dock' && openedAccount) {
+      body = <>{back(openedAccount.title, () => setOpened(null))}
+        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
+          <Card account={openedAccount} all confirm={confirm === openedAccount.id} onAction={action => act(openedAccount, action)} />
+        </div></>
+    } else if (view === 'dock') {
+      body = <div style={{ flexGrow: 1, overflowY: 'scroll', paddingTop: 8, paddingLeft: tiny ? 0 : 6, paddingRight: tiny ? 0 : 6,
+                           display: 'flex', flexDirection: 'column', alignItems: tiny ? 'center' : 'stretch', gap: tiny ? 2 : 0 }}>
+        {accounts.length === 0 && <Text size={12} color={C.muted} style={{ padding: 10 }}>Discovering your accounts…</Text>}
+        {accounts.map((a, i) => tiny
+          ? <DockCell key={a.id} account={a} active={false} onOpen={() => setOpened(a.id)} />
+          : <WidgetRow key={a.id} account={a} onOpen={() => setOpened(a.id)} />)}
+      </div>
+    } else if (view === 'accounts') {
+      body = <>{back('All accounts', () => setView('dock'))}
+        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {accounts.map(a => <Card key={a.id} account={a} all={false} confirm={confirm === a.id} onAction={action => act(a, action)} />)}
+        </div></>
+    } else {
+      body = <>{back('Settings', () => setView('dock'))}
+        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 12, paddingRight: 12, paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Text size={12} color={C.muted}>Proxy address, empty for the local Docker proxy.</Text>
+          <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
+            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
+          <input value={proxyKey} placeholder={readSettings().PROXY_MANAGEMENT_KEY ? 'Key (saved; type to replace)' : 'Management key'}
+            onChange={e => setProxyKey(String(e.value ?? ''))}
+            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <SmallButton label="Save and test" primary onClick={() => !busy && saveProxy(false)} />
+            <SmallButton label="Use local" onClick={() => !busy && saveProxy(true)} />
+          </div>
+          {hidden.map(([id, label]) => (
+            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text size={12} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{label}</Text>
+              <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
+            </div>))}
+        </div></>
+    }
+    return (
+      <div style={{ width: '100%', height: '100%', backgroundColor: C.dock, display: 'flex', flexDirection: 'column' }}>
+        {snapshot.warning ? <Text size={11} color={C.red} style={{ padding: 8 }}>{snapshot.warning}</Text> : null}
+        {message && view !== 'dock' ? <Text size={11} color={C.muted} style={{ paddingLeft: 12, paddingRight: 12 }}>{message}</Text> : null}
+        {body}
+        {/* The dock's own tool row: all accounts, settings, refresh. */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: tiny ? 0 : 6, paddingTop: 4, paddingBottom: 8, borderTopWidth: 1, borderColor: '#ffffff14' }}>
+          <IconButton icon="grid" label="All accounts" active={view === 'accounts'} onClick={() => { setOpened(null); setView(view === 'accounts' ? 'dock' : 'accounts') }} />
+          <IconButton icon="gear" label="Settings" active={view === 'settings'} onClick={() => { setOpened(null); setView(view === 'settings' ? 'dock' : 'settings') }} />
+          {!tiny && <IconButton icon="refresh" label="Refresh" onClick={() => !busy && collect(['--refresh'])} />}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ width: '100%', height: '100%', backgroundColor: C.bg, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 10, paddingBottom: 10, paddingRight: 16,
@@ -336,4 +442,6 @@ function App() {
   )
 }
 
-render(<App />, { title: 'Mako Capacity', width: 1120, height: 780, titlebarTransparent: true, trafficLightX: 16, trafficLightY: 17 })
+// --size=WxH opens a smaller window, for example a narrow widget column: --size=180x760
+const [W, H] = ((process.argv.find(a => a.startsWith('--size=')) ?? '').slice(7).split('x').map(Number))
+render(<App />, { title: 'Mako Capacity', width: W || 1120, height: H || 780, titlebarTransparent: true, trafficLightX: 16, trafficLightY: 17 })
