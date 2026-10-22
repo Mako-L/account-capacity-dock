@@ -149,6 +149,7 @@
   h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; letter-spacing: -0.01em; }
   .section-lede { color: var(--muted); margin: 0 0 32px; max-width: 42em; }
   .shot { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; background: var(--surface); }
+  .shot.video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #111; }
   .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
   .card h3 { margin: 0 0 8px; font-size: 18px; }
@@ -225,6 +226,14 @@
       <p class="hint"><span class="wide-only">Hover the dock on the right edge, just like the app.</span><span class="narrow-only">Tap an account in the dock below, just like the app.</span></p>
       <div class="hero-shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts"></div>
     </div>
+
+    <section id="video" aria-labelledby="video-title">
+      <h2 id="video-title">See it in 30 seconds</h2>
+      <p class="section-lede">Rings fill as you use each quota, turn red at the limit and count down to the reset. The film uses demo accounts.</p>
+      <div class="shot video"><video controls playsinline preload="metadata" width="1280" height="720" poster="media/showreel-poster.jpg" aria-label="30-second film of Mako Capacity">
+        <source src="media/showreel.mp4" type="video/mp4">
+      </video></div>
+    </section>
 
     <section aria-labelledby="overview-title">
       <h2 id="overview-title">All accounts, one view</h2>
