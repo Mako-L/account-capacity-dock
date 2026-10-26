@@ -1,6 +1,6 @@
 // Shared pieces of the GPUIX app: paths, colours, text, buttons and the ring arc.
 import { Button } from '@gpuix/react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -100,7 +100,8 @@ const CONTENT_KEYS = ['display', 'flexDirection', 'gap', 'alignItems', 'justifyC
 const FADE = (angle: number) => ({ type: 'linear-gradient' as const, angle, stops: [{ color: '#000000a6', position: 0 }, { color: '#00000000', position: 1 }] as [any, any] })
 
 // A vertical scroller that shades its top edge once content has moved up, and its bottom edge while more is below.
-export function Scroll({ style, children }: { style: Record<string, any>; children: ReactNode }) {
+// shadeBottom={false} leaves the bottom edge to the caller, which reports it through onBelow and draws one shade across columns.
+export function Scroll({ style, children, shadeBottom = true, onBelow }: { style: Record<string, any>; children: ReactNode; shadeBottom?: boolean; onBelow?: (below: boolean) => void }) {
   const [box, setBox] = useState(0)
   const [content, setContent] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -111,6 +112,7 @@ export function Scroll({ style, children }: { style: Record<string, any>; childr
     else outer[key] = value
   }
   const above = -offset > 1, below = content + offset - box > 1
+  useEffect(() => onBelow?.(below), [below])
   const shade = (edge: 'top' | 'bottom') => (
     <div style={{ position: 'absolute', left: 0, right: 0, [edge]: 0, height: Math.min(28, box / 2), pointerEvents: 'none',
                   background: FADE(edge === 'top' ? 180 : 0) }} />)
@@ -121,7 +123,11 @@ export function Scroll({ style, children }: { style: Record<string, any>; childr
         <div style={{ ...inner, flexShrink: 0 }} onLayout={e => setContent(e.height ?? 0)}>{children}</div>
       </div>
       {above && shade('top')}
-      {below && shade('bottom')}
+      {below && shadeBottom && shade('bottom')}
     </div>
   )
+}
+
+export function BottomShade() {
+  return <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 28, pointerEvents: 'none', background: FADE(0) }} />
 }

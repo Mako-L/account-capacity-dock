@@ -18,6 +18,15 @@ struct AgentSubagent: Codable, Identifiable {
     let running: Bool?
     let step: String?
     let updated: Double?
+    let said: String?
+    let activity: [AgentEvent]?
+    let children: [AgentSubagent]?
+    let kind: String?
+
+    var heading: String { description ?? name ?? "Subagent" }
+    var signal: Color { running == true ? .yellow : .green }
+    var stateLabel: String { running == true ? "Working" : "Finished" }
+    var kindLabel: String { kind == "workflow" ? "Workflow" : kind == "codex" ? "Codex" : (name ?? "Subagent") }
 }
 
 struct AgentEvent: Codable, Hashable {
@@ -181,8 +190,9 @@ final class AgentStore: ObservableObject {
 struct AgentRing: View {
     let agent: AgentItem
     var size: CGFloat = 42
-    @State private var pulse = false
-    @State private var beat = false
+    var dot: some View {
+        Circle().fill(agent.signal).overlay(Circle().stroke(Color(white: 0.065), lineWidth: 2))
+    }
     var body: some View {
         ZStack {
             Circle().stroke(.black.opacity(0.75), lineWidth: 6)
@@ -194,24 +204,22 @@ struct AgentRing: View {
         }
         .frame(width: size, height: size)
         .overlay(alignment: .bottomTrailing) {
-            // While the agent works, the status light beats and sends out a ring, like a pulse.
-            ZStack {
+            Group {
                 if agent.status == "working" {
-                    Circle().stroke(agent.signal, lineWidth: 1.5)
-                        .scaleEffect(pulse ? 2.4 : 1)
-                        .opacity(pulse ? 0 : 0.9)
+                    // A clock drives the pulse, not a SwiftUI transaction, so the card around the ring never animates with it.
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
+                        ZStack {
+                            Circle().stroke(agent.signal, lineWidth: 1.5).scaleEffect(1 + 1.4 * phase).opacity(0.9 * (1 - phase))
+                            dot.scaleEffect(1 + 0.3 * sin(phase * .pi))
+                        }
+                    }
+                } else {
+                    dot
                 }
-                Circle().fill(agent.signal)
-                    .overlay(Circle().stroke(Color(white: 0.065), lineWidth: 2))
-                    .scaleEffect(agent.status == "working" && beat ? 1.3 : 1)
             }
             .frame(width: size * 0.26, height: size * 0.26)
             .offset(x: 2, y: 2)
-        }
-        .onAppear {
-            guard agent.status == "working" else { return }
-            withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) { pulse = true }
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { beat = true }
         }
         .accessibilityLabel("\(agent.provider), \(agent.heading), \(agent.stateLabel)")
     }
@@ -220,6 +228,8 @@ struct AgentRing: View {
 struct AgentCard: View {
     let agent: AgentItem
     var focus: () -> Void
+    var openSub: (AgentSubagent) -> Void = { _ in }
+    var openID: String?
     func section(_ title: String) -> some View {
         Text(title.uppercased()).font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.top, 2)
     }
@@ -244,7 +254,7 @@ struct AgentCard: View {
                     Text("\(Int(progress))%").font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundStyle(agent.signal)
                 }
             }
-            if let now = agent.now {
+            if let now = agent.now?.trimmingCharacters(in: .whitespacesAndNewlines), !now.isEmpty {
                 HStack(spacing: 8) {
                     Circle().fill(agent.signal).frame(width: 7, height: 7)
                     Text(now).font(.caption).lineLimit(2)
@@ -268,23 +278,7 @@ struct AgentCard: View {
                 }
             }
             if let subagents = agent.subagents, !subagents.isEmpty {
-                section("Subagents")
-                ForEach(subagents) { sub in
-                    HStack(alignment: .top, spacing: 8) {
-                        Circle().fill(sub.running == true ? Color.yellow : .green).frame(width: 7, height: 7).padding(.top, 4)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(sub.description ?? sub.name ?? "Subagent").font(.caption.weight(.semibold)).lineLimit(1)
-                                if let model = sub.model, !model.isEmpty {
-                                    Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
-                                        .padding(.horizontal, 5).background(.white.opacity(0.08), in: Capsule())
-                                }
-                            }
-                            Text("\(sub.running == true ? "▸ " + (sub.step ?? "Working") : "Done") · \(ago(sub.updated))")
-                                .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                }
+                SubagentList(subagents: subagents, open: openSub, openID: openID)
             }
             if let activity = agent.activity, !activity.isEmpty {
                 section("Recent activity")
@@ -300,6 +294,97 @@ struct AgentCard: View {
                 Spacer()
                 if agent.pane != nil { Button("Go to pane", action: focus) }
             }
+        }
+        .padding(16)
+        .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.07)))
+    }
+}
+
+func cardSection(_ title: String) -> some View {
+    Text(title.uppercased()).font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.top, 2)
+}
+
+/// The subagents of an agent or of a subagent. A hover on a row opens that subagent's card beside this one.
+struct SubagentList: View {
+    let subagents: [AgentSubagent]
+    var open: (AgentSubagent) -> Void
+    var openID: String?
+    var body: some View {
+        let running = subagents.filter { $0.running == true }.count
+        cardSection("Subagents · \(subagents.count)" + (running > 0 ? ", \(running) running" : ""))
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(subagents) { sub in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle().fill(sub.signal).frame(width: 7, height: 7).padding(.top, 4)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(sub.heading).font(.caption.weight(.semibold)).lineLimit(1)
+                            if let model = sub.model, !model.isEmpty {
+                                Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
+                                    .padding(.horizontal, 5).background(.white.opacity(0.08), in: Capsule())
+                            }
+                        }
+                        let kids = sub.children?.count ?? 0
+                        Text("\(sub.running == true ? "▸ " + (sub.step ?? "Working") : "Finished") · \(ago(sub.updated))" + (kids > 0 ? " · \(kids) inside" : ""))
+                            .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 3)
+                }
+                .padding(6)
+                .background(sub.id == openID ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
+                .onHover { inside in if inside { open(sub) } }
+            }
+        }
+        .padding(.horizontal, -6)
+    }
+}
+
+/// A subagent's own card: what it does now, what it said last, its own subagents and its latest activity.
+struct SubagentCard: View {
+    let sub: AgentSubagent
+    var openSub: (AgentSubagent) -> Void
+    var openID: String?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Text(sub.kindLabel.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Text(sub.stateLabel).font(.system(size: 10, weight: .semibold)).foregroundStyle(sub.signal)
+                    .padding(.horizontal, 7).padding(.vertical, 2).background(sub.signal.opacity(0.16), in: Capsule())
+                if let model = sub.model, !model.isEmpty {
+                    Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 5).padding(.vertical, 2).background(.white.opacity(0.08), in: Capsule())
+                }
+                Spacer()
+            }
+            Text(sub.heading).font(.headline).fixedSize(horizontal: false, vertical: true)
+            if sub.running == true, let step = sub.step {
+                HStack(spacing: 8) {
+                    Circle().fill(sub.signal).frame(width: 7, height: 7)
+                    Text(step).font(.caption).lineLimit(2)
+                }
+                .padding(9).frame(maxWidth: .infinity, alignment: .leading)
+                .background(sub.signal.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(sub.signal.opacity(0.25)))
+            }
+            if let said = sub.said {
+                Text("“\(said)”").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if let children = sub.children, !children.isEmpty {
+                SubagentList(subagents: children, open: openSub, openID: openID)
+            }
+            if let activity = sub.activity, !activity.isEmpty {
+                cardSection("Recent activity")
+                ForEach(Array(activity.reversed().enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(ago(item.at)).frame(width: 48, alignment: .leading).foregroundStyle(.secondary)
+                        Text(item.text).foregroundStyle(item.kind == "say" ? .primary : .secondary).lineLimit(1)
+                    }.font(.system(size: 10))
+                }
+            }
+            Text("Last write \(ago(sub.updated))").font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(16)
         .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18))
@@ -377,7 +462,6 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     let store = AgentStore()
     let capacity: CapacityStore
     var panel: NSPanel!
-    var detail: NSPanel?
     var closeDetailWork: DispatchWorkItem?
     var dockingWork: DispatchWorkItem?
     var placing = false
@@ -407,7 +491,7 @@ final class AgentDockController: NSObject, NSWindowDelegate {
 
     func setVisible(_ visible: Bool) {
         UserDefaults.standard.set(visible, forKey: "agentDockVisible")
-        if visible { place(edge: store.edge); panel.orderFrontRegardless() } else { panel.orderOut(nil); detail?.orderOut(nil) }
+        if visible { place(edge: store.edge); panel.orderFrontRegardless() } else { panel.orderOut(nil); cards.forEach { $0.orderOut(nil) } }
     }
 
     func place(edge: String, screen preferred: NSScreen? = nil) {
@@ -445,7 +529,7 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
         guard !placing else { return }
         closeDetailWork?.cancel()
-        detail?.orderOut(nil)
+        cards.forEach { $0.orderOut(nil) }
         scheduleDocking()
     }
 
@@ -475,37 +559,88 @@ final class AgentDockController: NSObject, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
+    /// Cards open in a row away from the dock: the agent first, then each hovered subagent, down the tree.
+    var cards: [NSPanel] = []
+    var hoveredAgent: AgentItem?
+    var trail: [AgentSubagent] = []
+
     func showDetail(_ agent: AgentItem?) {
+        guard let agent else { scheduleClose(); return }
         closeDetailWork?.cancel()
-        guard let agent else {
-            let work = DispatchWorkItem { [weak self] in self?.detail?.orderOut(nil) }
-            closeDetailWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
-            return
+        if hoveredAgent?.id != agent.id { trail = [] }
+        hoveredAgent = agent
+        render(anchorY: NSEvent.mouseLocation.y)
+    }
+
+    func scheduleClose() {
+        closeDetailWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.cards.forEach { $0.orderOut(nil) }
+            self.hoveredAgent = nil
+            self.trail = []
         }
-        if detail == nil {
-            detail = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            detail?.hasShadow = false
-            detail?.isOpaque = false
-            detail?.backgroundColor = .clear
-            detail?.level = .floating
-            detail?.hidesOnDeactivate = false
-            detail?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        closeDetailWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    func open(level: Int, _ sub: AgentSubagent) {
+        closeDetailWork?.cancel()
+        if trail.count > level, trail[level].id == sub.id, cards.count > level + 1, cards[level + 1].isVisible { return }
+        trail = Array(trail.prefix(level)) + [sub]
+        // The card at `level` redraws in place to mark the open row; the new card opens beside it.
+        render(anchorY: NSEvent.mouseLocation.y, from: level, keepTop: level)
+    }
+
+    func card(_ index: Int) -> NSPanel {
+        while cards.count <= index {
+            let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.hasShadow = false
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.level = .floating
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            cards.append(panel)
         }
+        return cards[index]
+    }
+
+    /// Draws cards from `from` onwards. Earlier cards stay where they are, so the row does not jump.
+    func render(anchorY: CGFloat, from: Int = 0, keepTop: Int = -1) {
+        guard let agent = hoveredAgent else { return }
         let screen = panel.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
-        // The card opens on the side with room: right of a dock on the left edge, left of any other.
-        let pointsLeft = panel.frame.minX - 380 < screen.minX
-        let content = AgentCard(agent: agent, focus: { [weak self] in self?.store.focus(agent) }).frame(width: 330).padding(8)
-            .padding(pointsLeft ? .leading : .trailing, 20)
-            .background(DetailBubble(pointsLeft: pointsLeft).fill(Color(white: 0.065)))
-            .onHover { [weak self] inside in if inside { self?.closeDetailWork?.cancel() } else { self?.showDetail(nil) } }
-            .preferredColorScheme(.dark)
-        let view = NSHostingView(rootView: content)
-        let size = view.fittingSize
-        let x = pointsLeft ? panel.frame.maxX + 8 : panel.frame.minX - size.width - 8
-        let y = min(screen.maxY - size.height, max(screen.minY, NSEvent.mouseLocation.y - size.height / 2))
-        detail?.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: false)
-        detail?.contentView = view
-        detail?.orderFrontRegardless()
+        let outwardRight = panel.frame.minX - 380 < screen.minX
+        for index in from...trail.count {
+            let openID = index < trail.count ? trail[index].id : nil
+            let body: AnyView
+            if index == 0 {
+                body = AnyView(AgentCard(agent: agent, focus: { [weak self] in self?.store.focus(agent) },
+                                         openSub: { [weak self] in self?.open(level: 0, $0) }, openID: openID))
+            } else {
+                let level = index
+                body = AnyView(SubagentCard(sub: trail[index - 1], openSub: { [weak self] in self?.open(level: level, $0) }, openID: openID))
+            }
+            let previous = index == 0 ? panel.frame : cards[index - 1].frame
+            // The row grows away from the dock and turns back at the screen edge.
+            var right = index == 0 ? outwardRight : previous.minX >= (index == 1 ? panel.frame.maxX : cards[index - 2].frame.maxX)
+            if right && previous.maxX + 360 > screen.maxX { right = false }
+            if !right && previous.minX - 360 < screen.minX { right = true }
+            let content = body.frame(width: 330).padding(8)
+                .padding(right ? .leading : .trailing, 20)
+                .background(DetailBubble(pointsLeft: right).fill(Color(white: 0.065)))
+                .onHover { [weak self] inside in if inside { self?.closeDetailWork?.cancel() } else { self?.scheduleClose() } }
+                .preferredColorScheme(.dark)
+            let view = NSHostingView(rootView: content)
+            let size = view.fittingSize
+            let x = right ? previous.maxX + (index == 0 ? 8 : 4) : previous.minX - size.width - (index == 0 ? 8 : 4)
+            let target = card(index)
+            let top = index <= keepTop && target.isVisible ? target.frame.maxY : anchorY + size.height / 2
+            let y = min(screen.maxY - size.height, max(screen.minY, top - size.height))
+            target.contentView = view
+            target.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
+            target.orderFrontRegardless()
+        }
+        for extra in cards.dropFirst(trail.count + 1) { extra.orderOut(nil) }
     }
 }

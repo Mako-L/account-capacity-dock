@@ -68,6 +68,52 @@ class CodexRolloutTests(unittest.TestCase):
         self.assertEqual(found['activity'][-1]['text'], 'pnpm build')
 
 
+class SubagentTreeTests(unittest.TestCase):
+    def write(self, path, events, meta=None):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(''.join(json.dumps(e) + '\n' for e in events))
+        if meta is not None:
+            path.with_name(path.stem + '.meta.json').write_text(json.dumps(meta))
+
+    def test_nested_and_workflow_subagents_form_a_tree_in_start_order(self):
+        with tempfile.TemporaryDirectory() as folder:
+            transcript = Path(folder) / 'session.jsonl'
+            transcript.write_text('')
+            root = Path(folder) / 'session' / 'subagents'
+            call = [{'type': 'assistant', 'message': {'content': [{'type': 'tool_use', 'id': 't1', 'name': 'Read', 'input': {'file_path': '/a/b.py'}}]}}]
+            self.write(root / 'agent-a1.jsonl', call, {'agentType': 'reviewer', 'description': 'Review the change'})
+            self.write(root / 'agent-a2.jsonl', call, {'agentType': 'fork', 'description': 'Check one file', 'parentAgentId': 'a1'})
+            flow = root / 'workflows' / 'wf_1'
+            self.write(flow / 'agent-w1.jsonl', call, {'agentType': 'general-purpose'})
+            self.write(flow / 'journal.jsonl', [{'type': 'started', 'agentId': 'w1', 'label': 'tests:api'}])
+
+            def parse(path, reader, size):
+                found = reader(agents.tail_events(path, size))
+                found['pending'] = [agents.tool_step(n, d) for n, d, _ in found['pending'].values()]
+                return found, os.stat(path).st_mtime
+
+            tree = agents.subagent_tree(str(transcript), os.stat(transcript).st_mtime + 1, parse)
+        names = {n['id']: n for n in tree}
+        self.assertEqual(set(names), {'agent-a1', 'wf_1'})
+        self.assertEqual([c['description'] for c in names['agent-a1']['children']], ['Check one file'])
+        self.assertTrue(names['agent-a1']['running'])
+        self.assertEqual(names['agent-a1']['step'], 'Read b.py')
+        self.assertEqual(names['wf_1']['kind'], 'workflow')
+        self.assertEqual([c['name'] for c in names['wf_1']['children']], ['tests:api'])
+
+
+class ObserverInputTests(unittest.TestCase):
+    def test_sends_only_events_after_the_last_report(self):
+        found = {'prompt': 'Fix login', 'activity': [
+            {'at': 10, 'text': 'Read old.py', 'kind': 'tool'}, {'at': 20, 'text': 'Edit new.py', 'kind': 'tool'}]}
+        previous = {'result': {'task': 'Fix login', 'steps': []}, 'last_event': 10, 'prompt': 'Fix login'}
+        text, events = agents.observer_input({'agent': 'claude', 'cwd': '/x/app'}, found, previous)
+        self.assertEqual([e['text'] for e in events], ['Edit new.py'])
+        self.assertNotIn('Read old.py', text)
+        self.assertNotIn('Request from the person', text)
+        self.assertIn('Your last report', text)
+
+
 class ReportTests(unittest.TestCase):
     def test_report_keeps_the_task_and_clear_removes_it(self):
         with tempfile.TemporaryDirectory() as home, \

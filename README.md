@@ -286,6 +286,11 @@ subagents. Hover over an agent, or tap it in a narrow pane, to open its card: th
 steps as a timeline, the running subagents and the latest activity. **Go to pane**
 jumps to its Herdr pane.
 
+Agents keep the order in which they first appeared, so a refresh never moves them.
+The card lists every subagent of the session, running and finished. A hover on a
+subagent opens its card beside the first one, and so on through nested subagents and
+workflow runs.
+
 Each ring has one of three colours. Yellow means working, red means it needs you,
 and green means finished. Idle agents stay hidden unless you turn on **Show idle
 agents** in Settings.
@@ -310,8 +315,10 @@ The steps come from the first source that has them:
    `mako-capacity agents report "Run the tests" --task "Fix login" --done 2 --total 5`
    (`mako-capacity agents clear` removes it).
 3. **The observer** (a small model that reads the latest events of a busy agent).
-   It names the task and the steps through your proxy, with
-   `claude-haiku-4-5-20251001` at most once a minute per agent. Turn it off in
+   It names the task and the steps through your proxy, with `claude-haiku-5-5`, in
+   plain Simplified Technical English. It runs at most once a minute per agent, and
+   only after new events. Each call sends only the last report and the events after
+   it, so a busy agent costs a few hundred tokens a minute. Turn it off in
    Settings, or set `AGENT_OBSERVER=0`. `AGENT_OBSERVER_MODEL` picks another model.
 
 Without any of these, the widget still shows the live tool calls. The agents widget

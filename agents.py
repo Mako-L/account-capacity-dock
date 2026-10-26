@@ -33,6 +33,9 @@ SNAPSHOT = cache_dir() / 'agents.json'
 TAIL = 1_500_000  # bytes read from the end of a transcript; long sessions grow past 50 MB
 RUNNING = 45      # seconds since a subagent's last write while it still counts as running
 RECENT = 15 * 60  # finished subagents stay listed this long
+SUB_RECENT = 6 * 3600  # finished subagents of a live session stay in its tree this long
+SUB_LIMIT = 30     # newest top-level subagents kept per agent
+SUB_TAIL = 200_000  # bytes read from the end of a subagent transcript
 
 
 def setup_dir():
@@ -246,32 +249,79 @@ def task_files(session):
     return items
 
 
-def subagents(transcript, now):
-    folder = Path(transcript[:-len('.jsonl')]) / 'subagents'
-    found = []
-    for path in folder.glob('*.jsonl'):
+def started_at(path, stat):
+    return getattr(stat, 'st_birthtime', None) or stat.st_ctime
+
+
+def subagent_tree(transcript, now, parse):
+    """Every subagent of a session as a tree, oldest first so the order never moves.
+
+    Nested subagents name their parent in the meta file. Workflow agents sit under one node per run.
+    Each transcript is parsed once per change, so a finished subagent costs one stat call."""
+    root = Path(transcript[:-len('.jsonl')]) / 'subagents'
+    if not root.is_dir():
+        return []
+    nodes, parents = {}, {}
+
+    def node(path, label=None):
         try:
-            changed = path.stat().st_mtime
+            if now - path.stat().st_mtime > SUB_RECENT:
+                return None
+        except OSError:
+            return None
+        found, changed = parse(str(path), read_claude, SUB_TAIL)
+        if found is None:
+            return None
+        meta = read_json(path.with_name(path.stem + '.meta.json'))
+        running = now - changed < RUNNING
+        pending = found.get('pending') or []
+        activity = found.get('activity') or []
+        return {
+            'id': path.stem, 'name': label or meta.get('name') or meta.get('agentType') or 'Subagent',
+            'description': clip(meta.get('description') or found.get('title'), 80),
+            'model': (meta.get('model') or '').replace('[1m]', '').replace('inherit', ''),
+            'running': running, 'step': (pending[-1] if pending else None) if running else None,
+            'said': found.get('last_text'), 'activity': activity[-4:], 'updated': changed,
+            'started': started_at(path, os.stat(path)), 'children': [], 'kind': 'agent',
+        }
+
+    for path in root.glob('agent-*.jsonl'):
+        item = node(path)
+        if item:
+            nodes[item['id']] = item
+            parent = read_json(path.with_name(path.stem + '.meta.json')).get('parentAgentId')
+            if parent:
+                parents[item['id']] = 'agent-' + parent
+    for folder in root.glob('workflows/wf_*'):
+        try:
+            if now - (folder / 'journal.jsonl').stat().st_mtime > SUB_RECENT and now - folder.stat().st_mtime > SUB_RECENT:
+                continue
         except OSError:
             continue
-        if now - changed > RECENT:
+        labels = {}
+        for event in tail_events(folder / 'journal.jsonl', 200_000):
+            if event.get('type') == 'started' and event.get('agentId'):
+                labels['agent-' + event['agentId']] = event.get('label')
+        children = [c for c in (node(path, labels.get(path.stem)) for path in folder.glob('agent-*.jsonl')) if c]
+        if not children:
             continue
-        meta = read_json(path.with_name(path.stem + '.meta.json'))
-        events = tail_events(path, 300_000)
-        step = None
-        for event in reversed(events):
-            content = (event.get('message') or {}).get('content')
-            calls = [b for b in content if isinstance(b, dict) and b.get('type') == 'tool_use'] if isinstance(content, list) else []
-            if calls:
-                step = tool_step(calls[-1].get('name', ''), calls[-1].get('input'))
-                break
-        found.append({
-            'id': path.stem, 'name': meta.get('name') or meta.get('agentType') or 'Subagent',
-            'description': clip(meta.get('description'), 80), 'model': (meta.get('model') or '').replace('[1m]', ''),
-            'running': now - changed < RUNNING, 'step': step, 'updated': changed,
-        })
-    found.sort(key=lambda s: (not s['running'], -s['updated']))
-    return found[:8]
+        children.sort(key=lambda c: c['started'])
+        running = sum(c['running'] for c in children)
+        nodes[folder.name] = {
+            'id': folder.name, 'name': 'Workflow', 'kind': 'workflow',
+            'description': f'{len(children)} agents' + (f', {running} running' if running else ''), 'model': '',
+            'running': running > 0, 'step': next((c['step'] for c in children if c['running']), None), 'said': None,
+            'activity': [], 'updated': max(c['updated'] for c in children), 'started': children[0]['started'],
+            'children': children,
+        }
+    for child, parent in parents.items():
+        if parent in nodes and child in nodes:
+            nodes[parent]['children'].append(nodes[child])
+    top = [n for key, n in nodes.items() if parents.get(key) not in nodes]
+    for item in nodes.values():
+        item['children'].sort(key=lambda c: c['started'])
+    top.sort(key=lambda n: n['started'])
+    return top[-SUB_LIMIT:]
 
 
 def claude_sessions():
@@ -368,18 +418,26 @@ def proxy_base():
     return setting('PROXY_URL').rstrip('/') or 'http://127.0.0.1:' + str(setting('CLAUDE_PROXY_PORT', '8317'))
 
 
-OBSERVER_PROMPT = """You watch a coding agent at work. From its recent events, say what it is doing.
-Reply with JSON only, no prose:
-{"task": "<what the whole job is, at most 8 words>",
+OBSERVER_PROMPT = """You watch a coding agent at work and keep a short report of its job.
+You get your last report and only the events since then. Update the report.
+Reply with JSON only:
+{"task": "<the whole job, at most 8 words>",
  "now": "<what it does this minute, at most 10 words>",
  "steps": [{"title": "<at most 6 words>", "status": "done|active|pending"}],
  "progress": <0-100, your estimate for the whole job>}
-Give 3 to 6 steps in order: the ones already done, the active one, then what likely comes next."""
+Give 3 to 6 steps in order: done ones, the active one, then the likely next ones.
+Keep step titles from your last report when they still fit, so the list stays stable.
+Write in Simplified Technical English: plain words, active voice, simple present tense,
+one fact per line, no "-ing" openings, British spelling. Example: "Run the payment tests"."""
+
+OBSERVER_MODEL = 'claude-haiku-5-5'
 
 
 def observe(agent, events_text):
     body = json.dumps({
-        'model': setting('AGENT_OBSERVER_MODEL', 'claude-haiku-4-5-20251001'), 'max_tokens': 400,
+        'model': setting('AGENT_OBSERVER_MODEL', OBSERVER_MODEL), 'max_tokens': 300,
+        # Haiku 5.5 thinks by default and would spend the whole budget on it; the report needs none.
+        'thinking': {'type': 'disabled'},
         'system': OBSERVER_PROMPT,
         'messages': [{'role': 'user', 'content': events_text}],
     }).encode()
@@ -394,19 +452,28 @@ def observe(agent, events_text):
     result = json.loads(found.group(0)) if found else {}
     steps = [{'title': clip(s.get('title'), 60), 'status': s.get('status') if s.get('status') in ('done', 'active', 'pending') else 'pending'}
              for s in result.get('steps', []) if isinstance(s, dict) and s.get('title')][:6]
+    if not result.get('task') and not steps:
+        raise ValueError('the observer reply held no report')
     progress = result.get('progress')
     return {'task': clip(result.get('task'), 70), 'now': clip(result.get('now'), 80), 'steps': steps,
-            'progress': max(0, min(100, int(progress))) if isinstance(progress, (int, float)) else None}
+            'progress': max(0, min(100, int(progress))) if isinstance(progress, (int, float)) else None,
+            'tokens': (reply.get('usage') or {}).get('input_tokens', 0) + (reply.get('usage') or {}).get('output_tokens', 0)}
 
 
-def observer_input(agent, found):
-    lines = [f'Agent: {agent["agent"]} in {agent["cwd"]}', f'Terminal title: {agent.get("title") or "-"}']
-    if found.get('prompt'):
-        lines.append(f'Last request from the person: {found["prompt"]}')
-    lines.append('Recent events, oldest first:')
-    for item in found.get('activity', []):
+def observer_input(agent, found, previous):
+    """Only what changed: the last report and the events after it. A busy agent costs a few hundred tokens a minute."""
+    since = previous.get('last_event') or 0
+    events = [e for e in found.get('activity', []) if not since or (e.get('at') or 0) > since]
+    lines = [f'Agent: {agent["agent"]} in {Path(agent["cwd"]).name or agent["cwd"]}']
+    report = previous.get('result')
+    if report:
+        lines.append('Your last report: ' + json.dumps({k: report.get(k) for k in ('task', 'now', 'steps', 'progress')}))
+    if found.get('prompt') and (not report or found['prompt'] != previous.get('prompt')):
+        lines.append(f'Request from the person: {found["prompt"]}')
+    lines.append('New events, oldest first:')
+    for item in events:
         lines.append(('- says: ' if item['kind'] == 'say' else '- runs: ') + item['text'])
-    return '\n'.join(lines)[:6000]
+    return '\n'.join(lines)[:3000], events
 
 
 # ---- Snapshot ----------------------------------------------------------------
@@ -427,7 +494,7 @@ def collect(run_observer=False):
     by_pid.update(found_now)
     by_pid.update({pid: None for pid in wanted if pid not in by_pid})
     transcripts = previous.get('transcripts', {})
-    agents, parsed, used_panes = [], {}, set()
+    agents, parsed, used_panes, rollouts = [], {}, set(), {}
 
     def base(pane, info):
         return {
@@ -438,7 +505,7 @@ def collect(run_observer=False):
             'workspace': info.get('workspace_id'), 'tab': info.get('tab_id'),
         }
 
-    def parse(path, reader):
+    def parse(path, reader, size=TAIL):
         """Parse a transcript tail once per change; idle agents cost one stat call."""
         try:
             stat = os.stat(path)
@@ -448,7 +515,7 @@ def collect(run_observer=False):
         if cache.get(path, {}).get('key') == key:
             parsed[path] = cache[path]
             return cache[path]['found'], stat.st_mtime
-        found = reader(tail_events(path))
+        found = reader(tail_events(path, size))
         found['pending'] = [tool_step(n, d) for n, d, _ in found['pending'].values()][-3:]
         parsed[path] = {'key': key, 'found': found}
         return found, stat.st_mtime
@@ -501,20 +568,29 @@ def collect(run_observer=False):
             transcript = transcripts[session['sessionId']] = transcript_of(session['sessionId'], session.get('cwd', ''))
         found, updated = parse(transcript, read_claude) if transcript else (None, None)
         agent = finish(agent, found, updated, transcript, task_files(session['sessionId']))
-        agent['subagents'] = subagents(transcript, now) if transcript else []
+        agent['subagents'] = subagent_tree(transcript, now, parse) if transcript else []
         agents.append(agent)
 
     for pid in codex:
         pane = by_pid.get(pid)
         owner = next((a for a in agents if pane and a['pane'] == pane), None)
         info = panes.get(pane) or {}
-        rollout = open_rollout(pid) or (latest_rollout(info.get('cwd')) if info.get('agent') == 'codex' else None)
+        # lsof costs about 0.4 s, so each process's open rollout is looked up at most once a minute.
+        known_rollout = previous.get('rollouts', {}).get(str(pid))
+        if known_rollout and now - known_rollout[1] < 60 and os.path.exists(known_rollout[0]):
+            rollout = known_rollout[0]
+        else:
+            rollout = open_rollout(pid)
+        if rollout:
+            rollouts[str(pid)] = [rollout, known_rollout[1] if known_rollout and known_rollout[0] == rollout and now - known_rollout[1] < 60 else now]
+        rollout = rollout or (latest_rollout(info.get('cwd')) if info.get('agent') == 'codex' else None)
         found, updated = parse(rollout, read_codex) if rollout else (None, None)
         if owner and owner['agent'] != 'codex':
             # A Codex started by another agent, for example `codex exec` as a reviewer.
-            owner['subagents'].insert(0, {'id': f'codex-{pid}', 'name': 'Codex', 'description': (found or {}).get('prompt'),
-                                          'model': '', 'running': True, 'step': ((found or {}).get('pending') or [None])[-1],
-                                          'updated': updated or now})
+            owner['subagents'].append({'id': f'codex-{pid}', 'name': 'Codex', 'description': (found or {}).get('prompt'),
+                                       'model': '', 'running': True, 'step': ((found or {}).get('pending') or [None])[-1],
+                                       'said': (found or {}).get('last_text'), 'activity': ((found or {}).get('activity') or [])[-4:],
+                                       'updated': updated or now, 'started': updated or now, 'children': [], 'kind': 'codex'})
             continue
         if pane in used_panes or (not pane and not rollout):
             continue
@@ -540,10 +616,13 @@ def collect(run_observer=False):
                     agent.update({'steps': result.get('steps') or [], 'progress': result.get('progress'), 'source': 'observer',
                                   'task': result.get('task') or agent['task']})
 
-    order = {'blocked': 0, 'working': 1, 'done': 2, 'idle': 3}
-    agents.sort(key=lambda a: (order.get(a['status'], 4), -(a.get('updated') or 0)))
+    # Agents keep the order in which they first appeared, so a refresh never moves them.
+    seen = {key: at for key, at in previous.get('seen', {}).items() if any(a['id'] == key for a in agents)}
+    for agent in agents:
+        seen.setdefault(agent['id'], now)
+    agents.sort(key=lambda a: (seen[a['id']], a['id']))
     live = {s['sessionId'] for s in sessions}
-    snapshot = {'at': now, 'agents': agents, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
+    snapshot = {'at': now, 'agents': agents, 'seen': seen, 'rollouts': rollouts, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
                 'pids': {str(pid): pane for pid, pane in by_pid.items()},
                 'transcripts': {k: v for k, v in transcripts.items() if k in live}}
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
@@ -555,7 +634,9 @@ def collect(run_observer=False):
 
 
 def run_observers(agents, parsed, folder, now):
-    """Ask the small model about working agents that keep no task list. Each at most once a minute."""
+    """Ask the small model about working agents that keep no task list.
+
+    Each agent at most once a minute, only after new events, and only with those events."""
     folder.mkdir(parents=True, exist_ok=True)
     jobs = []
     for agent in agents:
@@ -567,17 +648,25 @@ def run_observers(agents, parsed, folder, now):
         key = parsed.get(transcript, {}).get('key')
         if previous.get('key') == key or now - previous.get('at', 0) < 60:
             continue
-        jobs.append((agent, path, key, parsed[transcript]['found']))
+        found = parsed[transcript]['found']
+        text, events = observer_input(agent, found, previous)
+        if not events:
+            continue
+        jobs.append((path, key, previous, found, text, events))
     if not jobs:
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(observe, agent, observer_input(agent, found)): (path, key) for agent, path, key, found in jobs[:6]}
+        futures = {pool.submit(observe, None, text): job for job in jobs[:6] for text in [job[4]]}
         for future in concurrent.futures.as_completed(futures):
-            path, key = futures[future]
+            path, key, previous, found, _, events = futures[future]
+            record = {'at': now, 'key': key, 'prompt': found.get('prompt'), 'last_event': max(e.get('at') or 0 for e in events)}
             try:
-                path.write_text(json.dumps({'at': now, 'key': key, 'result': future.result()}) + '\n')
+                result = future.result()
+                record['result'] = result
+                record['tokens'] = previous.get('tokens', 0) + result.pop('tokens', 0)
             except Exception as error:  # the proxy may be down; the view keeps the plain activity
-                path.write_text(json.dumps({'at': now, 'key': key, 'error': str(error)[:200]}) + '\n')
+                record.update({'result': previous.get('result'), 'error': str(error)[:200], 'tokens': previous.get('tokens', 0)})
+            path.write_text(json.dumps(record) + '\n')
 
 
 def text(snapshot):

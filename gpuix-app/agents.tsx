@@ -1,13 +1,16 @@
 // The Agents view: every running coding agent, what it works on now, its steps and its subagents.
 // Data comes from agents.py, which reads Herdr, Claude Code and Codex state, and an optional observer.
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@gpuix/react'
+import { Button, useWindowSize } from '@gpuix/react'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { Bar, C, CACHE, ONE_LINE, ROOT, Scroll, SmallButton, Text, TRACK, arcSvg, run } from './ui'
+import { Bar, BottomShade, C, CACHE, ONE_LINE, ROOT, Scroll, SmallButton, Text, TRACK, arcSvg, run } from './ui'
 
 export type Step = { title: string; status: 'done' | 'active' | 'pending' }
-export type Subagent = { id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number }
+export type Subagent = {
+  id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
+  said?: string | null; activity?: Agent['activity']; children?: Subagent[]; kind?: 'agent' | 'workflow' | 'codex'
+}
 export type Agent = {
   id: string; pane: string | null; agent: string; name: string; status: string; title?: string | null; cwd: string; project: string
   task?: string | null; prompt?: string | null; now?: string | null; said?: string | null; steps: Step[]
@@ -202,7 +205,7 @@ function Timeline({ steps }: { steps: Step[] }) {
 }
 
 // The card that opens on hover, like an account's card: steps, subagents and the latest activity.
-export function AgentDetail({ agent, onFocus }: { agent: Agent; onFocus?: () => void }) {
+export function AgentDetail({ agent, onFocus, onSubagent, openSub }: { agent: Agent; onFocus?: () => void; onSubagent?: (sub: Subagent) => void; openSub?: string }) {
   return (
     <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
                   minWidth: 0, flexShrink: 0, overflow: 'hidden' }}>
@@ -231,18 +234,8 @@ export function AgentDetail({ agent, onFocus }: { agent: Agent; onFocus?: () => 
           <Timeline steps={agent.steps} />
         </Section>)}
       {agent.subagents.length > 0 && (
-        <Section title="Subagents">
-          {agent.subagents.map(s => (
-            <div key={s.id} style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 4, marginTop: 4, flexShrink: 0, backgroundColor: s.running ? LIVE : C.green + '88' }} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <Text size={12} weight={600} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{s.description || s.name}</Text>
-                  {s.model ? <Pill label={s.model} color={C.muted} /> : null}
-                </div>
-                <Text size={11} color={C.muted} style={ONE_LINE}>{`${s.running ? '▸ ' + (s.step || 'Working') : 'Done'} · ${ago(s.updated)}`}</Text>
-              </div>
-            </div>))}
+        <Section title={subLabel(agent.subagents)}>
+          {agent.subagents.map(sub => <SubagentRow key={sub.id} sub={sub} active={sub.id === openSub} onOpen={() => onSubagent?.(sub)} />)}
         </Section>)}
       {agent.activity.length > 0 && (
         <Section title="Recent activity">
@@ -255,6 +248,81 @@ export function AgentDetail({ agent, onFocus }: { agent: Agent; onFocus?: () => 
       <Text size={10} color={C.muted}>{`${SOURCE[agent.source] ?? ''}${agent.pane ? ' · pane ' + agent.pane : ''}`}</Text>
     </div>
   )
+}
+
+const subLabel = (subs: Subagent[]) => {
+  const running = subs.filter(x => x.running).length
+  return `Subagents · ${subs.length}${running ? `, ${running} running` : ''}`
+}
+
+// One subagent: a hover opens its own card beside this one, and so on down the tree.
+function SubagentRow({ sub, active, onOpen }: { sub: Subagent; active: boolean; onOpen: () => void }) {
+  const kids = sub.children?.length ?? 0
+  return (
+    <Button onClick={onOpen} onMouseEnter={onOpen} style={{
+      display: 'flex', gap: 10, flexShrink: 0, padding: 6, marginLeft: -6, marginRight: -6, borderRadius: 10, cursor: 'pointer',
+      backgroundColor: active ? '#ffffff12' : undefined, hover: { backgroundColor: '#ffffff12' },
+    }}>
+      <div style={{ width: 8, height: 8, borderRadius: 4, marginTop: 4, flexShrink: 0, backgroundColor: sub.running ? LIVE : C.green }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <Text size={12} weight={600} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{sub.description || sub.name}</Text>
+          {sub.model ? <Pill label={sub.model} color={C.muted} /> : null}
+        </div>
+        <Text size={11} color={C.muted} style={ONE_LINE}>{`${sub.running ? '▸ ' + (sub.step || 'Working') : 'Finished'} · ${ago(sub.updated)}${kids ? ` · ${kids} inside` : ''}`}</Text>
+      </div>
+      <Text size={14} color={C.muted} style={{ flexShrink: 0 }}>›</Text>
+    </Button>
+  )
+}
+
+// A subagent's own card: what it does, what it said last, its own subagents and its latest activity.
+export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; onSubagent: (child: Subagent) => void; openSub?: string }) {
+  const state = sub.running ? STATUS.working : STATUS.done
+  const kids = sub.children ?? []
+  return (
+    <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
+                  minWidth: 0, flexShrink: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Text size={11} weight={600} color={C.muted}>{(sub.kind === 'workflow' ? 'Workflow' : sub.kind === 'codex' ? 'Codex' : sub.name).toUpperCase()}</Text>
+        <Pill label={state.label} color={state.color} />
+        {sub.model ? <Pill label={sub.model} color={C.muted} /> : null}
+      </div>
+      <Text size={16} weight={600}>{sub.description || sub.name}</Text>
+      {sub.running && sub.step ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, backgroundColor: LIVE + '14', borderWidth: 1, borderColor: LIVE + '33' }}>
+          <div style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: LIVE, flexShrink: 0 }} />
+          <Text size={12} style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{sub.step}</Text>
+        </div>) : null}
+      {sub.said ? <Text size={11} color={C.muted}>{`“${sub.said}”`}</Text> : null}
+      {kids.length > 0 && (
+        <Section title={subLabel(kids)}>
+          {kids.map(child => <SubagentRow key={child.id} sub={child} active={child.id === openSub} onOpen={() => onSubagent(child)} />)}
+        </Section>)}
+      {(sub.activity?.length ?? 0) > 0 && (
+        <Section title="Recent activity">
+          {sub.activity!.slice().reverse().map((item, i) => (
+            <div key={i} style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+              <Text size={10} color={C.muted} style={{ width: 48, flexShrink: 0 }}>{ago(item.at)}</Text>
+              <Text size={11} color={item.kind === 'say' ? C.text : C.muted} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{item.text}</Text>
+            </div>))}
+        </Section>)}
+      <Text size={10} color={C.muted}>{`${sub.running ? 'Running' : 'Finished'} · last write ${ago(sub.updated)}`}</Text>
+    </div>
+  )
+}
+
+// Follows a chain of subagent ids from an agent down its tree; stops where an id no longer exists.
+function chain(agent: Agent | undefined, ids: string[]) {
+  const found: Subagent[] = []
+  let level = agent?.subagents ?? []
+  for (const id of ids) {
+    const next = level.find(x => x.id === id)
+    if (!next) break
+    found.push(next)
+    level = next.children ?? []
+  }
+  return found
 }
 
 function focusPane(agent: Agent) {
@@ -271,31 +339,42 @@ const counts = (agents: Agent[]) => {
           done && `${done} finished`, idle && `${idle} idle`].filter(Boolean).join(' · ')
 }
 
-// The wide view: live agents as cards, the rest as lines, and the hovered agent's card on the right.
+// The wide view: one list in a fixed order, live agents as cards and the rest as lines.
+// The hovered agent's card sits on the right, and each hovered subagent opens another card beside it.
 export function AgentsWide({ snapshot }: { snapshot: Snapshot }) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [trail, setTrail] = useState<string[]>([])
+  const [below, setBelow] = useState<Record<string, boolean>>({})
+  const window = useWindowSize()
   const agents = snapshot.agents
   const current = agents.find(a => a.id === selected) ?? agents.find(live) ?? agents[0]
-  const working = agents.filter(live), rest = agents.filter(a => !live(a))
+  const subs = chain(current, trail)
+  const choose = (id: string) => { if (id !== current?.id) setTrail([]); setSelected(id) }
+  const open = (level: number, sub: Subagent) => setTrail(t => t[level] === sub.id ? t : [...t.slice(0, level), sub.id])
+  // As many cards as fit beside a list at least 320 px wide, the deepest ones first.
+  const fit = Math.max(1, Math.floor(((window?.width ?? 1000) - 320) / 390))
+  const cards = [current ? 'agent' : null, ...subs.map((_, i) => i)].filter(x => x !== null).slice(-fit) as ('agent' | number)[]
+  const report = (key: string) => (value: boolean) => setBelow(b => b[key] === value ? b : { ...b, [key]: value })
   return (
-    <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
-      <Scroll style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, overflowY: 'scroll', display: 'flex', flexDirection: 'column', gap: 14, paddingLeft: 16, paddingRight: 10, paddingBottom: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6 }}>
+    <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden', position: 'relative' }}>
+      <Scroll shadeBottom={false} onBelow={report('list')} style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, overflowY: 'scroll', display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 16, paddingRight: 10, paddingBottom: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6, paddingBottom: 4 }}>
           <Text size={26} weight={600}>Your agents. Live.</Text>
           <Text size={13} color={C.muted}>{agents.length ? counts(agents) : 'No agents found. Start Claude Code or Codex, in Herdr or any terminal.'}</Text>
         </div>
-        {working.length > 0 && (
-          <Section title="Working now">
-            {working.map(a => <AgentCard key={a.id} agent={a} active={a.id === current?.id} onHover={() => setSelected(a.id)} onOpen={() => setSelected(a.id)} />)}
-          </Section>)}
-        {rest.length > 0 && (
-          <Section title="Idle and finished">
-            {rest.map(a => <AgentLine key={a.id} agent={a} active={a.id === current?.id} onHover={() => setSelected(a.id)} onOpen={() => setSelected(a.id)} />)}
-          </Section>)}
+        {agents.map(a => live(a)
+          ? <AgentCard key={a.id} agent={a} active={a.id === current?.id} onHover={() => choose(a.id)} onOpen={() => choose(a.id)} />
+          : <AgentLine key={a.id} agent={a} active={a.id === current?.id} onHover={() => choose(a.id)} onOpen={() => choose(a.id)} />)}
       </Scroll>
-      <Scroll style={{ width: 406, flexShrink: 0, overflowY: 'scroll', paddingLeft: 10, paddingRight: 16, paddingBottom: 16 }}>
-        {current ? <AgentDetail agent={current} onFocus={() => focusPane(current)} /> : null}
-      </Scroll>
+      {cards.map((card, i) => (
+        <Scroll key={card === 'agent' ? 'agent' : subs[card].id} shadeBottom={false} onBelow={report(`card${i}`)}
+                style={{ width: 390, flexShrink: 0, overflowY: 'scroll', paddingLeft: i === 0 ? 10 : 0, paddingRight: i === cards.length - 1 ? 16 : 10, paddingBottom: 16 }}>
+          {card === 'agent'
+            ? <AgentDetail agent={current!} onFocus={() => focusPane(current!)} onSubagent={sub => open(0, sub)} openSub={trail[0]} />
+            : <SubagentDetail sub={subs[card]} onSubagent={sub => open(card + 1, sub)} openSub={trail[card + 1]} />}
+        </Scroll>))}
+      {/* One shadow across the whole width while any column has more below. */}
+      {Object.values(below).some(Boolean) && <BottomShade />}
     </div>
   )
 }
@@ -303,10 +382,18 @@ export function AgentsWide({ snapshot }: { snapshot: Snapshot }) {
 // The narrow view: one line per agent, a tap opens its card. Under 200 px only the rings.
 export function AgentsCompact({ snapshot, tiny, opened, onOpen }: { snapshot: Snapshot; tiny: boolean; opened: string | null; onOpen: (id: string | null) => void }) {
   const agent = snapshot.agents.find(a => a.id === opened)
+  const [trail, setTrail] = useState<string[]>([])
+  useEffect(() => setTrail([]), [opened])
   if (agent) {
+    // A narrow pane shows one card at a time: a tap on a subagent opens its card, the back row goes up one level.
+    const subs = chain(agent, trail)
+    const sub = subs[subs.length - 1]
     return (
-      <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
-        <AgentDetail agent={agent} onFocus={() => focusPane(agent)} />
+      <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {sub && <SmallButton label={`‹ ${subs.length > 1 ? subs[subs.length - 2].description || subs[subs.length - 2].name : agent.name}`} onClick={() => setTrail(subs.slice(0, -1).map(x => x.id))} />}
+        {sub
+          ? <SubagentDetail sub={sub} onSubagent={child => setTrail([...subs.map(x => x.id), child.id])} />
+          : <AgentDetail agent={agent} onFocus={() => focusPane(agent)} onSubagent={child => setTrail([child.id])} />}
       </Scroll>
     )
   }
