@@ -23,6 +23,13 @@ cp "$capacity_root/codeburn_usage.py" "$capacity_app/Contents/Resources/codeburn
 cp "$capacity_root/platform_paths.py" "$capacity_app/Contents/Resources/platform_paths.py"
 cp "$capacity_root/Resources/"* "$capacity_app/Contents/Resources/"
 cp "$capacity_root/LICENSE" "$capacity_app/Contents/Resources/LICENSE.txt"
+# The GPUIX app is the dashboard when Bun is installed. Its packages install on first use, outside the bundle.
+mkdir -p "$capacity_app/Contents/Resources/gpuix-app" "$capacity_app/Contents/Resources/docs/images" "$capacity_app/Contents/Resources/scripts"
+for capacity_file in app.tsx agents.tsx ui.tsx package.json bun.lock tsconfig.json; do
+  cp "$capacity_root/gpuix-app/$capacity_file" "$capacity_app/Contents/Resources/gpuix-app/$capacity_file"
+done
+cp "$capacity_root/docs/images/claude.png" "$capacity_root/docs/images/codex.png" "$capacity_app/Contents/Resources/docs/images/"
+cp "$capacity_root/scripts/capacity.py" "$capacity_app/Contents/Resources/scripts/capacity.py"
 cp "$capacity_root/Info.plist" "$capacity_app/Contents/Info.plist"
 swiftc "$capacity_root/Icon.swift" -o "$capacity_root/build/generate-icon"
 "$capacity_root/build/generate-icon" "$capacity_root/build/icon-png"

@@ -18,6 +18,18 @@ const HOME_VIEW: View = WIDGET === 'agents' ? 'agents' : 'dock'
 const PIN_STATE = process.env.HERDR_PLUGIN_STATE_DIR
   ? path.join(process.env.HERDR_PLUGIN_STATE_DIR, WIDGET === 'agents' ? 'pinned-agents' : 'pinned-side') : null
 
+// Set when the desktop app opens this window: its preferences domain, which holds the dock settings.
+const DOCK = process.env.MAKO_DOCK_DEFAULTS
+const DOCK_DEFAULTS: Record<string, string> = { dockScale: '1', dockOpacity: '1', roundIcons: '0', showNames: '1', dockEdge: 'right', agentsInDock: '0' }
+function readDock(): Record<string, string> {
+  if (!DOCK) return {}
+  const values = { ...DOCK_DEFAULTS }
+  for (const key of Object.keys(values)) {
+    const result = Bun.spawnSync(['defaults', 'read', DOCK, key])
+    if (result.exitCode === 0) values[key] = result.stdout.toString().trim()
+  }
+  return values
+}
 const PROVIDER: Record<string, string> = { Claude: '#e69860', Codex: '#5cd6b3', Cursor: '#b384f2' }
 const ICON: Record<string, string> = {
   Claude: path.join(ROOT, 'docs/images/claude.png'),
@@ -197,6 +209,7 @@ function App() {
   const [pinned, setPinned] = useState(() => !!PIN_STATE && existsSync(PIN_STATE))
   const [observer, setObserver] = useState(() => readSettings().AGENT_OBSERVER !== '0')
   const [showIdle, setShowIdle] = useState(() => readSettings().SHOW_IDLE_AGENTS === '1')
+  const [dock, setDock] = useState(readDock)
   const allAgents = useAgents(view === 'agents')
   // Idle agents stay hidden unless Settings turns them on.
   const agents = showIdle ? allAgents : { ...allAgents, agents: allAgents.agents.filter(a => a.status !== 'idle') }
@@ -249,6 +262,29 @@ function App() {
   }
   function toggleIdle() {
     if (saveSetting('SHOW_IDLE_AGENTS', showIdle ? null : '1')) setShowIdle(!showIdle)
+  }
+  function setDockValue(key: string, type: 'float' | 'bool' | 'string', value: string | number | boolean) {
+    const text = type === 'bool' ? (value ? '1' : '0') : String(value)
+    const result = Bun.spawnSync(['defaults', 'write', DOCK!, key, `-${type}`, type === 'bool' ? (value ? 'true' : 'false') : text])
+    if (result.exitCode === 0) setDock({ ...dock, [key]: text }); else setMessage('Saving the dock setting failed.')
+  }
+  const choice = (key: string, type: 'bool' | 'string', options: [string, string | boolean][]) => (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {options.map(([label, value]) => (
+        <SmallButton key={label} label={label} primary={dock[key] === (type === 'bool' ? (value ? '1' : '0') : value)}
+          onClick={() => setDockValue(key, type, value)} />))}
+    </div>
+  )
+  const stepper = (key: string, low: number, high: number) => {
+    const value = Number(dock[key])
+    const step = (by: number) => setDockValue(key, 'float', Math.round(Math.min(high, Math.max(low, value + by)) * 100) / 100)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <SmallButton label="−" onClick={() => step(-0.05)} />
+        <Text size={13} style={{ width: 44 }}>{`${Math.round(value * 100)}%`}</Text>
+        <SmallButton label="+" onClick={() => step(0.05)} />
+      </div>
+    )
   }
   const idleButton = <SmallButton label={showIdle ? 'Hide idle agents' : 'Show idle agents'} onClick={toggleIdle} />
   const observerButton = <SmallButton label={observer ? 'Turn the observer off' : 'Turn the observer on'} onClick={toggleObserver} />
@@ -432,7 +468,23 @@ function App() {
               <Text size={13} style={{ flexGrow: 1 }}>{label}</Text>
               <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
             </div>))}
-          <Text size={11} color={C.muted} style={{ paddingTop: 12 }}>Dock size, edge and icon shape are set in the desktop dock.</Text>
+          {DOCK ? <>
+            <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
+            <Text size={17} weight={600}>Dock</Text>
+            <Text size={12} color={C.muted}>Changes apply to the desktop dock at once.</Text>
+            <Text size={12} color={C.muted}>Size</Text>
+            {stepper('dockScale', 0.65, 1.4)}
+            <Text size={12} color={C.muted}>Background opacity</Text>
+            {stepper('dockOpacity', 0.25, 1)}
+            <Text size={12} color={C.muted}>Icon shape</Text>
+            {choice('roundIcons', 'bool', [['Rounded square', false], ['Circle', true]])}
+            <Text size={12} color={C.muted}>Account names</Text>
+            {choice('showNames', 'bool', [['Show', true], ['Hide', false]])}
+            <Text size={12} color={C.muted}>Screen edge</Text>
+            {choice('dockEdge', 'string', [['Right', 'right'], ['Left', 'left'], ['Top', 'top'], ['Bottom', 'bottom'], ['Floating', 'floating']])}
+            <Text size={12} color={C.muted}>Agents</Text>
+            {choice('agentsInDock', 'bool', [['Own dock', false], ['In this dock', true]])}
+          </> : <Text size={11} color={C.muted} style={{ paddingTop: 12 }}>Dock size, edge and icon shape are set in the desktop dock.</Text>}
         </Scroll>)}
     </div>
   )

@@ -226,6 +226,13 @@ mako-capacity ui accounts --terminal    # inside Ghostty or kitty, also over SSH
 ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
 ```
 
+On macOS, the dock's **All accounts** and **Settings** buttons open this app when
+[Bun](https://bun.sh) is installed, so the dock and the terminal share one dashboard.
+Its Settings page also holds the dock settings: size, opacity, icon shape, names,
+screen edge and agents. The first click installs the GPUIX packages into
+`~/.mako-capacity/gpuix-app`, which takes a few seconds. Until that finishes, or
+without Bun, the buttons open the built-in macOS windows.
+
 It needs [Bun](https://bun.sh); the first run installs its packages. The terminal
 mode needs the Kitty graphics protocol, so it works in Ghostty and kitty but not
 in tmux. Every button is also a Tab stop that Enter presses.

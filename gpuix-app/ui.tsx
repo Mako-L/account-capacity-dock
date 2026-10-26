@@ -5,7 +5,8 @@ import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
-export const ROOT = path.resolve(import.meta.dir, '..')
+// The desktop app runs a copy of this folder and points MAKO_ROOT at its bundled Python files.
+export const ROOT = process.env.MAKO_ROOT ?? path.resolve(import.meta.dir, '..')
 export const HOME = process.env.MAKO_CAPACITY_HOME ?? path.join(homedir(), '.mako-capacity')
 export const CACHE = process.platform === 'darwin'
   ? path.join(homedir(), 'Library/Application Support/Mako Capacity')

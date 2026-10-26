@@ -496,13 +496,25 @@ struct DockSurface: Shape {
     }
 }
 
+/// A card with a tail on one side that points at the dock. `at` is where the tail sits along that side.
 struct DetailBubble: Shape {
-    var pointsLeft: Bool
+    var tail: Edge = .trailing
+    var at: CGFloat?
+    init(pointsLeft: Bool) { tail = pointsLeft ? .leading : .trailing }
+    init(tail: Edge, at: CGFloat? = nil) { self.tail = tail; self.at = at }
+
     func path(in rect: CGRect) -> Path {
+        // A tail on the top or bottom is the side tail drawn with x and y swapped.
+        guard tail == .top || tail == .bottom else { return sidePath(in: rect, left: tail == .leading) }
+        let swapped = CGRect(x: 0, y: 0, width: rect.height, height: rect.width)
+        return sidePath(in: swapped, left: tail == .top).applying(CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: 0, ty: 0))
+    }
+
+    func sidePath(in rect: CGRect, left pointsLeft: Bool) -> Path {
         let radius: CGFloat = 20
         let tail: CGFloat = 20
         let right = rect.width - tail
-        let mid = rect.midY
+        let mid = min(max(at ?? rect.midY, radius + 30), rect.height - radius - 30)
         var path = Path()
         path.move(to: CGPoint(x: radius, y: 0))
         path.addLine(to: CGPoint(x: right - radius, y: 0))
@@ -518,6 +530,35 @@ struct DetailBubble: Shape {
         path.addQuadCurve(to: CGPoint(x: radius, y: 0), control: .zero)
         path.closeSubpath()
         return pointsLeft ? path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.width, ty: 0)) : path
+    }
+}
+
+/// Where a card opens next to a dock: beside a side dock, above a bottom dock, below a top dock.
+/// The tail points at the pointer, so it lands on the hovered ring.
+struct DetailPlacement {
+    let dock: NSRect, edge: String, screen: NSRect, mouse: NSPoint
+    var vertical: Bool { edge == "top" || edge == "bottom" }
+    var tail: Edge {
+        if edge == "bottom" { return .bottom }
+        if edge == "top" { return .top }
+        return dock.minX - 360 < screen.minX ? .leading : .trailing
+    }
+    /// The tail position inside the card, set by `origin`.
+    /// Cards are 330 wide plus 8 padding each side when the tail is on the top or bottom.
+    var tailAt: CGFloat? { vertical ? mouse.x - x(width: 346) : nil }
+
+    func x(width: CGFloat) -> CGFloat {
+        min(max(mouse.x - width / 2, screen.minX + 4), screen.maxX - width - 4)
+    }
+
+    func origin(size: NSSize) -> (CGFloat, CGFloat) {
+        switch tail {
+        case .bottom: return (x(width: size.width), dock.maxY + 4)
+        case .top: return (x(width: size.width), dock.minY - size.height - 4)
+        default:
+            let x = tail == .trailing ? dock.minX - size.width - 8 : dock.maxX + 8
+            return (x, min(screen.maxY - size.height, max(screen.minY, mouse.y - size.height / 2)))
+        }
     }
 }
 
@@ -682,6 +723,108 @@ enum ProxySettings {
     }
 }
 
+/// All accounts and Settings open in the GPUIX app when Bun is installed, so the dock and the terminal share one dashboard.
+/// Without Bun, or while its packages install the first time, the Swift windows open instead.
+@MainActor
+enum Dashboard {
+    static var process: Process?
+    static var view: String?
+    static var installing = false
+    /// The newest Bun found, because an older Bun cannot read the lockfile a newer one wrote.
+    static let bun: String? = {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let found = ["\(home)/.bun/bin/bun", "/opt/homebrew/bin/bun", "/usr/local/bin/bun"].filter { FileManager.default.isExecutableFile(atPath: $0) }
+        func version(_ path: String) -> [Int] {
+            let probe = Process(), pipe = Pipe()
+            probe.executableURL = URL(fileURLWithPath: path)
+            probe.arguments = ["--version"]
+            probe.standardOutput = pipe
+            guard (try? probe.run()) != nil else { return [] }
+            probe.waitUntilExit()
+            let text = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            return text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ".").map { Int($0) ?? 0 }
+        }
+        return found.max { version($0).lexicographicallyPrecedes(version($1)) }
+    }()
+    /// A writable copy of the bundled app, beside settings.json, where its packages can install.
+    static var folder: URL { ProxySettings.file.deletingLastPathComponent().appendingPathComponent("gpuix-app") }
+
+    static func open(view: String) -> Bool {
+        guard let bun, let resources = Bundle.main.resourceURL,
+              FileManager.default.fileExists(atPath: resources.appendingPathComponent("gpuix-app/app.tsx").path) else { return false }
+        if let process, process.isRunning {
+            if self.view == view {
+                NSRunningApplication(processIdentifier: process.processIdentifier)?.activate()
+                return true
+            }
+            process.terminate()
+        }
+        guard ready(source: resources.appendingPathComponent("gpuix-app"), bun: bun) else { return false }
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: bun)
+        child.arguments = ["app.tsx", "--view=\(view)"]
+        child.currentDirectoryURL = folder
+        var environment = ProcessInfo.processInfo.environment
+        environment["MAKO_ROOT"] = resources.path
+        environment["MAKO_DOCK_DEFAULTS"] = Bundle.main.bundleIdentifier ?? "com.mako-l.capacity"
+        child.environment = environment
+        do { try child.run() } catch { return false }
+        process = child
+        self.view = view
+        return true
+    }
+
+    /// Copies changed sources into the folder. Returns false while `bun install` still has to run.
+    static func ready(source: URL, bun: String) -> Bool {
+        let files = FileManager.default
+        try? files.createDirectory(at: folder, withIntermediateDirectories: true)
+        var packagesChanged = false
+        for name in (try? files.contentsOfDirectory(atPath: source.path)) ?? [] {
+            let from = source.appendingPathComponent(name), to = folder.appendingPathComponent(name)
+            if files.contentsEqual(atPath: from.path, andPath: to.path) { continue }
+            try? files.removeItem(at: to)
+            try? files.copyItem(at: from, to: to)
+            if name == "bun.lock" || name == "package.json" { packagesChanged = true }
+        }
+        if !packagesChanged && files.fileExists(atPath: folder.appendingPathComponent("node_modules").path) { return true }
+        if !installing {
+            installing = true
+            let install = Process(), folder = folder
+            install.executableURL = URL(fileURLWithPath: bun)
+            install.arguments = ["install", "--frozen-lockfile"]
+            install.currentDirectoryURL = folder
+            install.terminationHandler = { finished in
+                // A lockfile this Bun cannot read falls back to the exact versions in package.json.
+                if finished.terminationStatus != 0 {
+                    let retry = Process()
+                    retry.executableURL = URL(fileURLWithPath: bun)
+                    retry.arguments = ["install"]
+                    retry.currentDirectoryURL = folder
+                    try? retry.run()
+                    retry.waitUntilExit()
+                }
+                Task { @MainActor in installing = false }
+            }
+            if (try? install.run()) == nil { installing = false }
+        }
+        return false
+    }
+}
+
+/// The GPUIX settings window changes dock settings with `defaults write`. This applies them to the running dock.
+final class DefaultsWatcher: NSObject {
+    static let keys = ["dockScale", "dockOpacity", "roundIcons", "showNames", "dockEdge", "agentsInDock"]
+    let changed: @MainActor () -> Void
+    init(changed: @escaping @MainActor () -> Void) {
+        self.changed = changed
+        super.init()
+        for key in Self.keys { UserDefaults.standard.addObserver(self, forKeyPath: key, options: [.new], context: nil) }
+    }
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+        Task { @MainActor in self.changed() }
+    }
+}
+
 struct DockSettingsView: View {
     @ObservedObject var store: CapacityStore
     var attach: (String) -> Void
@@ -761,6 +904,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var placingRail = false
     var agentDock: AgentDockController!
     var modeSubscription: AnyCancellable?
+    var defaultsWatcher: DefaultsWatcher?
     var mergedState: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -859,17 +1003,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(repositionRail), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(repositionRail), name: NSWorkspace.didWakeNotification, object: nil)
         let args = CommandLine.arguments
-        if args.contains("--settings") { showSettings() }
-        if args.contains("--overview") || args.contains("--screenshot") { showOverview() }
+        if args.contains("--settings") { showSwiftSettings() }
+        if args.contains("--overview") || args.contains("--screenshot") { showSwiftOverview() }
+        defaultsWatcher = DefaultsWatcher { [weak self] in self?.applyDefaults() }
         if let index = args.firstIndex(of: "--screenshot"), args.count > index + 1 {
             let path = args[index + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.capture(path) }
         }
     }
 
-    @objc func showOverview() { overview.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
+    @objc func showOverview() {
+        if Dashboard.open(view: "accounts") { return }
+        showSwiftOverview()
+    }
+    func showSwiftOverview() { overview.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc func showSettings() {
         showDetail(nil)
+        if Dashboard.open(view: "settings") { return }
+        showSwiftSettings()
+    }
+    func showSwiftSettings() {
         if settings == nil {
             let view = NSHostingView(rootView: DockSettingsView(store: store, attach: { [weak self] edge in self?.positionRail(edge: edge) }))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: view.fittingSize), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -881,6 +1034,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         settings?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+    /// Takes dock settings that another process wrote, such as the GPUIX settings window.
+    func applyDefaults() {
+        let defaults = UserDefaults.standard
+        if let value = defaults.object(forKey: "dockScale") as? Double, value != store.dockScale { store.dockScale = value }
+        if let value = defaults.object(forKey: "dockOpacity") as? Double, value != store.dockOpacity { store.dockOpacity = value }
+        if let value = defaults.object(forKey: "showNames") as? Bool, value != store.showNames { store.showNames = value }
+        if defaults.bool(forKey: "roundIcons") != store.roundIcons { store.roundIcons = defaults.bool(forKey: "roundIcons") }
+        if defaults.bool(forKey: "agentsInDock") != store.agentsInDock { store.agentsInDock = defaults.bool(forKey: "agentsInDock") }
+        if let edge = defaults.string(forKey: "dockEdge"), edge != store.dockEdge { positionRail(edge: edge) }
     }
     @objc func toggleRail() { if rail.isVisible { rail.orderOut(nil) } else { rail.orderFrontRegardless() } }
     @objc func refresh() { store.refresh(force: true) }
@@ -905,6 +1068,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func attachRail(_ item: NSMenuItem) { positionRail(edge: item.representedObject as? String ?? "right"); rail.orderFrontRegardless() }
     @objc func quit() { NSApp.terminate(nil) }
+    func applicationWillTerminate(_ notification: Notification) { Dashboard.process?.terminate() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showOverview(); return true }
 
     func positionRail(edge: String, screen preferred: NSScreen? = nil) {
@@ -992,18 +1156,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             detail?.hidesOnDeactivate = false
             detail?.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         }
-        let pointsLeft = store.dockEdge == "left"
+        let screen = rail.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
+        let mouse = NSEvent.mouseLocation
+        let placed = DetailPlacement(dock: rail.frame, edge: store.dockEdge, screen: screen, mouse: mouse)
         let content = AccountCard(account: account, roundIcons: store.roundIcons).frame(width: 330).padding(8)
-            .padding(pointsLeft ? .leading : .trailing, 20)
-            .background(DetailBubble(pointsLeft: pointsLeft).fill(Color(white: 0.065)))
+            .padding(Edge.Set(placed.tail), 20)
+            .background(DetailBubble(tail: placed.tail, at: placed.tailAt).fill(Color(white: 0.065)))
             .onHover { [weak self] inside in if inside { self?.closeDetailWork?.cancel() } else { self?.showDetail(nil) } }
             .preferredColorScheme(.dark)
         let view = NSHostingView(rootView: content)
         let size = view.fittingSize
-        let screen = rail.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
-        let right = rail.frame.minX - size.width - 8
-        let x = right >= screen.minX ? right : rail.frame.maxX + 8
-        let y = min(screen.maxY - size.height, max(screen.minY, NSEvent.mouseLocation.y - size.height / 2))
+        let (x, y) = placed.origin(size: size)
         detail?.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: false)
         detail?.contentView = view
         detail?.orderFrontRegardless()

@@ -751,6 +751,8 @@ final class AgentDockController: NSObject, NSWindowDelegate {
         let dock = anchor
         let screen = dock.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let outwardRight = dock.frame.minX - 380 < screen.minX
+        let placed = DetailPlacement(dock: dock.frame, edge: capacity.agentsInDock ? capacity.dockEdge : store.edge,
+                                     screen: screen, mouse: NSEvent.mouseLocation)
         for index in from...trail.count {
             let body: AnyView
             if index == 0 {
@@ -762,20 +764,31 @@ final class AgentDockController: NSObject, NSWindowDelegate {
             }
             let previous = index == 0 ? dock.frame : cards[index - 1].frame
             // The row grows away from the dock and turns back at the screen edge.
-            var right = index == 0 ? outwardRight : previous.minX >= (index == 1 ? dock.frame.maxX : cards[index - 2].frame.maxX)
+            var right: Bool
+            if index == 0 { right = outwardRight }
+            else if index == 1 && placed.vertical { right = previous.midX < screen.midX }
+            else { right = previous.minX >= (index == 1 ? dock.frame.maxX : cards[index - 2].frame.maxX) }
             if right && previous.maxX + 360 > screen.maxX { right = false }
             if !right && previous.minX - 360 < screen.minX { right = true }
+            // Above a bottom dock or below a top dock, the first card's tail points down or up at the ring.
+            let tail: Edge = index == 0 && placed.vertical ? placed.tail : right ? .leading : .trailing
             let content = body.frame(width: 330).padding(8)
-                .padding(right ? .leading : .trailing, 20)
-                .background(DetailBubble(pointsLeft: right).fill(Color(white: 0.065)))
+                .padding(Edge.Set(tail), 20)
+                .background(DetailBubble(tail: tail, at: index == 0 ? placed.tailAt : nil).fill(Color(white: 0.065)))
                 .onHover { [weak self] inside in if inside { self?.closeDetailWork?.cancel() } else { self?.scheduleClose() } }
                 .preferredColorScheme(.dark)
             let view = NSHostingView(rootView: content)
             let size = view.fittingSize
-            let x = right ? previous.maxX + (index == 0 ? 8 : 4) : previous.minX - size.width - (index == 0 ? 8 : 4)
+            var x = right ? previous.maxX + (index == 0 ? 8 : 4) : previous.minX - size.width - (index == 0 ? 8 : 4)
             let target = card(index)
             let top = anchorY + size.height / 2
-            let y = min(screen.maxY - size.height, max(screen.minY, top - size.height))
+            var y = min(screen.maxY - size.height, max(screen.minY, top - size.height))
+            if placed.vertical {
+                if index == 0 { (x, y) = placed.origin(size: size) }
+                // Subagent cards stay clear of the dock, on the same side as the first card.
+                else if placed.tail == .bottom { y = max(y, dock.frame.maxY + 4) }
+                else { y = min(y, dock.frame.minY - size.height - 4) }
+            }
             target.contentView = view
             target.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
             target.orderFrontRegardless()
