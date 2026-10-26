@@ -282,13 +282,22 @@ def main():
     commands.add_parser('doctor', help='check macOS, build tools, Docker, and configured paths')
     commands.add_parser('open', help='open the dock')
     ui = commands.add_parser('ui', help='dock, All accounts and Settings on GPUIX, in a window or the terminal')
-    ui.add_argument('view', nargs='?', choices=['dock', 'accounts', 'settings'], default='dock')
+    ui.add_argument('view', nargs='?', choices=['dock', 'accounts', 'agents', 'settings'], default='dock')
     ui.add_argument('--terminal', action='store_true', help='draw inside this terminal (Ghostty or kitty, also over SSH)')
     proxy = commands.add_parser('proxy', help='use a CLIProxyAPI on another machine, or "local" for Docker')
     proxy.add_argument('url', help='for example https://server:8317, or local')
     proxy.add_argument('--key', default=os.environ.get('PROXY_MANAGEMENT_KEY', ''), help='the remote management key')
     logs = commands.add_parser('logs', help='show the last 100 proxy log lines')
     logs.add_argument('service', nargs='?', choices=['claude-proxy'])
+    agents = commands.add_parser('agents', help='list running coding agents, or report this agent\'s progress')
+    agents.add_argument('--observe', action='store_true', help='ask a small model to name the steps of working agents')
+    reports = agents.add_subparsers(dest='action')
+    report = reports.add_parser('report', help='show what this agent works on in the agents view')
+    report.add_argument('step', help='the current step, for example "Running the tests"')
+    report.add_argument('--task', help='the whole task, kept until the next --task')
+    report.add_argument('--done', type=int, help='steps finished so far')
+    report.add_argument('--total', type=int, help='steps in the task')
+    reports.add_parser('clear', help='remove this agent\'s report')
     login = commands.add_parser('login', help='add a provider account')
     login.add_argument('provider', choices=['claude', 'codex', 'cursor'])
     args = parser.parse_args()
@@ -327,6 +336,16 @@ def main():
         start_app()
     elif args.command == 'open':
         start_app()
+    elif args.command == 'agents':
+        sys.path.insert(0, str(ROOT))
+        import agents
+        if args.action in ('report', 'clear'):
+            path = agents.write_report(getattr(args, 'step', None), getattr(args, 'task', None),
+                                       getattr(args, 'done', None), getattr(args, 'total', None), args.action == 'clear')
+            print(f'Saved for {path.stem}.' if args.action == 'report' else 'Cleared.')
+        else:
+            for line in agents.text(agents.collect(args.observe)):
+                print(line)
     elif args.command == 'ui':
         need('bun')
         app = ROOT / 'gpuix-app'

@@ -278,6 +278,36 @@ The narrow pane on the right shows names hidden.
 
 <br clear="right">
 
+### Agents widget
+
+The agents widget shows every Claude Code and Codex session that runs on this
+machine. For each one it shows the task, the step it is on now, its progress and its
+subagents. Hover over an agent, or tap it in a narrow pane, to open its card: the
+steps as a timeline, the running subagents and the latest activity. **Go to pane**
+jumps to its Herdr pane.
+
+```sh
+herdr plugin action invoke pin-agents-right --plugin mako-capacity   # or pin-agents-left
+mako-capacity ui agents             # the same view in a window
+mako-capacity agents                # a plain list in the terminal
+```
+
+![The agents view: live agents with their steps, subagents and activity](docs/images/agents.png)
+
+The steps come from the first source that has them:
+
+1. **The agent's own task list:** Claude Code's TodoWrite and task tools, or the Codex plan.
+2. **A report from the agent.** Tell an agent to run this at each step:
+   `mako-capacity agents report "Run the tests" --task "Fix login" --done 2 --total 5`
+   (`mako-capacity agents clear` removes it).
+3. **The observer** (a small model that reads the latest events of a busy agent).
+   It names the task and the steps through your proxy, with
+   `claude-haiku-4-5-20251001` at most once a minute per agent. Turn it off in
+   Settings, or set `AGENT_OBSERVER=0`. `AGENT_OBSERVER_MODEL` picks another model.
+
+Without any of these, the widget still shows the live tool calls. The agents widget
+only reads files, `ps` and Herdr's socket. It never changes an agent.
+
 ### Text widget
 
 The text widget shows a progress ring per account, a bar per quota window, and reset

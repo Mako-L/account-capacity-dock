@@ -352,6 +352,14 @@ herdr plugin action invoke pin-app-right --plugin mako-capacity</code></pre></di
         <div class="shot"><img src="images/herdr-compact.png" width="330" height="1548" alt="Narrow Herdr widget: a column of rings with names hidden, and the pin button"></div>
       </div>
     </section>
+
+    <section id="agents" aria-labelledby="agents-title">
+      <h2 id="agents-title">Your agents, live</h2>
+      <p class="section-lede">A second widget shows every Claude Code and Codex session: the task, the step it is on, its progress and its subagents. Hover over an agent to see its steps as a timeline. Steps come from the agent's own task list, from a one-line report the agent writes, or from a small observer model that reads its latest events.</p>
+      <div class="shot"><img src="images/agents.png" width="1120" height="780" alt="The agents view: three working agents with progress bars, and the card of the first one with its steps, subagents and recent activity" loading="lazy"></div>
+      <div class="code"><pre><code>herdr plugin action invoke pin-agents-right --plugin mako-capacity
+mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div>
+    </section>
   </main>
 
   <footer>

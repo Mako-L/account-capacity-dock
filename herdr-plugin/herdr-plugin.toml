@@ -2,7 +2,7 @@ id = "mako-capacity"
 name = "Mako Capacity"
 version = "1.0.0"
 min_herdr_version = "0.8.0"
-description = "Percent used for every Claude, Codex and Cursor account, docked beside your panes."
+description = "Percent used for every Claude, Codex and Cursor account, and your live agents with their steps, docked beside your panes."
 platforms = ["macos", "linux"]
 
 [[panes]]
@@ -16,6 +16,12 @@ id = "app"
 title = "Capacity"
 placement = "split"
 command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/../scripts/capacity.py\" ui dock --terminal"]
+
+[[panes]]
+id = "agents"
+title = "Agents"
+placement = "split"
+command = ["sh", "-c", "MAKO_WIDGET=agents exec python3 \"$HERDR_PLUGIN_ROOT/../scripts/capacity.py\" ui agents --terminal"]
 
 [[actions]]
 id = "open-right"
@@ -52,6 +58,30 @@ id = "pin-app-left"
 title = "Mako Capacity: pin the app on the left in every tab"
 contexts = ["global", "workspace", "pane"]
 command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left app"]
+
+[[actions]]
+id = "open-agents-right"
+title = "Mako Capacity: agents on the right"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" right agents"]
+
+[[actions]]
+id = "pin-agents-right"
+title = "Mako Capacity: pin agents on the right in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin right agents"]
+
+[[actions]]
+id = "pin-agents-left"
+title = "Mako Capacity: pin agents on the left in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left agents"]
+
+[[actions]]
+id = "unpin-agents"
+title = "Mako Capacity: unpin agents"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" unpin agents"]
 
 [[actions]]
 id = "toggle-pin"

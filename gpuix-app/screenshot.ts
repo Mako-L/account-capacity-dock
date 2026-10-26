@@ -8,7 +8,7 @@ const size = process.argv[4] ?? ''
 for (const view of (process.argv[3] ?? 'dock,accounts,settings').split(',')) {
   const app = await launch({
     command: 'bun', args: ['app.tsx', `--view=${view}`, ...(size ? [`--size=${size}`] : [])],
-    env: { GPUIX_BACKGROUND: '1', MAKO_CAPACITY_SNAPSHOT: snapshot, MAKO_CAPACITY_HOME: '/tmp/demo/home/.mako-capacity' },
+    env: { GPUIX_BACKGROUND: '1', MAKO_CAPACITY_SNAPSHOT: snapshot, MAKO_AGENTS_SNAPSHOT: process.env.MAKO_AGENTS_SNAPSHOT ?? '/tmp/demo/agents.json', MAKO_CAPACITY_HOME: '/tmp/demo/home/.mako-capacity' },
   })
   await app.getByText(size ? '%' : 'All accounts').waitFor({ timeoutMs: 60_000 }).catch(() => {})
   await new Promise(r => setTimeout(r, 1500))
