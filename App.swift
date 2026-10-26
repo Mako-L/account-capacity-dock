@@ -799,13 +799,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         modeSubscription = Publishers.CombineLatest3(store.$agentsInDock, store.$dockMode, agentDock.store.$agents)
             .dropFirst().receive(on: RunLoop.main).sink { [weak self] inDock, mode, _ in
                 guard let self else { return }
-                if self.mergedState != [inDock ? "1" : "0", mode] {
-                    self.mergedState = [inDock ? "1" : "0", mode]
+                let state = [inDock ? "1" : "0", mode]
+                let switched = self.mergedState != state
+                if switched {
+                    self.mergedState = state
                     self.showDetail(nil)
                     self.agentDock.closeCards()
                     self.agentDock.syncMerged()
                 }
-                if self.store.showsAgents || !inDock { self.repositionRail() }
+                // Agents coming and going resize the dock only while it shows them.
+                if switched || self.store.showsAgents { self.repositionRail() }
             }
         rail.orderFrontRegardless()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)

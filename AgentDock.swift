@@ -235,11 +235,17 @@ struct AgentRing: View {
     }
 }
 
+/// Which subagent row is open on each card. Cards watch it, so marking a row does not redraw the card or reset its scroll.
+final class CardTrail: ObservableObject {
+    @Published var ids: [String] = []
+    func id(_ level: Int) -> String? { level < ids.count ? ids[level] : nil }
+}
+
 struct AgentCard: View {
     let agent: AgentItem
     var focus: () -> Void
     var openSub: (AgentSubagent) -> Void = { _ in }
-    var openID: String?
+    var marks = CardTrail()
     func section(_ title: String) -> some View {
         Text(title.uppercased()).font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.top, 2)
     }
@@ -278,7 +284,7 @@ struct AgentCard: View {
                 StepList(steps: steps, signal: agent.signal)
             }
             if let subagents = agent.subagents, !subagents.isEmpty {
-                SubagentList(subagents: subagents, open: openSub, openID: openID)
+                SubagentList(subagents: subagents, open: openSub, marks: marks, level: 0)
             }
             if let activity = agent.activity, !activity.isEmpty {
                 section("Recent activity")
@@ -349,7 +355,9 @@ struct SubRing: View {
 struct SubagentList: View {
     let subagents: [AgentSubagent]
     var open: (AgentSubagent) -> Void
-    var openID: String?
+    @ObservedObject var marks: CardTrail
+    let level: Int
+    var openID: String? { marks.id(level) }
 
     var groups: [(phase: String?, subs: [AgentSubagent])] {
         var groups: [(phase: String?, subs: [AgentSubagent])] = []
@@ -419,7 +427,8 @@ struct SubagentList: View {
 struct SubagentCard: View {
     let sub: AgentSubagent
     var openSub: (AgentSubagent) -> Void
-    var openID: String?
+    let marks: CardTrail
+    let level: Int
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -457,7 +466,7 @@ struct SubagentCard: View {
                 StepList(steps: steps, signal: sub.signal)
             }
             if let children = sub.children, !children.isEmpty {
-                SubagentList(subagents: children, open: openSub, openID: openID)
+                SubagentList(subagents: children, open: openSub, marks: marks, level: level)
             }
             if let activity = sub.activity, !activity.isEmpty {
                 cardSection("Recent activity")
@@ -601,6 +610,7 @@ final class AgentDockController: NSObject, NSWindowDelegate {
 
     func closeCards() {
         closeDetailWork?.cancel()
+        openWork?.cancel()
         cards.forEach { $0.orderOut(nil) }
         hoveredAgent = nil
         trail = []
@@ -681,7 +691,9 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     /// Cards open in a row away from the dock: the agent first, then each hovered subagent, down the tree.
     var cards: [NSPanel] = []
     var hoveredAgent: AgentItem?
-    var trail: [AgentSubagent] = []
+    var trail: [AgentSubagent] = [] { didSet { marks.ids = trail.map(\.id) } }
+    let marks = CardTrail()
+    var openWork: DispatchWorkItem?
 
     func showDetail(_ agent: AgentItem?) {
         guard let agent else { scheduleClose(); return }
@@ -695,6 +707,7 @@ final class AgentDockController: NSObject, NSWindowDelegate {
         closeDetailWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            self.openWork?.cancel()
             self.cards.forEach { $0.orderOut(nil) }
             self.hoveredAgent = nil
             self.trail = []
@@ -705,10 +718,17 @@ final class AgentDockController: NSObject, NSWindowDelegate {
 
     func open(level: Int, _ sub: AgentSubagent) {
         closeDetailWork?.cancel()
+        openWork?.cancel()
         if trail.count > level, trail[level].id == sub.id, cards.count > level + 1, cards[level + 1].isVisible { return }
-        trail = Array(trail.prefix(level)) + [sub]
-        // The card at `level` redraws in place to mark the open row; the new card opens beside it.
-        render(anchorY: NSEvent.mouseLocation.y, from: level, keepTop: level)
+        // Rows slide under the pointer while the list scrolls, so a card opens only after the pointer rests on a row.
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.hoveredAgent != nil, self.cards.count > level, self.cards[level].isVisible else { return }
+            self.trail = Array(self.trail.prefix(level)) + [sub]
+            // The card at `level` keeps its view and scroll; only the cards after it are drawn.
+            self.render(anchorY: NSEvent.mouseLocation.y, from: level + 1)
+        }
+        openWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
     }
 
     func card(_ index: Int) -> NSPanel {
@@ -726,20 +746,19 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     }
 
     /// Draws cards from `from` onwards. Earlier cards stay where they are, so the row does not jump.
-    func render(anchorY: CGFloat, from: Int = 0, keepTop: Int = -1) {
+    func render(anchorY: CGFloat, from: Int = 0) {
         guard let agent = hoveredAgent else { return }
         let dock = anchor
         let screen = dock.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let outwardRight = dock.frame.minX - 380 < screen.minX
         for index in from...trail.count {
-            let openID = index < trail.count ? trail[index].id : nil
             let body: AnyView
             if index == 0 {
                 body = AnyView(AgentCard(agent: agent, focus: { [weak self] in self?.store.focus(agent) },
-                                         openSub: { [weak self] in self?.open(level: 0, $0) }, openID: openID))
+                                         openSub: { [weak self] in self?.open(level: 0, $0) }, marks: marks))
             } else {
                 let level = index
-                body = AnyView(SubagentCard(sub: trail[index - 1], openSub: { [weak self] in self?.open(level: level, $0) }, openID: openID))
+                body = AnyView(SubagentCard(sub: trail[index - 1], openSub: { [weak self] in self?.open(level: level, $0) }, marks: marks, level: level))
             }
             let previous = index == 0 ? dock.frame : cards[index - 1].frame
             // The row grows away from the dock and turns back at the screen edge.
@@ -755,7 +774,7 @@ final class AgentDockController: NSObject, NSWindowDelegate {
             let size = view.fittingSize
             let x = right ? previous.maxX + (index == 0 ? 8 : 4) : previous.minX - size.width - (index == 0 ? 8 : 4)
             let target = card(index)
-            let top = index <= keepTop && target.isVisible ? target.frame.maxY : anchorY + size.height / 2
+            let top = anchorY + size.height / 2
             let y = min(screen.maxY - size.height, max(screen.minY, top - size.height))
             target.contentView = view
             target.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
