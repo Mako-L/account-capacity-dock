@@ -124,6 +124,26 @@ class SubagentTreeTests(unittest.TestCase):
         self.assertEqual(sorted(c['name'] for c in tree[0]['children']), ['a', 'b'])
 
 
+class ClaudeSessionTests(unittest.TestCase):
+    def test_a_session_file_whose_pid_was_reused_is_skipped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            sessions = Path(folder) / 'sessions'
+            sessions.mkdir()
+            pid = os.getpid()
+            (sessions / 'new.json').write_text(json.dumps({'pid': pid, 'sessionId': 'new', 'startedAt': 2_000_000_000_000}))
+            (sessions / 'old.json').write_text(json.dumps({'pid': pid, 'sessionId': 'old', 'startedAt': 1_000_000_000_000}))
+            checked = {}
+            with mock.patch.object(agents, 'claude_dirs', return_value=[Path(folder)]), \
+                    mock.patch.object(agents, 'process_starts', return_value={pid: 1_900_000_000}):
+                found = agents.claude_sessions(checked)
+            with mock.patch.object(agents, 'claude_dirs', return_value=[Path(folder)]), \
+                    mock.patch.object(agents, 'process_starts', side_effect=AssertionError('ps ran again')):
+                again = agents.claude_sessions(checked)
+        self.assertEqual([s['sessionId'] for s in found], ['new'])
+        self.assertEqual([s['sessionId'] for s in again], ['new'])
+        self.assertEqual(found[0]['root'], folder)
+
+
 class ObserverInputTests(unittest.TestCase):
     def test_sends_only_events_after_the_last_report(self):
         found = {'prompt': 'Fix login', 'activity': [

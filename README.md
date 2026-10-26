@@ -300,7 +300,13 @@ agents** in Settings.
 On macOS the app also has an **agents dock**, a second floating dock next to the
 capacity dock. Drag it to any screen edge to attach it, or leave it floating. The
 menu bar icon shows or hides it (**Show / hide agents dock**) and attaches it to an
-edge (**Attach agents dock**).
+edge (**Attach agents dock**). To keep one dock, set **Agents** to **In this dock** in
+Dock settings. A switch at the top of the capacity dock then moves between accounts
+and agents.
+
+Agent names come from the Herdr sidebar: the workspace name, and the tab name when the
+tab has one. The app reads Claude sessions from every Claude config folder, so agents
+started with a different `CLAUDE_CONFIG_DIR` also show, with their workflow runs.
 
 ```sh
 herdr plugin action invoke pin-agents-right --plugin mako-capacity   # or pin-agents-left

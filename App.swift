@@ -89,6 +89,14 @@ final class CapacityStore: ObservableObject {
     @Published var dockOpacity = (UserDefaults.standard.object(forKey: "dockOpacity") as? Double ?? 1) {
         didSet { UserDefaults.standard.set(dockOpacity, forKey: "dockOpacity") }
     }
+    /// Agents can live in this dock behind a switch, in place of their own dock.
+    @Published var agentsInDock = UserDefaults.standard.bool(forKey: "agentsInDock") {
+        didSet { UserDefaults.standard.set(agentsInDock, forKey: "agentsInDock") }
+    }
+    @Published var dockMode = UserDefaults.standard.string(forKey: "dockMode") ?? "capacity" {
+        didSet { UserDefaults.standard.set(dockMode, forKey: "dockMode") }
+    }
+    var showsAgents: Bool { agentsInDock && dockMode == "agents" }
     private var timer: Timer?
     private var usageProcess: Process?
     private var queuedAction: [String] = []
@@ -515,10 +523,40 @@ struct DetailBubble: Shape {
 
 struct RailView: View {
     @ObservedObject var store: CapacityStore
+    @ObservedObject var agents: AgentStore
     var showOverview: () -> Void
     var showSettings: () -> Void
     var hover: (CapacityAccount?) -> Void
+    var hoverAgent: (AgentItem?) -> Void
     var horizontal: Bool { store.dockEdge == "top" || store.dockEdge == "bottom" }
+    /// Two icons at the top of the dock: accounts and agents.
+    var modeSwitch: some View {
+        HStack(spacing: 2) {
+            ForEach([("capacity", "gauge.with.dots.needle.50percent", "Accounts"), ("agents", "sparkles", "Agents")], id: \.0) { mode, icon, label in
+                Button { store.dockMode = mode } label: {
+                    Image(systemName: icon).font(.system(size: 11, weight: .semibold)).frame(width: 26, height: 20)
+                        .background(store.dockMode == mode ? Color.white.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                        .foregroundStyle(store.dockMode == mode ? Color.white : Color.secondary)
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).help(label).accessibilityLabel(label)
+            }
+        }.padding(2).background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+    }
+    @ViewBuilder var top: some View {
+        if store.agentsInDock { modeSwitch } else {
+            Image(systemName: "line.3.horizontal").font(.system(size: horizontal ? 10 : 12)).foregroundStyle(.secondary).help("Drag to attach to a screen edge")
+        }
+    }
+    @ViewBuilder var cells: some View {
+        if store.showsAgents {
+            if agents.agents.isEmpty { NoAgents() }
+            ForEach(agents.agents) { agent in
+                AgentCell(agent: agent, horizontal: horizontal, focus: { agents.focus(agent) }, hover: hoverAgent)
+            }
+        } else {
+            ForEach(store.accounts) { cell($0) }
+        }
+    }
     func cursorQuotas(_ account: CapacityAccount) -> some View {
         VStack(spacing: 1) {
             ForEach(account.windows) { window in
@@ -565,25 +603,27 @@ struct RailView: View {
                 .frame(width: geometry.size.width / store.dockScale, height: geometry.size.height / store.dockScale)
                 .scaleEffect(store.dockScale, anchor: .topLeading)
         }
-        .contextMenu { Button("Dock settings…", action: showSettings); Button("All accounts", action: showOverview) }
+        .contextMenu {
+            Button("Dock settings…", action: showSettings); Button("All accounts", action: showOverview)
+            if store.agentsInDock { Button(store.showsAgents ? "Show accounts" : "Show agents") { store.dockMode = store.showsAgents ? "capacity" : "agents" } }
+        }
     }
     var railContent: some View {
         Group {
             if horizontal {
                 HStack(spacing: 8) {
-                    Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundStyle(.secondary).help("Drag to attach to a screen edge")
+                    top
                     ShadowScrollView(axis: .horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) { ForEach(store.accounts) { cell($0) } }
+                        HStack(spacing: 8) { cells }
                     }
                     Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill") }.buttonStyle(.plain)
                     Button(action: showSettings) { Image(systemName: "gearshape") }.buttonStyle(.plain).help("Dock settings")
                 }.padding(.horizontal, 34).padding(.vertical, 14)
             } else {
                 VStack(spacing: 8) {
-                    Image(systemName: "line.3.horizontal").font(.system(size: 12)).foregroundStyle(.secondary)
-                        .padding(.top, store.dockEdge == "floating" ? 12 : 32).help("Drag to attach to a screen edge")
+                    top.padding(.top, store.dockEdge == "floating" ? 12 : 32)
                     ShadowScrollView(showsIndicators: false) {
-                        VStack(spacing: 6) { ForEach(store.accounts) { cell($0) } }.padding(.horizontal, 12)
+                        VStack(spacing: 6) { cells }.padding(.horizontal, 12)
                     }
                     HStack(spacing: 14) {
                         Button(action: showOverview) { Image(systemName: "square.grid.2x2.fill") }.help("Open all accounts")
@@ -669,6 +709,13 @@ struct DockSettingsView: View {
             Picker("Screen edge", selection: Binding(get: { store.dockEdge }, set: attach)) {
                 ForEach(["right", "left", "top", "bottom", "floating"], id: \.self) { Text($0.capitalized).tag($0) }
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Picker("Agents", selection: $store.agentsInDock) {
+                    Text("Own dock").tag(false)
+                    Text("In this dock").tag(true)
+                }.pickerStyle(.segmented)
+                Text("In this dock, the switch at the top moves between accounts and agents.").font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Spacer()
                 Button("Restore defaults") {
@@ -713,6 +760,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var dockingWork: DispatchWorkItem?
     var placingRail = false
     var agentDock: AgentDockController!
+    var modeSubscription: AnyCancellable?
+    var mergedState: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -731,8 +780,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         rail.isMovableByWindowBackground = true
         rail.hidesOnDeactivate = false
         rail.delegate = self
+        agentDock = AgentDockController(capacity: store)
+        agentDock.host = rail
         positionRail(edge: store.dockEdge)
-        rail.contentView = NSHostingView(rootView: RailView(store: store, showOverview: { [weak self] in self?.showOverview() }, showSettings: { [weak self] in self?.showSettings() }, hover: { [weak self] in self?.showDetail($0) }))
+        rail.contentView = NSHostingView(rootView: RailView(store: store, agents: agentDock.store, showOverview: { [weak self] in self?.showOverview() },
+            showSettings: { [weak self] in self?.showSettings() }, hover: { [weak self] in self?.showDetail($0) },
+            hoverAgent: { [weak self] in self?.agentDock.showDetail($0) }))
         layoutSubscription = Publishers.CombineLatest3(store.$dockScale, store.$showNames, store.$accounts)
             .dropFirst().receive(on: RunLoop.main).sink { [weak self] _, _, accounts in
                 guard let self else { return }
@@ -742,8 +795,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 self.repositionRail()
             }
+        // Switching what the dock shows, or agents coming and going in it, resizes the dock.
+        modeSubscription = Publishers.CombineLatest3(store.$agentsInDock, store.$dockMode, agentDock.store.$agents)
+            .dropFirst().receive(on: RunLoop.main).sink { [weak self] inDock, mode, _ in
+                guard let self else { return }
+                if self.mergedState != [inDock ? "1" : "0", mode] {
+                    self.mergedState = [inDock ? "1" : "0", mode]
+                    self.showDetail(nil)
+                    self.agentDock.closeCards()
+                    self.agentDock.syncMerged()
+                }
+                if self.store.showsAgents || !inDock { self.repositionRail() }
+            }
         rail.orderFrontRegardless()
-        agentDock = AgentDockController(capacity: store)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mako Capacity")
         let menu = NSMenu()
@@ -826,8 +890,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         agentDock.store.setShowIdle(show)
         item.state = show ? .on : .off
     }
-    @objc func toggleAgents() { agentDock.setVisible(!agentDock.visible) }
+    @objc func toggleAgents() {
+        // With agents in the capacity dock, showing their own dock moves them back out.
+        if store.agentsInDock { store.agentsInDock = false; agentDock.setVisible(true); return }
+        agentDock.setVisible(!agentDock.visible)
+    }
     @objc func attachAgents(_ item: NSMenuItem) {
+        store.agentsInDock = false
         agentDock.place(edge: item.representedObject as? String ?? "left")
         agentDock.setVisible(true)
     }
@@ -842,12 +911,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         UserDefaults.standard.set(edge, forKey: "dockEdge")
         let horizontal = edge == "top" || edge == "bottom"
         let scale = store.dockScale
-        let count = max(1, store.accounts.count)
+        let agentCount = store.showsAgents ? agentDock?.store.agents.count ?? 0 : nil
+        let count = max(1, agentCount ?? store.accounts.count)
         let padding: CGFloat = edge == "floating" ? 12 : 32
-        let cells = store.accounts.reduce(CGFloat(0)) { total, account in
+        let cells = agentCount.map { CGFloat(max(1, $0) * 78) } ?? store.accounts.reduce(CGFloat(0)) { total, account in
             total + (store.showNames ? 78 : 66) + (account.provider == "Cursor" ? CGFloat(max(3, account.windows.count) - 2) * 16 : 0)
         }
-        let length = horizontal ? CGFloat(130 + count * 72 + (count - 1) * 8) : padding * 2 + 44 + max(cells, store.showNames ? 78 : 66) + CGFloat((count - 1) * 6)
+        // The switch takes more room than the drag handle it replaces.
+        let switchRoom: CGFloat = store.agentsInDock ? (horizontal ? 50 : 10) : 0
+        let length = switchRoom + (horizontal ? CGFloat(130 + count * 72 + (count - 1) * 8) : padding * 2 + 44 + max(cells, store.showNames ? 78 : 66) + CGFloat((count - 1) * 6))
         let size = horizontal ? NSSize(width: min(length * scale, screen.visibleFrame.width), height: 114 * scale) : NSSize(width: 88 * scale, height: min(length * scale, screen.visibleFrame.height - 24))
         let offset = UserDefaults.standard.object(forKey: "dockOffset") as? Double ?? 0.5
         var origin = NSPoint(x: screen.visibleFrame.minX + (screen.visibleFrame.width - size.width) * offset,

@@ -49,6 +49,7 @@ struct AgentItem: Codable, Identifiable {
     let pane: String?
     let agent: String
     let name: String?
+    let tabName: String?
     let status: String
     let title: String?
     let project: String?
@@ -255,7 +256,7 @@ struct AgentCard: View {
                 AgentRing(agent: agent, size: 40)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(agent.heading).font(.headline).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Text([agent.name, agent.project].compactMap { $0 }.uniqued().joined(separator: " · "))
+                    Text([agent.name, agent.tabName].compactMap { $0 }.uniqued().joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -479,14 +480,14 @@ extension Array where Element == String {
     func uniqued() -> [String] { reduce(into: []) { if !$0.contains($1) { $0.append($1) } } }
 }
 
-struct AgentRailView: View {
-    @ObservedObject var store: AgentStore
-    @ObservedObject var capacity: CapacityStore
+/// One agent in a dock: its ring, its progress or state, and its name.
+struct AgentCell: View {
+    let agent: AgentItem
+    let horizontal: Bool
+    var focus: () -> Void
     var hover: (AgentItem?) -> Void
-    var hide: () -> Void
-    var horizontal: Bool { store.edge == "top" || store.edge == "bottom" }
-    func cell(_ agent: AgentItem) -> some View {
-        Button { store.focus(agent) } label: {
+    var body: some View {
+        Button(action: focus) {
             VStack(spacing: 3) {
                 AgentRing(agent: agent, size: horizontal ? 36 : 42)
                 Text(agent.progress.map { "\(Int($0))%" } ?? agent.stateLabel)
@@ -497,12 +498,27 @@ struct AgentRailView: View {
         }.buttonStyle(.plain).onHover { inside in hover(inside ? agent : nil) }
             .help("\(agent.provider) · \(agent.heading) · \(agent.stateLabel)")
     }
-    var empty: some View {
+}
+
+struct NoAgents: View {
+    var body: some View {
         VStack(spacing: 4) {
             Image(systemName: "sparkles").font(.system(size: 18)).foregroundStyle(.secondary)
             Text("No agents").font(.system(size: 9)).foregroundStyle(.secondary)
         }.frame(width: 64, height: 78)
     }
+}
+
+struct AgentRailView: View {
+    @ObservedObject var store: AgentStore
+    @ObservedObject var capacity: CapacityStore
+    var hover: (AgentItem?) -> Void
+    var hide: () -> Void
+    var horizontal: Bool { store.edge == "top" || store.edge == "bottom" }
+    func cell(_ agent: AgentItem) -> some View {
+        AgentCell(agent: agent, horizontal: horizontal, focus: { store.focus(agent) }, hover: hover)
+    }
+    var empty: some View { NoAgents() }
     var body: some View {
         GeometryReader { geometry in
             content
@@ -549,6 +565,9 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     var dockingWork: DispatchWorkItem?
     var placing = false
     var subscription: AnyCancellable?
+    /// The capacity dock, which holds the agents when they share it.
+    weak var host: NSPanel?
+    var anchor: NSPanel { capacity.agentsInDock ? host ?? panel : panel }
 
     init(capacity: CapacityStore) {
         self.capacity = capacity
@@ -567,7 +586,24 @@ final class AgentDockController: NSObject, NSWindowDelegate {
         place(edge: store.edge)
         subscription = Publishers.CombineLatest(store.$agents, capacity.$dockScale).dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _, _ in self?.place(edge: self?.store.edge ?? "left") }
-        if UserDefaults.standard.object(forKey: "agentDockVisible") as? Bool ?? true { panel.orderFrontRegardless() }
+        if !capacity.agentsInDock && UserDefaults.standard.object(forKey: "agentDockVisible") as? Bool ?? true { panel.orderFrontRegardless() }
+    }
+
+    /// Hides the agents dock while the capacity dock holds the agents, and brings it back after.
+    func syncMerged() {
+        if capacity.agentsInDock {
+            panel.orderOut(nil)
+        } else if UserDefaults.standard.object(forKey: "agentDockVisible") as? Bool ?? true {
+            place(edge: store.edge)
+            panel.orderFrontRegardless()
+        }
+    }
+
+    func closeCards() {
+        closeDetailWork?.cancel()
+        cards.forEach { $0.orderOut(nil) }
+        hoveredAgent = nil
+        trail = []
     }
 
     var visible: Bool { panel.isVisible }
@@ -692,8 +728,9 @@ final class AgentDockController: NSObject, NSWindowDelegate {
     /// Draws cards from `from` onwards. Earlier cards stay where they are, so the row does not jump.
     func render(anchorY: CGFloat, from: Int = 0, keepTop: Int = -1) {
         guard let agent = hoveredAgent else { return }
-        let screen = panel.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
-        let outwardRight = panel.frame.minX - 380 < screen.minX
+        let dock = anchor
+        let screen = dock.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
+        let outwardRight = dock.frame.minX - 380 < screen.minX
         for index in from...trail.count {
             let openID = index < trail.count ? trail[index].id : nil
             let body: AnyView
@@ -704,9 +741,9 @@ final class AgentDockController: NSObject, NSWindowDelegate {
                 let level = index
                 body = AnyView(SubagentCard(sub: trail[index - 1], openSub: { [weak self] in self?.open(level: level, $0) }, openID: openID))
             }
-            let previous = index == 0 ? panel.frame : cards[index - 1].frame
+            let previous = index == 0 ? dock.frame : cards[index - 1].frame
             // The row grows away from the dock and turns back at the screen edge.
-            var right = index == 0 ? outwardRight : previous.minX >= (index == 1 ? panel.frame.maxX : cards[index - 2].frame.maxX)
+            var right = index == 0 ? outwardRight : previous.minX >= (index == 1 ? dock.frame.maxX : cards[index - 2].frame.maxX)
             if right && previous.maxX + 360 > screen.maxX { right = false }
             if !right && previous.minX - 360 < screen.minX { right = true }
             let content = body.frame(width: 330).padding(8)

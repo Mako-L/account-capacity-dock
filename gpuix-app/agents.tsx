@@ -13,7 +13,7 @@ export type Subagent = {
   steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string
 }
 export type Agent = {
-  id: string; pane: string | null; agent: string; name: string; status: string; title?: string | null; cwd: string; project: string
+  id: string; pane: string | null; agent: string; name: string; tabName?: string | null; status: string; title?: string | null; cwd: string; project: string
   task?: string | null; prompt?: string | null; now?: string | null; said?: string | null; steps: Step[]
   activity: { at: number | null; text: string; kind: 'say' | 'tool' }[]; updated?: number | null; source: string
   progress: number | null; stepCount?: [number, number]; subagents: Subagent[]
@@ -217,7 +217,7 @@ export function AgentDetail({ agent, onFocus, onSubagent, openSub }: { agent: Ag
             <Text size={11} weight={600} color={(KIND[agent.agent] ?? { color: C.muted }).color}>{agent.agent.toUpperCase()}</Text>
             <Pill label={status(agent).label} color={status(agent).color} />
           </div>
-          <Text size={13} weight={600} style={ONE_LINE}>{agent.name}</Text>
+          <Text size={13} weight={600} style={ONE_LINE}>{agent.tabName ? `${agent.name} · ${agent.tabName}` : agent.name}</Text>
         </div>
         {agent.pane && onFocus ? <SmallButton label="Go to pane" onClick={onFocus} /> : null}
       </div>

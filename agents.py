@@ -28,6 +28,15 @@ from platform_paths import cache_dir
 
 HOME = Path.home()
 CLAUDE = Path(os.environ.get('CLAUDE_CONFIG_DIR', HOME / '.claude'))
+
+
+def claude_dirs():
+    """Every Claude Code config folder in use: the default, CLAUDE_CONFIG_DIR, and account switcher copies.
+
+    One app process sees one CLAUDE_CONFIG_DIR, but each terminal can run Claude with a different one.
+    """
+    found = [HOME / '.claude', CLAUDE, *(HOME / 'Library' / 'Application Support').glob('*/accounts/claude/*')]
+    return list(dict.fromkeys(d for d in found if (d / 'sessions').is_dir()))
 CODEX = Path(os.environ.get('CODEX_HOME', HOME / '.codex'))
 SNAPSHOT = cache_dir() / 'agents.json'
 TAIL = 1_500_000  # bytes read from the end of a transcript; long sessions grow past 50 MB
@@ -88,6 +97,18 @@ def herdr_agents():
         return json.loads(out)['result']['agents']
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         return []
+
+
+def herdr_labels():
+    """Workspace and tab names as the Herdr sidebar shows them."""
+    labels = {}
+    for kind, key in (('workspace', 'workspaces'), ('tab', 'tabs')):
+        try:
+            out = subprocess.run(['herdr', kind, 'list'], capture_output=True, text=True, timeout=5).stdout
+            labels.update({item[f'{kind}_id']: item.get('label') for item in json.loads(out)['result'][key]})
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            pass
+    return labels
 
 
 def pane_of(pids):
@@ -252,10 +273,11 @@ def read_claude(events):
     return found
 
 
-def task_files(session):
+def task_files(session, root=CLAUDE):
     """Claude's own task list, kept in ~/.claude/tasks/<session or team>/<id>.json."""
     items = []
-    for folder in (CLAUDE / 'tasks' / session, CLAUDE / 'tasks' / f'session-{session[:8]}'):
+    root = Path(root)
+    for folder in (root / 'tasks' / session, root / 'tasks' / f'session-{session[:8]}'):
         for path in sorted(folder.glob('*.json'), key=lambda p: (len(p.stem), p.stem)):
             task = read_json(path)
             if task.get('subject') and task.get('status') != 'deleted':
@@ -360,7 +382,14 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         report = read_json(observed / f'sub-{path.stem}.json').get('result') if observed else None
         if running and watch is not None:
             watch.append((item, str(path), found))
-        return with_progress(item, (report or {}).get('steps') or [], (report or {}).get('progress'))
+        steps = (report or {}).get('steps') or []
+        if not steps:
+            # Before the observer names steps, the latest tool calls stand in for them.
+            calls = [e['text'] for e in activity if e.get('kind') == 'tool' and e['text'] != 'StructuredOutput']
+            calls = [text for i, text in enumerate(calls) if i == 0 or text != calls[i - 1]][-5:]
+            steps = [{'title': clip(text, 60), 'status': 'active' if running and i == len(calls) - 1 else 'done'} for i, text in enumerate(calls)]
+            return with_progress(item, steps, (report or {}).get('progress'))
+        return with_progress(item, steps, (report or {}).get('progress'))
 
     for path in root.glob('agent-*.jsonl'):
         item = node(path)
@@ -385,7 +414,12 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         children.sort(key=lambda c: c['started'])
         meta = (workflows or {}).get(folder.name)
         if not meta:
-            # Claude Code keeps each run's script beside the session, named <workflow>-<run>.js.
+            # Claude Code keeps a record of each run beside the session, and some runs also keep their script.
+            record = read_json(root.parent / 'workflows' / f'{folder.name}.json')
+            if record.get('workflowName'):
+                meta = {'name': record['workflowName'], 'description': clip(record.get('summary'), 90),
+                        'phases': [p.get('title') for p in record.get('phases') or [] if isinstance(p, dict)][:12]}
+        if not meta:
             script = next(iter(root.parent.glob(f'workflows/scripts/*-{folder.name}.js')), None)
             try:
                 meta = workflow_meta(script.read_text()[:4000]) if script else {}
@@ -404,27 +438,57 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
     return top[-SUB_LIMIT:]
 
 
-def claude_sessions():
-    sessions = []
-    for path in (CLAUDE / 'sessions').glob('*.json'):
-        data = read_json(path)
-        pid = data.get('pid')
-        if not pid or not data.get('sessionId'):
-            continue
+def process_starts(pids):
+    """Start time of each running process, in epoch seconds."""
+    if not pids:
+        return {}
+    try:
+        out = subprocess.run(['ps', '-o', 'pid=,lstart=', '-p', ','.join(map(str, pids))],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    starts = {}
+    for line in out.splitlines():
         try:
-            os.kill(pid, 0)
-        except (OSError, TypeError):
+            pid, when = line.split(None, 1)
+            starts[int(pid)] = time.mktime(time.strptime(when.strip(), '%a %b %d %H:%M:%S %Y'))
+        except ValueError:
             continue
-        sessions.append(data)
-    return sessions
+    return starts
 
 
-def transcript_of(session, cwd):
+def claude_sessions(checked=None):
+    """Running Claude sessions. `checked` keeps each pid:session verdict, so ps runs once per new session."""
+    checked = {} if checked is None else checked
+    found = []
+    for path in (p for root in claude_dirs() for p in (root / 'sessions').glob('*.json')):
+        data = read_json(path)
+        if isinstance(data.get('pid'), int) and data.get('sessionId'):
+            try:
+                os.kill(data['pid'], 0)
+            except OSError:
+                continue
+            data['root'] = str(path.parent.parent)
+            found.append(data)
+    # A session file can outlive its process, and macOS then gives the pid to a new one.
+    key = lambda s: f"{s['pid']}:{s['sessionId']}"
+    new = [s['pid'] for s in found if key(s) not in checked]
+    starts = process_starts(new) if new else {}
+    for s in found:
+        if key(s) not in checked:
+            checked[key(s)] = s['pid'] in starts and (s.get('startedAt') or 0) / 1000 >= starts[s['pid']] - 60
+    for stale in set(checked) - {key(s) for s in found}:
+        del checked[stale]
+    return [s for s in found if checked[key(s)]]
+
+
+def transcript_of(session, cwd, root=CLAUDE):
     # Claude names the project folder after the start folder, with every other character as '-'.
-    direct = CLAUDE / 'projects' / re.sub(r'[^A-Za-z0-9]', '-', cwd) / f'{session}.jsonl'
+    root = Path(root)
+    direct = root / 'projects' / re.sub(r'[^A-Za-z0-9]', '-', cwd) / f'{session}.jsonl'
     if direct.exists():
         return str(direct)
-    matches = list((CLAUDE / 'projects').glob(f'*/{session}.jsonl'))
+    matches = list((root / 'projects').glob(f'*/{session}.jsonl'))
     return str(matches[0]) if matches else None
 
 
@@ -564,7 +628,9 @@ def collect(run_observer=False):
     cache = previous.get('parsed', {})
     observed_dir = setup_dir() / 'agents' / 'observer'
     panes = {a['pane_id']: a for a in herdr_agents()}
-    sessions = claude_sessions()
+    labels = herdr_labels() if panes else {}
+    checked = previous.get('sessions', {})
+    sessions = claude_sessions(checked)
     codex = codex_processes()
     # A process keeps its pane for life, so ps runs only for processes not seen before.
     known = {int(pid): pane for pid, pane in previous.get('pids', {}).items()}
@@ -581,7 +647,9 @@ def collect(run_observer=False):
     def base(pane, info):
         return {
             'id': pane, 'pane': pane if pane in panes else None, 'agent': info.get('agent', 'claude'),
-            'name': info.get('name') or Path(info.get('cwd', '')).name or info.get('agent'),
+            'name': labels.get(info.get('workspace_id')) or info.get('name') or Path(info.get('cwd', '')).name or info.get('agent'),
+            # A tab named only by its number adds nothing beside the workspace name.
+            'tabName': None if str(labels.get(info.get('tab_id')) or '').isdigit() else labels.get(info.get('tab_id')),
             'status': info.get('agent_status', 'idle'), 'title': info.get('terminal_title_stripped'),
             'cwd': info.get('cwd', ''), 'project': Path(info.get('cwd', '')).name, 'focused': info.get('focused', False),
             'workspace': info.get('workspace_id'), 'tab': info.get('tab_id'),
@@ -645,9 +713,9 @@ def collect(run_observer=False):
         agent['session'] = session['sessionId']
         transcript = transcripts.get(session['sessionId'])
         if not transcript or not os.path.exists(transcript):
-            transcript = transcripts[session['sessionId']] = transcript_of(session['sessionId'], session.get('cwd', ''))
+            transcript = transcripts[session['sessionId']] = transcript_of(session['sessionId'], session.get('cwd', ''), session.get('root', CLAUDE))
         found, updated = parse(transcript, read_claude) if transcript else (None, None)
-        agent = finish(agent, found, updated, transcript, task_files(session['sessionId']))
+        agent = finish(agent, found, updated, transcript, task_files(session['sessionId'], session.get('root', CLAUDE)))
         for run, meta in ((found or {}).get('workflows') or {}).items():
             workflows[run] = meta
         agent['subagents'] = subagent_tree(transcript, now, parse, workflows, observed_dir, watch) if transcript else []
@@ -707,6 +775,7 @@ def collect(run_observer=False):
     live = {s['sessionId'] for s in sessions}
     snapshot = {'at': now, 'agents': agents, 'seen': seen, 'rollouts': rollouts, 'workflows': workflows, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
                 'pids': {str(pid): pane for pid, pane in by_pid.items()},
+                'sessions': checked,
                 'transcripts': {k: v for k, v in transcripts.items() if k in live}}
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
     # The dock and the GPUIX app both run this, so each writer gets its own temporary file.
