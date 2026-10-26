@@ -289,7 +289,9 @@ jumps to its Herdr pane.
 Agents keep the order in which they first appeared, so a refresh never moves them.
 The card lists every subagent of the session, running and finished. A hover on a
 subagent opens its card beside the first one, and so on through nested subagents and
-workflow runs.
+workflow runs. Each subagent has its own steps and a progress ring. A workflow run
+groups its agents by phase and shows how many in each phase are done. A long list of
+subagents scrolls inside the card.
 
 Each ring has one of three colours. Yellow means working, red means it needs you,
 and green means finished. Idle agents stay hidden unless you turn on **Show idle

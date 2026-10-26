@@ -101,6 +101,28 @@ class SubagentTreeTests(unittest.TestCase):
         self.assertEqual(names['wf_1']['kind'], 'workflow')
         self.assertEqual([c['name'] for c in names['wf_1']['children']], ['tests:api'])
 
+    def test_a_workflow_keeps_agents_older_than_the_recent_window(self):
+        with tempfile.TemporaryDirectory() as folder:
+            transcript = Path(folder) / 'session.jsonl'
+            transcript.write_text('')
+            flow = Path(folder) / 'session' / 'subagents' / 'workflows' / 'wf_1'
+            call = [{'type': 'assistant', 'message': {'content': [{'type': 'text', 'text': 'done'}]}}]
+            for name in ('agent-old', 'agent-new'):
+                self.write(flow / f'{name}.jsonl', call, {'agentType': 'general-purpose'})
+            self.write(flow / 'journal.jsonl', [{'type': 'started', 'agentId': 'old', 'label': 'a', 'phase': 'Build'},
+                                                {'type': 'started', 'agentId': 'new', 'label': 'b', 'phase': 'Check'}])
+            now = os.stat(transcript).st_mtime + 60
+            old = now - agents.SUB_RECENT - 3600
+            os.utime(flow / 'agent-old.jsonl', (old, old))
+
+            def parse(path, reader, size):
+                found = reader(agents.tail_events(path, size))
+                found['pending'] = []
+                return found, os.stat(path).st_mtime
+
+            tree = agents.subagent_tree(str(transcript), now, parse)
+        self.assertEqual(sorted(c['name'] for c in tree[0]['children']), ['a', 'b'])
+
 
 class ObserverInputTests(unittest.TestCase):
     def test_sends_only_events_after_the_last_report(self):

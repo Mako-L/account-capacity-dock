@@ -22,8 +22,17 @@ struct AgentSubagent: Codable, Identifiable {
     let activity: [AgentEvent]?
     let children: [AgentSubagent]?
     let kind: String?
+    let steps: [AgentStep]?
+    let progress: Double?
+    let phase: String?
+    let summary: String?
 
-    var heading: String { description ?? name ?? "Subagent" }
+    var heading: String { kind == "workflow" ? (name ?? "Workflow") : (description ?? name ?? "Subagent") }
+    var stepCount: String? {
+        if kind == "workflow" { return summary }
+        guard let steps, !steps.isEmpty else { return nil }
+        return "\(steps.filter { $0.status == "done" }.count)/\(steps.count) steps"
+    }
     var signal: Color { running == true ? .yellow : .green }
     var stateLabel: String { running == true ? "Working" : "Finished" }
     var kindLabel: String { kind == "workflow" ? "Workflow" : kind == "codex" ? "Codex" : (name ?? "Subagent") }
@@ -265,17 +274,7 @@ struct AgentCard: View {
             }
             if let steps = agent.steps, !steps.isEmpty {
                 section(agent.stepCount.map { "Steps · \($0[0]) of \($0[1])" } ?? "Steps")
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: step.status == "done" ? "checkmark.circle.fill" : step.status == "active" ? "circle.inset.filled" : "circle")
-                                .foregroundStyle(step.status == "done" ? Color.green : step.status == "active" ? agent.signal : .secondary)
-                            Text(step.title ?? "").foregroundStyle(step.status == "pending" ? .secondary : .primary)
-                                .fontWeight(step.status == "active" ? .semibold : .regular)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }.font(.caption)
-                    }
-                }
+                StepList(steps: steps, signal: agent.signal)
             }
             if let subagents = agent.subagents, !subagents.isEmpty {
                 SubagentList(subagents: subagents, open: openSub, openID: openID)
@@ -305,40 +304,113 @@ func cardSection(_ title: String) -> some View {
     Text(title.uppercased()).font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary).padding(.top, 2)
 }
 
-/// The subagents of an agent or of a subagent. A hover on a row opens that subagent's card beside this one.
+/// Steps as a short timeline: a check when done, a lit dot for the active one, an empty ring for the rest.
+struct StepList: View {
+    let steps: [AgentStep]
+    let signal: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: step.status == "done" ? "checkmark.circle.fill" : step.status == "active" ? "circle.inset.filled" : "circle")
+                        .foregroundStyle(step.status == "done" ? Color.green : step.status == "active" ? signal : .secondary)
+                    Text(step.title ?? "").foregroundStyle(step.status == "pending" ? .secondary : .primary)
+                        .fontWeight(step.status == "active" ? .semibold : .regular)
+                        .fixedSize(horizontal: false, vertical: true)
+                }.font(.caption)
+            }
+        }
+    }
+}
+
+/// A subagent's progress ring: yellow while it runs, full and green once it finished.
+struct SubRing: View {
+    let sub: AgentSubagent
+    let size: CGFloat
+    var body: some View {
+        let value = sub.progress ?? (sub.running == true ? 8 : 100)
+        ZStack {
+            Circle().stroke(.white.opacity(0.12), lineWidth: size > 30 ? 4 : 2.5)
+            Circle().trim(from: 0, to: value / 100).stroke(sub.signal, style: StrokeStyle(lineWidth: size > 30 ? 4 : 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if size > 30 {
+                Text("\(Int(value))%").font(.system(size: 11, weight: .bold)).foregroundStyle(sub.signal)
+            } else {
+                Circle().fill(sub.signal).frame(width: 5, height: 5)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// The subagents of an agent or of a subagent, in a fixed-height list that scrolls.
+/// Workflow agents sit under the phase they ran in. A hover on a row opens that subagent's card beside this one.
 struct SubagentList: View {
     let subagents: [AgentSubagent]
     var open: (AgentSubagent) -> Void
     var openID: String?
+
+    var groups: [(phase: String?, subs: [AgentSubagent])] {
+        var groups: [(phase: String?, subs: [AgentSubagent])] = []
+        for sub in subagents {
+            if let last = groups.last, last.phase == sub.phase { groups[groups.count - 1].subs.append(sub) }
+            else { groups.append((sub.phase, [sub])) }
+        }
+        return groups
+    }
+
     var body: some View {
         let running = subagents.filter { $0.running == true }.count
+        let groups = groups
+        let headers = groups.filter { $0.phase != nil }.count
         cardSection("Subagents · \(subagents.count)" + (running > 0 ? ", \(running) running" : ""))
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(subagents) { sub in
-                HStack(alignment: .top, spacing: 8) {
-                    Circle().fill(sub.signal).frame(width: 7, height: 7).padding(.top, 4)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(sub.heading).font(.caption.weight(.semibold)).lineLimit(1)
-                            if let model = sub.model, !model.isEmpty {
-                                Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
-                                    .padding(.horizontal, 5).background(.white.opacity(0.08), in: Capsule())
-                            }
+        ShadowScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                    if let phase = group.phase {
+                        HStack(spacing: 6) {
+                            Text(phase.uppercased()).font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(group.subs.contains { $0.running == true } ? Color.yellow : .secondary)
+                            Text("\(group.subs.filter { $0.running != true }.count)/\(group.subs.count) done")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
                         }
-                        let kids = sub.children?.count ?? 0
-                        Text("\(sub.running == true ? "▸ " + (sub.step ?? "Working") : "Finished") · \(ago(sub.updated))" + (kids > 0 ? " · \(kids) inside" : ""))
-                            .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        .padding(.leading, 6).padding(.top, index == 0 ? 2 : 8).padding(.bottom, 2)
                     }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 3)
+                    ForEach(group.subs) { sub in row(sub) }
                 }
-                .padding(6)
-                .background(sub.id == openID ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                .contentShape(Rectangle())
-                .onHover { inside in if inside { open(sub) } }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(height: min(230, CGFloat(subagents.count) * 42 + CGFloat(headers) * 24))
         .padding(.horizontal, -6)
+    }
+
+    func row(_ sub: AgentSubagent) -> some View {
+        HStack(spacing: 8) {
+            SubRing(sub: sub, size: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(sub.heading).font(.caption.weight(.semibold)).lineLimit(1)
+                    if let model = sub.model, !model.isEmpty {
+                        Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 5).background(.white.opacity(0.08), in: Capsule())
+                    }
+                }
+                let kids = sub.kind == "workflow" ? 0 : sub.children?.count ?? 0
+                Text([sub.running == true ? "▸ " + (sub.step ?? "Working") : "Finished", sub.stepCount, ago(sub.updated),
+                      kids > 0 ? "\(kids) inside" : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if let progress = sub.progress {
+                Text("\(Int(progress))%").font(.system(size: 10, weight: .semibold)).foregroundStyle(sub.signal)
+            }
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 5)
+        .background(sub.id == openID ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .onHover { inside in if inside { open(sub) } }
     }
 }
 
@@ -349,17 +421,24 @@ struct SubagentCard: View {
     var openID: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Text(sub.kindLabel.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-                Text(sub.stateLabel).font(.system(size: 10, weight: .semibold)).foregroundStyle(sub.signal)
-                    .padding(.horizontal, 7).padding(.vertical, 2).background(sub.signal.opacity(0.16), in: Capsule())
-                if let model = sub.model, !model.isEmpty {
-                    Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
-                        .padding(.horizontal, 5).padding(.vertical, 2).background(.white.opacity(0.08), in: Capsule())
+            HStack(spacing: 10) {
+                SubRing(sub: sub, size: 42)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(sub.kindLabel.uppercased()).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary).lineLimit(1)
+                        Text(sub.stateLabel).font(.system(size: 10, weight: .semibold)).foregroundStyle(sub.signal)
+                            .padding(.horizontal, 7).padding(.vertical, 2).background(sub.signal.opacity(0.16), in: Capsule())
+                        if let model = sub.model, !model.isEmpty {
+                            Text(model).font(.system(size: 9)).foregroundStyle(.secondary)
+                                .padding(.horizontal, 5).padding(.vertical, 2).background(.white.opacity(0.08), in: Capsule())
+                        }
+                        Spacer()
+                    }
+                    Text(sub.kind == "workflow" ? sub.name ?? "Workflow" : sub.phase.map { "Phase: \($0)" } ?? sub.stepCount ?? "Subagent")
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
                 }
-                Spacer()
             }
-            Text(sub.heading).font(.headline).fixedSize(horizontal: false, vertical: true)
+            Text(sub.kind == "workflow" ? (sub.description ?? sub.heading) : sub.heading).font(.headline).fixedSize(horizontal: false, vertical: true)
             if sub.running == true, let step = sub.step {
                 HStack(spacing: 8) {
                     Circle().fill(sub.signal).frame(width: 7, height: 7)
@@ -371,6 +450,10 @@ struct SubagentCard: View {
             }
             if let said = sub.said {
                 Text("“\(said)”").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if let steps = sub.steps, !steps.isEmpty {
+                cardSection((sub.kind == "workflow" ? "Phases" : "Steps") + (sub.stepCount.map { " · \($0)" } ?? ""))
+                StepList(steps: steps, signal: sub.signal)
             }
             if let children = sub.children, !children.isEmpty {
                 SubagentList(subagents: children, open: openSub, openID: openID)

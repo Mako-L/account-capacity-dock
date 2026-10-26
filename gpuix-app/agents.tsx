@@ -10,6 +10,7 @@ export type Step = { title: string; status: 'done' | 'active' | 'pending' }
 export type Subagent = {
   id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
   said?: string | null; activity?: Agent['activity']; children?: Subagent[]; kind?: 'agent' | 'workflow' | 'codex'
+  steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string
 }
 export type Agent = {
   id: string; pane: string | null; agent: string; name: string; status: string; title?: string | null; cwd: string; project: string
@@ -235,7 +236,7 @@ export function AgentDetail({ agent, onFocus, onSubagent, openSub }: { agent: Ag
         </Section>)}
       {agent.subagents.length > 0 && (
         <Section title={subLabel(agent.subagents)}>
-          {agent.subagents.map(sub => <SubagentRow key={sub.id} sub={sub} active={sub.id === openSub} onOpen={() => onSubagent?.(sub)} />)}
+          <SubagentList subs={agent.subagents} openSub={openSub} onOpen={sub => onSubagent?.(sub)} />
         </Section>)}
       {agent.activity.length > 0 && (
         <Section title="Recent activity">
@@ -255,24 +256,70 @@ const subLabel = (subs: Subagent[]) => {
   return `Subagents · ${subs.length}${running ? `, ${running} running` : ''}`
 }
 
+// A subagent's ring: its progress in yellow while it runs, a full green ring once it finished.
+function SubRing({ sub, size }: { sub: Subagent; size: number }) {
+  const value = sub.progress ?? (sub.running ? 8 : 100)
+  const color = sub.running ? LIVE : C.green
+  return (
+    <div style={{ width: size, height: size, flexShrink: 0, position: 'relative', alignItems: 'center', justifyContent: 'center', display: 'flex' }}>
+      <svg source={TRACK} style={{ position: 'absolute', top: 0, left: 0, width: size, height: size, color: C.line }} />
+      {arcSvg(value) && <svg source={arcSvg(value)!} style={{ position: 'absolute', top: 0, left: 0, width: size, height: size, color }} />}
+      {size >= 40
+        ? <Text size={11} weight={700} color={color}>{`${value}%`}</Text>
+        : <div style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />}
+    </div>
+  )
+}
+
+const stepCount = (sub: Subagent) => {
+  const steps = sub.steps ?? []
+  return steps.length ? `${steps.filter(x => x.status === 'done').length}/${steps.length} steps` : ''
+}
+
 // One subagent: a hover opens its own card beside this one, and so on down the tree.
 function SubagentRow({ sub, active, onOpen }: { sub: Subagent; active: boolean; onOpen: () => void }) {
   const kids = sub.children?.length ?? 0
+  const detail = [sub.running ? '▸ ' + (sub.step || 'Working') : 'Finished', sub.kind === 'workflow' ? sub.summary : stepCount(sub),
+                  ago(sub.updated), sub.kind !== 'workflow' && kids ? `${kids} inside` : ''].filter(Boolean).join(' · ')
   return (
     <Button onClick={onOpen} onMouseEnter={onOpen} style={{
-      display: 'flex', gap: 10, flexShrink: 0, padding: 6, marginLeft: -6, marginRight: -6, borderRadius: 10, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, padding: 6, borderRadius: 10, cursor: 'pointer',
       backgroundColor: active ? '#ffffff12' : undefined, hover: { backgroundColor: '#ffffff12' },
     }}>
-      <div style={{ width: 8, height: 8, borderRadius: 4, marginTop: 4, flexShrink: 0, backgroundColor: sub.running ? LIVE : C.green }} />
+      <SubRing sub={sub} size={26} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Text size={12} weight={600} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{sub.description || sub.name}</Text>
+          <Text size={12} weight={600} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{sub.kind === 'workflow' ? sub.name : sub.description || sub.name}</Text>
           {sub.model ? <Pill label={sub.model} color={C.muted} /> : null}
         </div>
-        <Text size={11} color={C.muted} style={ONE_LINE}>{`${sub.running ? '▸ ' + (sub.step || 'Working') : 'Finished'} · ${ago(sub.updated)}${kids ? ` · ${kids} inside` : ''}`}</Text>
+        <Text size={11} color={C.muted} style={ONE_LINE}>{detail}</Text>
       </div>
+      {sub.progress != null ? <Text size={11} weight={600} color={sub.running ? LIVE : C.green} style={{ flexShrink: 0 }}>{`${sub.progress}%`}</Text> : null}
       <Text size={14} color={C.muted} style={{ flexShrink: 0 }}>›</Text>
     </Button>
+  )
+}
+
+// The subagent list keeps a fixed height and scrolls. Workflow agents sit under the phase they ran in.
+function SubagentList({ subs, openSub, onOpen }: { subs: Subagent[]; openSub?: string; onOpen: (sub: Subagent) => void }) {
+  const phases: { phase: string | null; subs: Subagent[] }[] = []
+  for (const sub of subs) {
+    const last = phases[phases.length - 1]
+    if (last && last.phase === (sub.phase ?? null)) last.subs.push(sub)
+    else phases.push({ phase: sub.phase ?? null, subs: [sub] })
+  }
+  return (
+    <Scroll style={{ maxHeight: 236, flexShrink: 0, overflowY: 'scroll', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {phases.map((group, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+          {group.phase ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: i ? 8 : 2, paddingBottom: 2, paddingLeft: 6 }}>
+              <Text size={10} weight={700} color={group.subs.some(x => x.running) ? LIVE : C.muted}>{group.phase.toUpperCase()}</Text>
+              <Text size={10} color={C.muted}>{`${group.subs.filter(x => !x.running).length}/${group.subs.length} done`}</Text>
+            </div>) : null}
+          {group.subs.map(sub => <SubagentRow key={sub.id} sub={sub} active={sub.id === openSub} onOpen={() => onOpen(sub)} />)}
+        </div>))}
+    </Scroll>
   )
 }
 
@@ -283,10 +330,16 @@ export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; on
   return (
     <div style={{ backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: '#ffffff12', padding: 16, display: 'flex', flexDirection: 'column', gap: 14,
                   minWidth: 0, flexShrink: 0, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Text size={11} weight={600} color={C.muted}>{(sub.kind === 'workflow' ? 'Workflow' : sub.kind === 'codex' ? 'Codex' : sub.name).toUpperCase()}</Text>
-        <Pill label={state.label} color={state.color} />
-        {sub.model ? <Pill label={sub.model} color={C.muted} /> : null}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <SubRing sub={sub} size={46} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Text size={11} weight={600} color={C.muted} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>{(sub.kind === 'workflow' ? 'Workflow' : sub.kind === 'codex' ? 'Codex' : sub.name).toUpperCase()}</Text>
+            <Pill label={state.label} color={state.color} />
+            {sub.model ? <Pill label={sub.model} color={C.muted} /> : null}
+          </div>
+          <Text size={13} weight={600} style={ONE_LINE}>{sub.kind === 'workflow' ? sub.name : sub.phase ? `Phase: ${sub.phase}` : sub.summary || stepCount(sub) || 'Subagent'}</Text>
+        </div>
       </div>
       <Text size={16} weight={600}>{sub.description || sub.name}</Text>
       {sub.running && sub.step ? (
@@ -295,9 +348,13 @@ export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; on
           <Text size={12} style={{ flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{sub.step}</Text>
         </div>) : null}
       {sub.said ? <Text size={11} color={C.muted}>{`“${sub.said}”`}</Text> : null}
+      {(sub.steps?.length ?? 0) > 0 && (
+        <Section title={`${sub.kind === 'workflow' ? 'Phases' : 'Steps'} · ${sub.kind === 'workflow' ? sub.summary : stepCount(sub)}`}>
+          <Timeline steps={sub.steps!} />
+        </Section>)}
       {kids.length > 0 && (
         <Section title={subLabel(kids)}>
-          {kids.map(child => <SubagentRow key={child.id} sub={child} active={child.id === openSub} onOpen={() => onSubagent(child)} />)}
+          <SubagentList subs={kids} openSub={openSub} onOpen={onSubagent} />
         </Section>)}
       {(sub.activity?.length ?? 0) > 0 && (
         <Section title="Recent activity">
