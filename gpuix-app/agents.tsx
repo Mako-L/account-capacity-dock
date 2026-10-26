@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@gpuix/react'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { Bar, C, CACHE, ONE_LINE, ROOT, SmallButton, Text, TRACK, arcSvg, run } from './ui'
+import { Bar, C, CACHE, ONE_LINE, ROOT, Scroll, SmallButton, Text, TRACK, arcSvg, run } from './ui'
 
 export type Step = { title: string; status: 'done' | 'active' | 'pending' }
 export type Subagent = { id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number }
@@ -17,9 +17,10 @@ export type Agent = {
 type Snapshot = { at?: number; agents: Agent[]; observer?: boolean }
 
 const FILE = process.env.MAKO_AGENTS_SNAPSHOT ?? path.join(CACHE, 'agents.json')
-const LIVE = '#64d2ff'
+// Three colours: yellow while an agent works, red when it needs you, green when it finished.
+const LIVE = C.yellow
 export const STATUS: Record<string, { label: string; color: string }> = {
-  working: { label: 'Working', color: LIVE }, blocked: { label: 'Needs you', color: C.orange },
+  working: { label: 'Working', color: LIVE }, blocked: { label: 'Needs you', color: C.red },
   done: { label: 'Finished', color: C.green }, idle: { label: 'Idle', color: C.muted },
 }
 const status = (a: Agent) => STATUS[a.status] ?? STATUS.idle
@@ -263,9 +264,11 @@ function focusPane(agent: Agent) {
 const counts = (agents: Agent[]) => {
   const working = agents.filter(a => a.status === 'working').length
   const blocked = agents.filter(a => a.status === 'blocked').length
+  const done = agents.filter(a => a.status === 'done').length
+  const idle = agents.length - working - blocked - done
   const subs = agents.reduce((n, a) => n + a.subagents.filter(s => s.running).length, 0)
   return [working && `${working} working`, blocked && `${blocked} need you`, subs && `${subs} subagent${subs === 1 ? '' : 's'} running`,
-          `${agents.length - working - blocked} idle`].filter(Boolean).join(' · ')
+          done && `${done} finished`, idle && `${idle} idle`].filter(Boolean).join(' · ')
 }
 
 // The wide view: live agents as cards, the rest as lines, and the hovered agent's card on the right.
@@ -275,8 +278,8 @@ export function AgentsWide({ snapshot }: { snapshot: Snapshot }) {
   const current = agents.find(a => a.id === selected) ?? agents.find(live) ?? agents[0]
   const working = agents.filter(live), rest = agents.filter(a => !live(a))
   return (
-    <div style={{ display: 'flex', flexGrow: 1, gap: 20, paddingLeft: 16, paddingRight: 16, paddingBottom: 16, overflow: 'hidden' }}>
-      <div style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, overflowY: 'scroll', display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
+      <Scroll style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, overflowY: 'scroll', display: 'flex', flexDirection: 'column', gap: 14, paddingLeft: 16, paddingRight: 10, paddingBottom: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6 }}>
           <Text size={26} weight={600}>Your agents. Live.</Text>
           <Text size={13} color={C.muted}>{agents.length ? counts(agents) : 'No agents found. Start Claude Code or Codex, in Herdr or any terminal.'}</Text>
@@ -289,10 +292,10 @@ export function AgentsWide({ snapshot }: { snapshot: Snapshot }) {
           <Section title="Idle and finished">
             {rest.map(a => <AgentLine key={a.id} agent={a} active={a.id === current?.id} onHover={() => setSelected(a.id)} onOpen={() => setSelected(a.id)} />)}
           </Section>)}
-      </div>
-      <div style={{ width: 380, flexShrink: 0, overflowY: 'scroll' }}>
+      </Scroll>
+      <Scroll style={{ width: 406, flexShrink: 0, overflowY: 'scroll', paddingLeft: 10, paddingRight: 16, paddingBottom: 16 }}>
         {current ? <AgentDetail agent={current} onFocus={() => focusPane(current)} /> : null}
-      </div>
+      </Scroll>
     </div>
   )
 }
@@ -302,13 +305,13 @@ export function AgentsCompact({ snapshot, tiny, opened, onOpen }: { snapshot: Sn
   const agent = snapshot.agents.find(a => a.id === opened)
   if (agent) {
     return (
-      <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
+      <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
         <AgentDetail agent={agent} onFocus={() => focusPane(agent)} />
-      </div>
+      </Scroll>
     )
   }
   return (
-    <div style={{ flexGrow: 1, overflowY: 'scroll', paddingTop: 8, paddingLeft: tiny ? 0 : 6, paddingRight: tiny ? 0 : 6,
+    <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingTop: 8, paddingLeft: tiny ? 0 : 6, paddingRight: tiny ? 0 : 6,
                   display: 'flex', flexDirection: 'column', alignItems: tiny ? 'center' : 'stretch', gap: tiny ? 6 : 2 }}>
       {snapshot.agents.length === 0 && <Text size={12} color={C.muted} style={{ padding: 10 }}>No agents running.</Text>}
       {snapshot.agents.map(a => tiny
@@ -331,6 +334,6 @@ export function AgentsCompact({ snapshot, tiny, opened, onOpen }: { snapshot: Sn
               {a.progress != null ? <Bar value={a.progress} color={status(a).color} /> : null}
             </Button>
           : <AgentLine key={a.id} agent={a} active={false} onHover={() => {}} onOpen={() => onOpen(a.id)} />)}
-    </div>
+    </Scroll>
   )
 }

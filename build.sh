@@ -5,7 +5,7 @@ capacity_app="$capacity_root/build/Mako Capacity.app"
 mkdir -p "$capacity_app/Contents/MacOS" "$capacity_app/Contents/Resources"
 capacity_swift() {
   swiftc -swift-version 5 -parse-as-library -O -framework AppKit -framework SwiftUI -framework Combine \
-    "$@" "$capacity_root/App.swift"
+    "$@" "$capacity_root/App.swift" "$capacity_root/AgentDock.swift"
 }
 if [ "${MAKO_UNIVERSAL:-0}" = 1 ]; then
   # Release builds run on Apple Silicon and Intel Macs.
@@ -18,6 +18,7 @@ else
   capacity_swift -o "$capacity_app/Contents/MacOS/MakoCapacity"
 fi
 cp "$capacity_root/collector.py" "$capacity_app/Contents/Resources/collector.py"
+cp "$capacity_root/agents.py" "$capacity_app/Contents/Resources/agents.py"
 cp "$capacity_root/codeburn_usage.py" "$capacity_app/Contents/Resources/codeburn_usage.py"
 cp "$capacity_root/platform_paths.py" "$capacity_app/Contents/Resources/platform_paths.py"
 cp "$capacity_root/Resources/"* "$capacity_app/Contents/Resources/"

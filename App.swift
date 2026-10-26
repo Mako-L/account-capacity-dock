@@ -712,6 +712,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var closeDetailWork: DispatchWorkItem?
     var dockingWork: DispatchWorkItem?
     var placingRail = false
+    var agentDock: AgentDockController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -742,6 +743,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.repositionRail()
             }
         rail.orderFrontRegardless()
+        agentDock = AgentDockController(capacity: store)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mako Capacity")
         let menu = NSMenu()
@@ -757,6 +759,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         edges.submenu = edgesMenu
         menu.addItem(edges)
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Show / hide agents dock", action: #selector(toggleAgents), keyEquivalent: "")
+        let agentEdges = NSMenuItem(title: "Attach agents dock", action: nil, keyEquivalent: "")
+        let agentEdgesMenu = NSMenu()
+        for edge in ["Left", "Right", "Top", "Bottom"] {
+            let item = agentEdgesMenu.addItem(withTitle: edge, action: #selector(attachAgents(_:)), keyEquivalent: "")
+            item.representedObject = edge.lowercased()
+            item.target = self
+        }
+        agentEdges.submenu = agentEdgesMenu
+        menu.addItem(agentEdges)
+        let idle = menu.addItem(withTitle: "Show idle agents", action: #selector(toggleIdleAgents(_:)), keyEquivalent: "")
+        idle.state = AgentStore.showIdle() ? .on : .off
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Mako Capacity", action: #selector(quit), keyEquivalent: "q")
@@ -801,7 +817,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func toggleRail() { if rail.isVisible { rail.orderOut(nil) } else { rail.orderFrontRegardless() } }
     @objc func refresh() { store.refresh(force: true) }
-    @objc func repositionRail() { positionRail(edge: store.dockEdge) }
+    @objc func repositionRail() {
+        positionRail(edge: store.dockEdge)
+        agentDock?.place(edge: agentDock.store.edge)
+    }
+    @objc func toggleIdleAgents(_ item: NSMenuItem) {
+        let show = !AgentStore.showIdle()
+        agentDock.store.setShowIdle(show)
+        item.state = show ? .on : .off
+    }
+    @objc func toggleAgents() { agentDock.setVisible(!agentDock.visible) }
+    @objc func attachAgents(_ item: NSMenuItem) {
+        agentDock.place(edge: item.representedObject as? String ?? "left")
+        agentDock.setVisible(true)
+    }
     @objc func attachRail(_ item: NSMenuItem) { positionRail(edge: item.representedObject as? String ?? "right"); rail.orderFrontRegardless() }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showOverview(); return true }

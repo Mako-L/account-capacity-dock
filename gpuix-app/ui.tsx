@@ -1,5 +1,6 @@
 // Shared pieces of the GPUIX app: paths, colours, text, buttons and the ring arc.
 import { Button } from '@gpuix/react'
+import { useState, type ReactNode } from 'react'
 import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -91,5 +92,36 @@ export function IconButton({ icon, label, onClick, active, small }: { icon: keyo
     }}>
       <svg source={ICONS[icon]} style={{ width: 18, height: 18, color: C.text }} />
     </Button>
+  )
+}
+
+// Styles that lay out the scrolled content; the rest size the scroller itself.
+const CONTENT_KEYS = ['display', 'flexDirection', 'gap', 'alignItems', 'justifyContent', 'padding', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight']
+const FADE = (angle: number) => ({ type: 'linear-gradient' as const, angle, stops: [{ color: '#000000a6', position: 0 }, { color: '#00000000', position: 1 }] as [any, any] })
+
+// A vertical scroller that shades its top edge once content has moved up, and its bottom edge while more is below.
+export function Scroll({ style, children }: { style: Record<string, any>; children: ReactNode }) {
+  const [box, setBox] = useState(0)
+  const [content, setContent] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const outer: Record<string, any> = {}, inner: Record<string, any> = {}
+  for (const [key, value] of Object.entries(style)) {
+    if (key === 'overflowY') continue
+    if (CONTENT_KEYS.includes(key)) inner[key] = value
+    else outer[key] = value
+  }
+  const above = -offset > 1, below = content + offset - box > 1
+  const shade = (edge: 'top' | 'bottom') => (
+    <div style={{ position: 'absolute', left: 0, right: 0, [edge]: 0, height: Math.min(28, box / 2), pointerEvents: 'none',
+                  background: FADE(edge === 'top' ? 180 : 0) }} />)
+  return (
+    <div style={{ minHeight: 0, ...outer, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flexGrow: 1, flexShrink: 1, minHeight: 0, overflowY: 'scroll' }}
+           onLayout={e => setBox(e.height ?? 0)} onScrollChange={e => setOffset(e.scrollY ?? 0)}>
+        <div style={{ ...inner, flexShrink: 0 }} onLayout={e => setContent(e.height ?? 0)}>{children}</div>
+      </div>
+      {above && shade('top')}
+      {below && shade('bottom')}
+    </div>
   )
 }

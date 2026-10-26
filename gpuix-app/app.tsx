@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { Button, render, isTerminal, useWindowSize } from '@gpuix/react'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { Bar, C, HOME, IconButton, ONE_LINE, ROOT, SNAPSHOT, SmallButton, Text, TRACK, arcSvg, lastLine, run } from './ui'
+import { Bar, C, HOME, IconButton, ONE_LINE, ROOT, SNAPSHOT, Scroll, SmallButton, Text, TRACK, arcSvg, lastLine, run } from './ui'
 import { AgentsCompact, AgentsWide, useAgents } from './agents'
 
 // Present while account names are hidden; the Herdr text widget reads and sets the same file.
@@ -196,7 +196,10 @@ function App() {
   const [showNames, setShowNames] = useState(() => !existsSync(NAMES_FLAG))
   const [pinned, setPinned] = useState(() => !!PIN_STATE && existsSync(PIN_STATE))
   const [observer, setObserver] = useState(() => readSettings().AGENT_OBSERVER !== '0')
-  const agents = useAgents(view === 'agents')
+  const [showIdle, setShowIdle] = useState(() => readSettings().SHOW_IDLE_AGENTS === '1')
+  const allAgents = useAgents(view === 'agents')
+  // Idle agents stay hidden unless Settings turns them on.
+  const agents = showIdle ? allAgents : { ...allAgents, agents: allAgents.agents.filter(a => a.status !== 'idle') }
   const { width } = useWindowSize()
   const columns = Math.max(1, Math.floor((width - 32 + 14) / 264))
 
@@ -234,14 +237,20 @@ function App() {
     setPinned(!!PIN_STATE && existsSync(PIN_STATE))
     if (!result.ok) setMessage(lastLine(result.out) || 'Pinning failed.')
   }
-  function toggleObserver() {
-    // settings.json may hold the proxy key, so a new file is private and an existing one keeps its mode.
-    const file = path.join(HOME, 'settings.json')
+  // settings.json may hold the proxy key, so a new file is private and an existing one keeps its mode.
+  function saveSetting(key: string, value: string | null) {
     const settings = readSettings()
-    if (observer) settings.AGENT_OBSERVER = '0'; else delete settings.AGENT_OBSERVER
-    try { writeFileSync(file, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }) } catch { return setMessage('Saving the setting failed.') }
-    setObserver(!observer)
+    if (value === null) delete settings[key]; else settings[key] = value
+    try { writeFileSync(path.join(HOME, 'settings.json'), JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); return true }
+    catch { setMessage('Saving the setting failed.'); return false }
   }
+  function toggleObserver() {
+    if (saveSetting('AGENT_OBSERVER', observer ? '0' : null)) setObserver(!observer)
+  }
+  function toggleIdle() {
+    if (saveSetting('SHOW_IDLE_AGENTS', showIdle ? null : '1')) setShowIdle(!showIdle)
+  }
+  const idleButton = <SmallButton label={showIdle ? 'Hide idle agents' : 'Show idle agents'} onClick={toggleIdle} />
   const observerButton = <SmallButton label={observer ? 'Turn the observer off' : 'Turn the observer on'} onClick={toggleObserver} />
   const namesButton = <SmallButton label={showNames ? 'Hide account names' : 'Show account names'} onClick={toggleNames} />
   const current = accounts[Math.min(hovered, accounts.length - 1)]
@@ -291,29 +300,29 @@ function App() {
     let body
     if (view === 'dock' && openedAccount) {
       body = <>{back(openedAccount.title || openedAccount.provider, () => setOpened(null))}
-        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10 }}>
           <Card account={openedAccount} all confirm={confirm === openedAccount.id} onAction={action => act(openedAccount, action)} />
-        </div></>
+        </Scroll></>
     } else if (view === 'dock') {
-      body = <div style={{ flexGrow: 1, overflowY: 'scroll', paddingTop: 8, paddingLeft: tiny ? 0 : 6, paddingRight: tiny ? 0 : 6,
+      body = <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingTop: 8, paddingLeft: tiny ? 0 : 6, paddingRight: tiny ? 0 : 6,
                            display: 'flex', flexDirection: 'column', alignItems: tiny ? 'center' : 'stretch', gap: tiny ? 2 : 0 }}>
         {accounts.length === 0 && <Text size={12} color={C.muted} style={{ padding: 10 }}>Discovering your accounts…</Text>}
         {accounts.map((a, i) => tiny
           ? <DockCell key={a.id} account={a} active={false} onOpen={() => setOpened(a.id)} />
           : <WidgetRow key={a.id} account={a} onOpen={() => setOpened(a.id)} />)}
-      </div>
+      </Scroll>
     } else if (view === 'agents') {
       const agent = agents.agents.find(a => a.id === openedAgent)
       body = <>{agent && back(agent.name, () => setOpenedAgent(null))}
         <AgentsCompact snapshot={agents} tiny={tiny && !agent} opened={openedAgent} onOpen={setOpenedAgent} /></>
     } else if (view === 'accounts') {
       body = <>{back('All accounts', () => setView(HOME_VIEW))}
-        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 10, paddingRight: 10, paddingBottom: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {accounts.map(a => <Card key={a.id} account={a} all={false} confirm={confirm === a.id} onAction={action => act(a, action)} />)}
-        </div></>
+        </Scroll></>
     } else {
       body = <>{back('Settings', () => setView(HOME_VIEW))}
-        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 12, paddingRight: 12, paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 12, paddingRight: 12, paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Text size={12} color={C.muted}>Proxy address, empty for the local Docker proxy.</Text>
           <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
             style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
@@ -325,13 +334,13 @@ function App() {
             <SmallButton label="Use local" onClick={() => !busy && saveProxy(true)} />
           </div>
           <div style={{ display: 'flex' }}>{namesButton}</div>
-          <div style={{ display: 'flex' }}>{observerButton}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}</div>
           {hidden.map(([id, label]) => (
             <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Text size={12} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{label}</Text>
               <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
             </div>))}
-        </div></>
+        </Scroll></>
     }
     return (
       // In a macOS window the traffic lights sit over the top edge, so the widget starts below them.
@@ -372,16 +381,16 @@ function App() {
           {current
             ? <div style={{ width: 340, alignSelf: 'flex-start' }}><Card account={current} all={false} /></div>
             : <Text color={C.muted}>Discovering your accounts…</Text>}
-          <div style={{ width: 68, backgroundColor: C.dock, borderRadius: 22, borderWidth: 1, borderColor: '#ffffff29', paddingTop: 14, paddingBottom: 14,
+          <Scroll style={{ width: 68, backgroundColor: C.dock, borderRadius: 22, borderWidth: 1, borderColor: '#ffffff29', paddingTop: 14, paddingBottom: 14,
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, overflowY: 'scroll' }}>
             {accounts.map((a, i) => <DockCell key={a.id} account={a} active={i === hovered} onHover={() => setHovered(i)} />)}
-          </div>
+          </Scroll>
         </div>)}
 
       {view === 'agents' && <AgentsWide snapshot={agents} />}
 
       {view === 'accounts' && (
-        <div style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
           <Text size={26} weight={600} style={{ paddingTop: 6 }}>Your accounts. One view.</Text>
           <Text size={13} color={C.muted} style={{ paddingTop: 4, paddingBottom: 14 }}>
             {`${accounts.length} accounts across Claude, Codex and Cursor · percentages show capacity used`}
@@ -389,10 +398,10 @@ function App() {
           <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 14 }}>
             {accounts.map(a => <Card key={a.id} account={a} all={false} confirm={confirm === a.id} onAction={action => act(a, action)} />)}
           </div>
-        </div>)}
+        </Scroll>)}
 
       {view === 'settings' && (
-        <div style={{ flexGrow: 1, overflowY: 'scroll', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>
           <Text size={17} weight={600}>Proxy server</Text>
           <Text size={12} color={C.muted}>Leave the address empty to use the local Docker proxy. Saving checks that the server answers.</Text>
           <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
@@ -414,7 +423,7 @@ function App() {
             The observer asks a small model through your proxy to name each busy agent's task and steps, at most once a minute per agent.
             Agents can also report their own steps: mako-capacity agents report "Step" --done 2 --total 5
           </Text>
-          <div style={{ display: 'flex' }}>{observerButton}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}</div>
           <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
           <Text size={17} weight={600}>Hidden accounts</Text>
           {hidden.length === 0 && <Text size={12} color={C.muted}>No hidden accounts.</Text>}
@@ -424,7 +433,7 @@ function App() {
               <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
             </div>))}
           <Text size={11} color={C.muted} style={{ paddingTop: 12 }}>Dock size, edge and icon shape are set in the desktop dock.</Text>
-        </div>)}
+        </Scroll>)}
     </div>
   )
 }

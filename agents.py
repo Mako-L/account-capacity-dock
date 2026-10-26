@@ -547,7 +547,8 @@ def collect(run_observer=False):
                 'pids': {str(pid): pane for pid, pane in by_pid.items()},
                 'transcripts': {k: v for k, v in transcripts.items() if k in live}}
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    temporary = SNAPSHOT.with_suffix('.tmp')
+    # The dock and the GPUIX app both run this, so each writer gets its own temporary file.
+    temporary = SNAPSHOT.with_suffix(f'.{os.getpid()}.tmp')
     temporary.write_text(json.dumps(snapshot))
     temporary.replace(SNAPSHOT)
     return snapshot

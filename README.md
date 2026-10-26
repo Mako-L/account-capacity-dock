@@ -286,6 +286,15 @@ subagents. Hover over an agent, or tap it in a narrow pane, to open its card: th
 steps as a timeline, the running subagents and the latest activity. **Go to pane**
 jumps to its Herdr pane.
 
+Each ring has one of three colours. Yellow means working, red means it needs you,
+and green means finished. Idle agents stay hidden unless you turn on **Show idle
+agents** in Settings.
+
+On macOS the app also has an **agents dock**, a second floating dock next to the
+capacity dock. Drag it to any screen edge to attach it, or leave it floating. The
+menu bar icon shows or hides it (**Show / hide agents dock**) and attaches it to an
+edge (**Attach agents dock**).
+
 ```sh
 herdr plugin action invoke pin-agents-right --plugin mako-capacity   # or pin-agents-left
 mako-capacity ui agents             # the same view in a window
