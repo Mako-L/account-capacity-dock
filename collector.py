@@ -560,7 +560,8 @@ def collect(force=False, include_usage=True):
         cached_usage = read_json(cache_dir() / 'codeburn-usage.json')
         usage = cached_usage.get('providers', {}) if cached_usage.get('day') == dt.date.today().isoformat() else {}
     # The proxy's usage tracker counts each account apart. CodeBurn only knows one total per provider.
-    accounts = proxy_usage() if include_usage else {}
+    # One small request, so it runs on every refresh, even when CodeBurn is skipped.
+    accounts = proxy_usage()
     idle = {'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'tokens': 0, 'costUsd': 0.0,
             'scope': 'account', 'status': 'live', 'fetchedAt': time.time(), 'message': ''}
     for entry in result:
