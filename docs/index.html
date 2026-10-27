@@ -112,7 +112,14 @@
   .bubble .step i { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; box-sizing: border-box; }
   .bubble .step span:first-of-type { flex: 1; }
   .bubble .step .time { color: #9a9aa2; font-variant-numeric: tabular-nums; }
-  .bubble .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0 0 8px; }
+  .bubble .sub { all: unset; box-sizing: border-box; width: calc(100% + 12px); display: flex; align-items: center; gap: 8px; font-size: 12px;
+    margin: 0 -6px 4px; padding: 4px 6px; border-radius: 10px; cursor: pointer; }
+  .bubble .sub:hover, .bubble .sub:focus-visible, .bubble .sub[aria-expanded="true"] { background: rgba(255,255,255,.07); }
+  .bubble .sub:focus-visible { outline: 2px solid #64a8ff; }
+  .bubble .back { all: unset; cursor: pointer; font-size: 13px; color: #c9c9cf; margin: 0 0 10px; display: block; }
+  /* A subagent's card opens beside the agent's card, further from the dock, like the app's cascade. */
+  .bubble.sub-card { right: calc(78px + var(--depth, 1) * 342px); }
+  .bubble.sub-card::after { display: none; }
   .bubble .sub .ring { flex: none; }
   .bubble .sub div { flex: 1; min-width: 0; }
   .bubble .sub b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -449,8 +456,20 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   const AGENTS = [
     { p: 'Claude', t: 'checkout-api', s: 'working', pct: 60, task: 'Add webhook handling for failed payments', now: 'Subagent: Review retry logic for races',
       steps: [['Read the payment routes', 'done', '4m'], ['Add the webhook handler', 'done', '21m'], ['Review retries with a subagent', 'active', '6m'], ['Run the payment tests'], ['Open the pull request']],
-      subs: [['Review retry logic for races', 'working', 50, 'Read src/queue/worker.ts · 2/4 steps'], ['payment-tests', 'working', 67, 'Workflow · 3 of 5 agents done'],
-             ['Find where webhooks are verified', 'done', 100, 'Finished · Took 6m'], ['Draft the release note', 'idle', 100, 'Idle · 1/1 steps']],
+      subs: [
+        { t: 'Review retry logic for races', kind: 'code-reviewer', model: 'sonnet', s: 'working', pct: 50, line: 'Read src/queue/worker.ts · 2/4 steps', now: 'Read src/queue/worker.ts',
+          steps: [['Find every retry path', 'done', '1m'], ['Check the lock around retries', 'done', '2m'], ['Read the worker loop', 'active', '2m'], ['Write findings']],
+          subs: [{ t: 'Check the lock around retries', kind: 'fork', s: 'done', pct: 100, line: 'Finished · Took 2m', steps: [['Read lock.ts', 'done', '48s'], ['Trace callers', 'done', '1m']], cost: '$0.41 · <1% of a week', ran: 'Took 2m' }],
+          cost: '$2.84 · ~1% of a week', ran: 'Running for 6m' },
+        { t: 'payment-tests', kind: 'Workflow', s: 'working', pct: 67, line: 'Workflow · 3 of 5 agents done', now: 'tests:refunds', phases: true,
+          steps: [['Build', 'done', '3m'], ['Unit', 'done', '4m'], ['Integration', 'active', '3m']],
+          subs: [{ t: 'tests:api', kind: 'Unit', s: 'done', pct: 100, line: 'Finished · Took 4m', steps: [['Run the API suite', 'done', '4m']], cost: '$0.90 · <1% of a week', ran: 'Took 4m' },
+                 { t: 'tests:refunds', kind: 'Integration', s: 'working', pct: 40, line: 'Run refunds.spec.ts', now: 'Run refunds.spec.ts', steps: [['Seed the refunds data', 'done', '40s'], ['Run refunds.spec.ts', 'active', '1m']], cost: '$0.70 · <1% of a week', ran: 'Running for 2m' }],
+          cost: '$4.12 · ~2% of a week', ran: 'Running for 9m' },
+        { t: 'Find where webhooks are verified', kind: 'Explore', model: 'haiku', s: 'done', pct: 100, line: 'Finished · Took 6m',
+          steps: [['Search for signature checks', 'done', '40s'], ['Read the webhook router', 'done', '1m']], cost: '$0.66 · <1% of a week', ran: 'Took 6m' },
+        { t: 'Draft the release note', kind: 'docs-writer', model: 'sonnet', s: 'idle', pct: 100, line: 'Idle · 1/1 steps',
+          steps: [['Draft the note', 'done', '3m']], cost: '$0.38 · <1% of a week', ran: 'Took 3m' }],
       cost: '$18.42 · ~8% of a week', total: '$26.42 · ~9% of a week', ran: 'Running for 52m' },
     { p: 'Codex', t: 'design-system', s: 'working', pct: 25, task: 'Define dark mode colour tokens', now: 'Edit tokens.css',
       steps: [['List every colour in use', 'done', '7m'], ['Define the tokens', 'active', '2m'], ['Swap the old values'], ['Check contrast']], subs: [], cost: '$6.10 · ~3% of a week', ran: 'Running for 21m' },
@@ -515,6 +534,7 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   function show(i, cell) {
     clearTimeout(closeTimer);
     document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', String(c === cell)));
+    if (current !== i) closeFrom(0);
     current = i;
     if (mode === 'agents') return place(cell, agentCard(AGENTS[i]));
     const a = ACCOUNTS[i], pct = used(a) == null ? '—' : used(a) + '%';
@@ -542,11 +562,27 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
       ${g.now ? `<p class="now" style="background:${color}17;border:1px solid ${color}40">${g.now}</p>` : ''}
       <h4>STEPS · ${g.steps.filter(x => x[1] === 'done').length} OF ${g.steps.length}</h4>
       ${g.steps.map(([title, st, time]) => `<p class="step"><i style="border-color:${mark(st)};${st === 'done' ? `background:${mark(st)}` : ''}"></i><span style="${st ? '' : 'color:#9a9aa2'}">${title}</span>${time ? `<span class="time">${time}</span>` : ''}</p>`).join('')}
-      ${g.subs.length ? `<h4>SUBAGENTS · ${g.subs.length}, ${g.subs.filter(x => x[1] === 'working').length} RUNNING</h4>` + g.subs.map(([title, st, pct, line]) =>
-        `<div class="sub">${agentRing({ p: g.p, s: st, pct }, 26)}<div><b>${title}</b><small>${line}</small></div><small style="color:${LIVE[st][0]}">${pct}%</small></div>`).join('') : ''}
+      ${subList(g)}
       <div class="usage"><div><b>Tokens</b></div><div><span>This agent</span><span>${g.cost}</span></div>
         ${g.total ? `<div><span>With subagents</span><span>${g.total}</span></div>` : ''}</div>
       <p class="src">${g.ran} · demo agent</p>`;
+  }
+  const subs = g => g.subs || [];
+  // Subagent rows: a hover (or a tap on a phone) opens the subagent's own card, all the way down the tree.
+  const subList = g => subs(g).length ? `<h4>SUBAGENTS · ${subs(g).length}${subs(g).some(x => x.s === 'working') ? `, ${subs(g).filter(x => x.s === 'working').length} RUNNING` : ''}</h4>` + subs(g).map((x, i) =>
+    `<button class="sub" type="button" data-sub="${i}">${agentRing({ p: g.p || 'Claude', s: x.s, pct: x.pct }, 26)}<div><b>${x.t}</b><small>${x.line}</small></div><small style="color:${LIVE[x.s][0]}">${x.pct}%</small></button>`).join('') : '';
+  function subCard(x, back) {
+    const [color, label] = LIVE[x.s];
+    const mark = st => st === 'done' ? '#30d158' : st === 'active' ? color : '#48484a';
+    return `${back ? '<button class="back" type="button">‹ Back</button>' : ''}
+      <p class="prov" style="color:#9a9aa2">${x.kind.toUpperCase()} <span class="pill" style="color:${color};background:${color}29">${label}</span>${x.model ? ` <span class="pill" style="color:#c9c9cf;background:#ffffff14">${x.model}</span>` : ''}</p>
+      <div class="head">${agentRing({ p: 'Claude', s: x.s, pct: x.pct }, 40)}<span class="title">${x.t}</span><span class="big" style="color:${color}">${x.pct}%</span></div>
+      ${x.now && x.s === 'working' ? `<p class="now" style="background:${color}17;border:1px solid ${color}40;margin-top:12px">${x.now}</p>` : ''}
+      <h4>${x.phases ? 'PHASES' : 'STEPS'} · ${x.steps.filter(y => y[1] === 'done').length} OF ${x.steps.length}</h4>
+      ${x.steps.map(([title, st, time]) => `<p class="step"><i style="border-color:${mark(st)};${st === 'done' ? `background:${mark(st)}` : ''}"></i><span style="${st ? '' : 'color:#9a9aa2'}">${title}</span>${time ? `<span class="time">${time}</span>` : ''}</p>`).join('')}
+      ${subList(x)}
+      <div class="usage"><div><b>Tokens</b></div><div><span>This subagent</span><span>${x.cost}</span></div></div>
+      <p class="src">${x.ran} · demo subagent</p>`;
   }
   function place(cell, html) {
     if (html) bubble.innerHTML = html;
@@ -558,7 +594,55 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
     bubble.classList.add('open');
   }
   cells(); drawDock();
+  // Subagent cards: each level opens one card further from the dock. On a phone the card swaps in place, with a back button.
+  const trail = [];
+  function closeFrom(depth) {
+    while (trail.length > depth) trail.pop().el.remove();
+    document.querySelectorAll('.bubble .sub').forEach(b => b.setAttribute('aria-expanded', String(trail.some(t => t.button === b))));
+  }
+  function openSub(button) {
+    const host = button.closest('.bubble'), depth = host === bubble ? 0 : trail.findIndex(t => t.el === host) + 1;
+    const parent = depth === 0 ? AGENTS[current] : trail[depth - 1].sub;
+    const sub = subs(parent)[+button.dataset.sub];
+    if (!sub) return;
+    if (matchMedia('(max-width: 760px)').matches) {
+      const back = bubble.innerHTML;
+      bubble.innerHTML = subCard(sub, true);
+      bubble.querySelector('.back').addEventListener('click', e => { e.stopPropagation(); bubble.innerHTML = back; });
+      bubble.scrollTop = 0;
+      return;
+    }
+    if (trail[depth] && trail[depth].button === button) return;
+    closeFrom(depth);
+    const el = document.createElement('div');
+    el.className = 'bubble sub-card';
+    el.setAttribute('role', 'tooltip');
+    el.style.setProperty('--depth', depth + 1);
+    el.innerHTML = subCard(sub);
+    document.body.appendChild(el);
+    const r = button.getBoundingClientRect(), h = el.offsetHeight;
+    el.style.top = Math.min(Math.max(12, r.top + r.height / 2 - h / 2), innerHeight - h - 12) + 'px';
+    el.addEventListener('mouseenter', () => clearTimeout(closeTimer));
+    el.addEventListener('mouseleave', () => { closeTimer = setTimeout(hide, 250); });
+    trail.push({ el, button, sub });
+    requestAnimationFrame(() => el.classList.add('open'));
+    closeFrom(trail.length);
+  }
+  document.addEventListener('mouseover', e => {
+    const button = e.target.closest('.bubble .sub');
+    if (button && matchMedia('(hover: hover)').matches) openSub(button);
+  });
+  document.addEventListener('click', e => {
+    const button = e.target.closest('.bubble .sub');
+    if (button) { e.stopPropagation(); openSub(button); }
+  }, true);
+  document.addEventListener('focusin', e => {
+    const button = e.target.closest('.bubble .sub');
+    if (button && button.matches(':focus-visible')) openSub(button);
+  });
+
   function hide() {
+    closeFrom(0);
     bubble.classList.remove('open'); current = -1;
     document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', 'false'));
   }
@@ -566,7 +650,7 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   bubble.addEventListener('mouseenter', () => clearTimeout(closeTimer));
   bubble.addEventListener('mouseleave', () => { closeTimer = setTimeout(hide, 250); });
   addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
-  document.addEventListener('click', e => { if (!e.target.closest('.dock, .bubble')) hide(); });
+  document.addEventListener('click', e => { if (!e.target.closest('.dock, .bubble, .back')) hide(); });
 
   // Highlight the download for the visitor's system, and add copy buttons to code blocks.
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
