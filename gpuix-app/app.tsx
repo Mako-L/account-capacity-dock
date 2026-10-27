@@ -7,7 +7,7 @@ import { Button, render, isTerminal, useWindowSize } from '@gpuix/react'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Bar, C, HOME, IconButton, ONE_LINE, ROOT, SNAPSHOT, Scroll, SmallButton, Text, TRACK, arcSvg, lastLine, run } from './ui'
-import { AgentsCompact, AgentsWide, useAgents } from './agents'
+import { AgentsCompact, AgentsWide, useAgents, type Subagent } from './agents'
 
 // Present while account names are hidden; the Herdr text widget reads and sets the same file.
 const NAMES_FLAG = path.join(HOME, 'hide-names')
@@ -222,10 +222,13 @@ function App() {
   const [pinned, setPinned] = useState(() => !!PIN_STATE && existsSync(PIN_STATE))
   const [observer, setObserver] = useState(() => readSettings().AGENT_OBSERVER !== '0')
   const [showIdle, setShowIdle] = useState(() => readSettings().SHOW_IDLE_AGENTS === '1')
+  const [showActivity, setShowActivity] = useState(() => readSettings().SHOW_AGENT_ACTIVITY === '1')
   const [dock, setDock] = useState(readDock)
   const allAgents = useAgents(view === 'agents')
-  // Idle agents stay hidden unless Settings turns them on.
-  const agents = showIdle ? allAgents : { ...allAgents, agents: allAgents.agents.filter(a => a.status !== 'idle') }
+  // Idle agents and recent activity stay hidden unless Settings turns them on.
+  const shown = showIdle ? allAgents.agents : allAgents.agents.filter(a => a.status !== 'idle')
+  const quiet = (sub: Subagent): Subagent => ({ ...sub, activity: [], children: sub.children?.map(quiet) })
+  const agents = { ...allAgents, agents: showActivity ? shown : shown.map(a => ({ ...a, activity: [], subagents: a.subagents?.map(quiet) })) }
   const { width } = useWindowSize()
   const columns = Math.max(1, Math.floor((width - 32 + 14) / 264))
 
@@ -276,6 +279,9 @@ function App() {
   function toggleIdle() {
     if (saveSetting('SHOW_IDLE_AGENTS', showIdle ? null : '1')) setShowIdle(!showIdle)
   }
+  function toggleActivity() {
+    if (saveSetting('SHOW_AGENT_ACTIVITY', showActivity ? null : '1')) setShowActivity(!showActivity)
+  }
   function setDockValue(key: string, type: 'float' | 'bool' | 'string', value: string | number | boolean) {
     const text = type === 'bool' ? (value ? '1' : '0') : String(value)
     const result = Bun.spawnSync(['defaults', 'write', DOCK!, key, `-${type}`, type === 'bool' ? (value ? 'true' : 'false') : text])
@@ -300,6 +306,7 @@ function App() {
     )
   }
   const idleButton = <SmallButton label={showIdle ? 'Hide idle agents' : 'Show idle agents'} onClick={toggleIdle} />
+  const activityButton = <SmallButton label={showActivity ? 'Hide recent activity' : 'Show recent activity'} onClick={toggleActivity} />
   const observerButton = <SmallButton label={observer ? 'Turn the observer off' : 'Turn the observer on'} onClick={toggleObserver} />
   const namesButton = <SmallButton label={showNames ? 'Hide account names' : 'Show account names'} onClick={toggleNames} />
   const current = accounts[Math.min(hovered, accounts.length - 1)]
@@ -383,7 +390,7 @@ function App() {
             <SmallButton label="Use local" onClick={() => !busy && saveProxy(true)} />
           </div>
           <div style={{ display: 'flex' }}>{namesButton}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}{activityButton}</div>
           {hidden.map(([id, label]) => (
             <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Text size={12} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{label}</Text>
@@ -475,7 +482,7 @@ function App() {
             The observer asks a small model through your proxy to name each busy agent's task and steps, at most once a minute per agent.
             Agents can also report their own steps: mako-capacity agents report "Step" --done 2 --total 5
           </Text>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}{activityButton}</div>
           <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
           <Text size={17} weight={600}>Hidden accounts</Text>
           {hidden.length === 0 && <Text size={12} color={C.muted}>No hidden accounts.</Text>}

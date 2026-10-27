@@ -292,8 +292,9 @@ The narrow pane on the right shows names hidden.
 The agents widget shows every Claude Code and Codex session that runs on this
 machine. For each one it shows the task, the step it is on now, its progress and its
 subagents. Hover over an agent, or tap it in a narrow pane, to open its card: the
-steps as a timeline, the running subagents and the latest activity. **Go to pane**
-jumps to its Herdr pane.
+steps as a timeline and the running subagents. **Go to pane** jumps to its Herdr
+pane. Recent activity (the latest tool calls and messages) is hidden by default:
+turn it on with **Show recent activity** in Settings or the dock menu.
 
 Agents keep the order in which they first appeared, so a refresh never moves them.
 The card lists every subagent of the session, running and finished. A hover on a

@@ -983,6 +983,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(agentEdges)
         let idle = menu.addItem(withTitle: "Show idle agents", action: #selector(toggleIdleAgents(_:)), keyEquivalent: "")
         idle.state = AgentStore.showIdle() ? .on : .off
+        let activity = menu.addItem(withTitle: "Show recent activity", action: #selector(toggleAgentActivity(_:)), keyEquivalent: "")
+        activity.state = AgentStore.showActivity() ? .on : .off
         menu.addItem(.separator())
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "")
         menu.addItem(.separator())
@@ -1053,7 +1055,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func toggleIdleAgents(_ item: NSMenuItem) {
         let show = !AgentStore.showIdle()
-        agentDock.store.setShowIdle(show)
+        agentDock.store.setSetting("SHOW_IDLE_AGENTS", show)
+        item.state = show ? .on : .off
+    }
+    @objc func toggleAgentActivity(_ item: NSMenuItem) {
+        let show = !AgentStore.showActivity()
+        agentDock.store.setSetting("SHOW_AGENT_ACTIVITY", show)
         item.state = show ? .on : .off
     }
     @objc func toggleAgents() {

@@ -19,8 +19,8 @@ struct AgentSubagent: Codable, Identifiable {
     let step: String?
     let updated: Double?
     let said: String?
-    let activity: [AgentEvent]?
-    let children: [AgentSubagent]?
+    var activity: [AgentEvent]?
+    var children: [AgentSubagent]?
     let kind: String?
     let steps: [AgentStep]?
     let progress: Double?
@@ -36,6 +36,12 @@ struct AgentSubagent: Codable, Identifiable {
     var signal: Color { running == true ? .yellow : .green }
     var stateLabel: String { running == true ? "Working" : "Finished" }
     var kindLabel: String { kind == "workflow" ? "Workflow" : kind == "codex" ? "Codex" : (name ?? "Subagent") }
+    func withoutActivity() -> AgentSubagent {
+        var copy = self
+        copy.activity = nil
+        copy.children = children?.map { $0.withoutActivity() }
+        return copy
+    }
 }
 
 struct AgentEvent: Codable, Hashable {
@@ -57,11 +63,11 @@ struct AgentItem: Codable, Identifiable {
     let prompt: String?
     let now: String?
     let steps: [AgentStep]?
-    let activity: [AgentEvent]?
+    var activity: [AgentEvent]?
     let updated: Double?
     let progress: Double?
     let stepCount: [Int]?
-    let subagents: [AgentSubagent]?
+    var subagents: [AgentSubagent]?
 
     var provider: String { agent == "codex" ? "Codex" : "Claude" }
     var heading: String { task ?? title ?? name ?? provider }
@@ -123,7 +129,7 @@ final class AgentStore: ObservableObject {
     private var running = false
     private var observed = Date.distantPast
     private var lastData: Data?
-    private var lastShowIdle = false
+    private var lastSettings: [Bool] = []
     static let snapshot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Mako Capacity/agents.json")
 
     init() {
@@ -135,26 +141,34 @@ final class AgentStore: ObservableObject {
     }
 
     func load() {
-        let showIdle = Self.showIdle()
-        guard let data = try? Data(contentsOf: Self.snapshot), data != lastData || showIdle != lastShowIdle,
+        let showIdle = Self.showIdle(), showActivity = Self.showActivity()
+        guard let data = try? Data(contentsOf: Self.snapshot), data != lastData || [showIdle, showActivity] != lastSettings,
               let snapshot = try? JSONDecoder().decode(AgentSnapshot.self, from: data) else { return }
         lastData = data
-        lastShowIdle = showIdle
-        // Idle agents show only when Settings turns them on, the same setting the terminal app uses.
-        agents = showIdle ? snapshot.agents : snapshot.agents.filter { $0.status != "idle" }
+        lastSettings = [showIdle, showActivity]
+        // Idle agents and recent activity show only when Settings turns them on, the same settings the terminal app uses.
+        let shown = showIdle ? snapshot.agents : snapshot.agents.filter { $0.status != "idle" }
+        agents = showActivity ? shown : shown.map { agent in
+            var copy = agent
+            copy.activity = nil
+            copy.subagents = agent.subagents?.map { $0.withoutActivity() }
+            return copy
+        }
     }
 
     static let settings = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mako-capacity/settings.json")
-    static func showIdle() -> Bool {
+    static func showIdle() -> Bool { setting("SHOW_IDLE_AGENTS") }
+    static func showActivity() -> Bool { setting("SHOW_AGENT_ACTIVITY") }
+    static func setting(_ key: String) -> Bool {
         guard let data = try? Data(contentsOf: settings),
               let values = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
-        return values["SHOW_IDLE_AGENTS"] as? String == "1"
+        return values[key] as? String == "1"
     }
 
-    func setShowIdle(_ show: Bool) {
+    func setSetting(_ key: String, _ on: Bool) {
         // settings.json may hold the proxy key: keep its mode, and create it private.
         var values = (try? Data(contentsOf: Self.settings)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        values["SHOW_IDLE_AGENTS"] = show ? "1" : nil
+        values[key] = on ? "1" : nil
         guard let data = try? JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys]) else { return }
         if FileManager.default.fileExists(atPath: Self.settings.path) {
             try? data.write(to: Self.settings)
