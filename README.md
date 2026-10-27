@@ -1,7 +1,8 @@
 # Mako Capacity
 
 A capacity dock for **every Claude and Codex account in your local CLIProxyAPI**,
-plus your active **Cursor CLI account**. It keeps the original black dock, curved
+plus your active **Cursor CLI account**. Without a proxy, it reads the Claude Code
+and Codex CLI logins on this machine. It keeps the original black dock, curved
 edge flares, quota rings, provider icons, account labels, and inward-facing hover
 bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
@@ -157,6 +158,15 @@ For Cursor CLI in Windows WSL, sign in inside WSL with
 `AGENT_CLI_CREDENTIAL_STORE=file cursor-agent login`, then configure `CURSOR_DIR`
 to the distro's accessible `.cursor` directory when initializing setup. The
 Windows dock needs to be able to read its `cli-config.json` and `auth.json`.
+
+**No proxy:** the dock also reads the logins already on this machine. It shows
+the Claude Code login (`~/.claude` or `CLAUDE_CONFIG_DIR`, or the macOS Keychain
+entry `Claude Code-credentials`) and the Codex CLI login (`~/.codex/auth.json`).
+With no proxy you get one Claude account, one Codex account and the Cursor CLI
+account. The dock only reads these tokens and never renews them, because a renewal
+would sign the CLI out. If a token is too old, the card asks you to run `claude`
+or `codex` once. If the proxy already holds the same login, the dock shows it
+once, from the proxy.
 
 **Cursor supports one active CLI identity.** Multiple Cursor account inventories,
 account rotation, and Cursor traffic proxying are not provided by this stack.

@@ -41,6 +41,26 @@ class CapacityParsingTests(unittest.TestCase):
             self.assertEqual(rows[1]['email'], 'codex@example.test')
             self.assertNotIn('private-', json.dumps(rows))
 
+    def test_without_a_proxy_the_local_claude_and_codex_logins_show(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / '.claude').mkdir()
+            (home / '.codex').mkdir()
+            (home / '.claude.json').write_text(json.dumps({'oauthAccount': {'emailAddress': 'me@example.test', 'organizationUuid': 'org'}}))
+            (home / '.claude/.credentials.json').write_text(json.dumps({'claudeAiOauth': {'accessToken': 'private-claude', 'expiresAt': 1}}))
+            claims = base64.urlsafe_b64encode(json.dumps({'exp': 4_000_000_000}).encode()).decode().rstrip('=')
+            (home / '.codex/auth.json').write_text(json.dumps({'tokens': {'access_token': f'x.{claims}.y', 'account_id': 'acct'}}))
+            with patch.object(collector, 'HOME', home), patch.dict(collector.os.environ, {}, clear=True), \
+                    patch.object(collector.subprocess, 'run', side_effect=AssertionError('keychain read')), \
+                    patch.object(collector, 'cursor_cli_account', return_value=(collector.account('Cursor', '', 'cli'), None)):
+                rows = collector.discover()
+        claude, codex = rows[0], rows[1]
+        self.assertEqual((claude[0]['source'], claude[1]), ('Claude Code login', None))
+        self.assertIn('expired', claude[0]['message'])
+        self.assertEqual(codex[0]['source'], 'Codex CLI login')
+        self.assertEqual(codex[1][1]['ChatGPT-Account-Id'], 'acct')
+        self.assertNotIn('private-', json.dumps([entry for entry, _ in rows]))
+
     def test_cursor_cli_uses_cli_identity_and_keychain_not_editor(self):
         claims = {'sub': 'auth0|cli-user', 'exp': collector.time.time() + 3600}
         token = 'header.' + base64.urlsafe_b64encode(json.dumps(claims).encode()).decode() + '.signature'
@@ -176,7 +196,8 @@ class CapacityParsingTests(unittest.TestCase):
             for name, refresh in [('trial', ''), ('dedicated', 'private-refresh')]:
                 (auths / (name + '.json')).write_text(json.dumps({'type': 'claude', 'organization_uuid': 'org',
                     'email': 'test@example.test', 'access_token': 'private-access', 'refresh_token': refresh}))
-            with patch.object(collector, 'HOME', home), patch.object(collector.subprocess, 'run', side_effect=OSError):
+            with patch.object(collector, 'HOME', home), patch.object(collector.subprocess, 'run', side_effect=OSError), \
+                    patch.dict(collector.os.environ, {}, clear=True):
                 discovered = collector.discover()
             rows = [row for row, _ in discovered if row['provider'] == 'Claude']
             self.assertEqual(len(rows), 1)

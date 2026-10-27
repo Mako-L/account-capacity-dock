@@ -238,6 +238,55 @@ def cursor_cli_account():
     return entry, request
 
 
+def jwt_claims(token):
+    try:
+        return json.loads(base64.urlsafe_b64decode(token.split('.')[1] + '==='))
+    except (ValueError, IndexError, AttributeError):
+        return {}
+
+
+def local_logins():
+    """The Claude Code and Codex logins on this machine, so the dock works without a proxy.
+
+    Only the access token is read. It is never refreshed here: a refresh would sign the CLI out."""
+    claude, codex = {}, {}
+    folders = {Path(os.environ.get('CLAUDE_CONFIG_DIR') or HOME / '.claude')}
+    for folder in folders:
+        profile = read_json(folder / '.claude.json') or (read_json(HOME / '.claude.json') if folder == HOME / '.claude' else {})
+        who = profile.get('oauthAccount') or {}
+        if not who:
+            continue  # Claude Code keeps the account here once signed in: no profile, no login.
+        login = read_json(folder / '.credentials.json').get('claudeAiOauth') or {}
+        if not login and sys.platform == 'darwin' and folder == HOME / '.claude':
+            try:
+                result = subprocess.run(['/usr/bin/security', 'find-generic-password', '-s', 'Claude Code-credentials', '-w'],
+                                        capture_output=True, text=True, timeout=5, check=True)
+                login = json.loads(result.stdout).get('claudeAiOauth') or {}
+            except (OSError, subprocess.SubprocessError, ValueError):
+                login = {}
+        identity = who.get('organizationUuid') or who.get('emailAddress') or str(folder)
+        entry = account('Claude', who.get('emailAddress'), identity, plan=who.get('organizationName') or '', source='Claude Code login')
+        fresh = login.get('accessToken') and (login.get('expiresAt') or 0) / 1000 > time.time() + 60
+        if not fresh:
+            entry['message'] = 'The Claude Code login expired. Run claude once to renew it.'
+        claude[identity] = (entry, ('https://api.anthropic.com/api/oauth/usage', {
+            'Authorization': 'Bearer ' + login['accessToken'], 'anthropic-beta': 'oauth-2025-04-20'}) if fresh else None)
+    tokens = read_json(Path(os.environ.get('CODEX_HOME') or HOME / '.codex') / 'auth.json').get('tokens') or {}
+    if tokens.get('access_token'):
+        identity = tokens.get('account_id') or 'codex-cli'
+        claims = jwt_claims(tokens.get('id_token'))
+        plan = PLANS.get((claims.get('https://api.openai.com/auth') or {}).get('chatgpt_plan_type'), '')
+        entry = account('Codex', claims.get('email'), identity, title=plan or None, plan=plan, source='Codex CLI login')
+        headers = {'Authorization': 'Bearer ' + tokens['access_token']}
+        if tokens.get('account_id'):
+            headers['ChatGPT-Account-Id'] = tokens['account_id']
+        fresh = jwt_claims(tokens['access_token']).get('exp', 0) > time.time() + 60
+        if not fresh:
+            entry['message'] = 'The Codex login expired. Run codex once to renew it.'
+        codex[identity] = (entry, ('https://chatgpt.com/backend-api/wham/usage', headers) if fresh else None)
+    return claude, codex
+
+
 def discover():
     result = []
     sequence = read_json(HOME / '.claude-swap-backup/sequence.json').get('accounts', {})
@@ -266,6 +315,9 @@ def discover():
                 'Authorization': 'Bearer ' + token, 'anthropic-beta': 'oauth-2025-04-20'}))
         else:
             claude[identity] = old or (entry, None)
+    local_claude, local_codex = local_logins()
+    # A login the proxy already holds shows once, with the proxy's token. A local login replaces a saved account with no token.
+    claude.update({k: v for k, v in local_claude.items() if k not in claude or claude[k][1] is None})
     result.extend(claude.values())
     codex = {}
     for path in sorted(auths.glob('*.json')):
@@ -295,6 +347,7 @@ def discover():
         if row.get('accountId'):
             headers['ChatGPT-Account-Id'] = row['accountId']
         codex[identity] = (entry, ('https://chatgpt.com/backend-api/wham/usage', headers) if headers else None)
+    codex.update({k: v for k, v in local_codex.items() if k not in codex or codex[k][1] is None})
     result.extend(codex.values())
     result.append(cursor_cli_account())
     return result
@@ -305,7 +358,7 @@ def fetch(item, previous, force=False):
     now = time.time()
     old = previous.get(entry['id'])
     if request is None:
-        entry.update(status='loginRequired', message='Reconnect this account to read capacity.', windows=[], onDemandUsd=None, nextPollAt=now + 300)
+        entry.update(status='loginRequired', message=entry.get('message') or 'Reconnect this account to read capacity.', windows=[], onDemandUsd=None, nextPollAt=now + 300)
         return entry
     if old:
         for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan', 'onDemandUsd'):
