@@ -41,6 +41,7 @@ CODEX = Path(os.environ.get('CODEX_HOME', HOME / '.codex'))
 SNAPSHOT = cache_dir() / 'agents.json'
 TAIL = 1_500_000  # bytes read from the end of a transcript; long sessions grow past 50 MB
 RUNNING = 45      # seconds since a subagent's last write while it still counts as running
+SUB_WAIT = 3600   # a subagent inside one long tool call (a wait loop, a build) counts as running this long
 RECENT = 15 * 60  # finished subagents stay listed this long
 SUB_RECENT = 6 * 3600  # finished subagents of a live session stay in its tree this long
 SUB_LIMIT = 30     # newest top-level subagents kept per agent
@@ -232,9 +233,10 @@ def read_claude(events):
             found['title'] = event.get('aiTitle')
         message = event.get('message') or {}
         content = message.get('content')
-        if kind == 'user' and not event.get('isSidechain'):
+        if kind == 'user':
             words = text_of(content).strip()
-            if words and not event.get('isMeta') and not words.startswith(('<', 'Another Claude session', 'Stop hook feedback', '[Request interrupted', 'Caveat:')):
+            # Subagent transcripts mark every event as a sidechain: their tool results still close calls.
+            if words and not event.get('isSidechain') and not event.get('isMeta') and not words.startswith(('<', 'Another Claude session', 'Stop hook feedback', '[Request interrupted', 'Caveat:')):
                 found['prompt'] = clip(words, 160)
             for block in content if isinstance(content, list) else []:
                 if isinstance(block, dict) and block.get('type') == 'tool_result':
@@ -299,6 +301,9 @@ def with_progress(item, steps, guess=None):
     """Steps and progress for a subagent. A finished one has every step done and shows 100%."""
     if not item['running']:
         steps = [dict(step, status='done') for step in steps]
+    elif steps and not any(step['status'] in ('active', 'pending') for step in steps):
+        # The observer saw every step done, but the subagent still works: its current call is the open step.
+        steps = steps + [{'title': clip(item['step'], 60) or 'Working', 'status': 'active'}]
     item['steps'] = steps
     if not item['running']:
         item['progress'] = 100
@@ -365,8 +370,9 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         if found is None:
             return None
         meta = read_json(path.with_name(path.stem + '.meta.json'))
-        running = now - changed < RUNNING and not finished
         pending = found.get('pending') or []
+        # A long tool call writes nothing until it returns, so an open call keeps the subagent running.
+        running = not finished and (now - changed < RUNNING or (bool(pending) and now - changed < SUB_WAIT))
         activity = found.get('activity') or []
         item = {
             'id': path.stem, 'name': label or meta.get('name') or meta.get('agentType') or 'Subagent',

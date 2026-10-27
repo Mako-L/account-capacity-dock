@@ -123,6 +123,27 @@ class SubagentTreeTests(unittest.TestCase):
             tree = agents.subagent_tree(str(transcript), now, parse)
         self.assertEqual(sorted(c['name'] for c in tree[0]['children']), ['a', 'b'])
 
+    def test_a_subagent_inside_a_long_call_still_runs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            transcript = Path(folder) / 'session.jsonl'
+            transcript.write_text('')
+            root = Path(folder) / 'session' / 'subagents'
+            def call(id):
+                return {'type': 'assistant', 'isSidechain': True, 'message': {'content': [{'type': 'tool_use', 'id': id, 'name': 'Bash', 'input': {'command': 'pnpm build'}}]}}
+            closed = {'type': 'user', 'isSidechain': True, 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'a'}]}}
+            self.write(root / 'agent-wait.jsonl', [call('a'), closed, call('b')], {'agentType': 'general-purpose'})
+            self.write(root / 'agent-done.jsonl', [call('a'), closed], {'agentType': 'general-purpose'})
+            now = os.stat(transcript).st_mtime + 600
+
+            def parse(path, reader, size):
+                found = reader(agents.tail_events(path, size))
+                found['pending'] = [agents.tool_step(n, d) for n, d, _ in found['pending'].values()]
+                return found, os.stat(path).st_mtime
+
+            tree = {n['id']: n for n in agents.subagent_tree(str(transcript), now, parse)}
+        self.assertTrue(tree['agent-wait']['running'])
+        self.assertFalse(tree['agent-done']['running'])
+
 
 class ClaudeSessionTests(unittest.TestCase):
     def test_a_session_file_whose_pid_was_reused_is_skipped(self):
