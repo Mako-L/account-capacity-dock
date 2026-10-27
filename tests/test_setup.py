@@ -3,7 +3,9 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('capacity_cli', Path(__file__).parents[1] / 'scripts/capacity.py')
@@ -63,6 +65,49 @@ class SetupTests(unittest.TestCase):
                     cli.use_proxy('ftp://proxy.example.test', 'key')
                 cli.use_proxy('local', '')
                 self.assertEqual(cli.remote(), '')
+
+
+
+class CredentialTests(unittest.TestCase):
+    def fake_proxies(self, stores):
+        def management(path, body=None, proxy=None):
+            store = stores[proxy[0]]
+            if path == 'auth-files':
+                return {'files': [{'name': name} for name in store]}
+            name = cli.urllib.parse.unquote(path.split('name=')[1])
+            if path.startswith('auth-files/download'):
+                return store[name]
+            store[name] = body
+            return {'status': 'ok'}
+        return mock.patch.object(cli, 'management', side_effect=management)
+
+    def test_copy_moves_every_login_and_skips_ones_the_target_has(self):
+        stores = {'a': {'claude-x.json': {'type': 'claude'}, 'codex-y.json': {'type': 'codex'}, '../bad.json': {}},
+                  'b': {'codex-y.json': {'type': 'old'}}}
+        with self.fake_proxies(stores):
+            bundle = cli.export_credentials(('a', 'k'))
+            added, skipped = cli.import_credentials(bundle, ('b', 'k'))
+        self.assertEqual(sorted(bundle['files']), ['claude-x.json', 'codex-y.json'])
+        self.assertEqual((added, skipped), (['claude-x.json'], ['codex-y.json']))
+        self.assertEqual(stores['b']['codex-y.json'], {'type': 'old'})
+
+    def test_replace_overwrites_and_a_foreign_file_is_refused(self):
+        stores = {'b': {'codex-y.json': {'type': 'old'}}}
+        bundle = {'format': cli.CREDENTIALS_FORMAT, 'files': {'codex-y.json': {'type': 'codex'}}}
+        with self.fake_proxies(stores):
+            cli.import_credentials(bundle, ('b', 'k'), replace=True)
+            with self.assertRaises(ValueError):
+                cli.import_credentials({'files': {}}, ('b', 'k'))
+        self.assertEqual(stores['b']['codex-y.json'], {'type': 'codex'})
+
+    @unittest.skipIf(sys.platform == 'win32', 'POSIX permissions')
+    def test_an_export_file_is_readable_only_by_its_owner(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'out.json'
+            path.write_text('{}')
+            path.chmod(0o644)
+            cli.write_secret(path, {'files': {}})
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == '__main__':

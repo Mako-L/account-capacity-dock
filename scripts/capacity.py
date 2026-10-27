@@ -116,18 +116,90 @@ def remote():
     return settings().get('PROXY_URL', '').rstrip('/')
 
 
-def management(path, body=None):
+def management(path, body=None, proxy=None):
+    """Call a CLIProxyAPI management API. `proxy` is (address, key); the default is the saved remote proxy."""
+    base, key = proxy or (remote(), settings().get('PROXY_MANAGEMENT_KEY', ''))
     request = urllib.request.Request(
-        remote() + '/v0/management/' + path, data=None if body is None else json.dumps(body).encode(),
-        headers={'Authorization': 'Bearer ' + settings().get('PROXY_MANAGEMENT_KEY', ''),
-                 'Content-Type': 'application/json'})
+        base + '/v0/management/' + path, data=None if body is None else json.dumps(body).encode(),
+        headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
-        raise RuntimeError(f'Proxy refused {path.split("?")[0]} (HTTP {error.code}); check the management key.') from error
+        raise RuntimeError(f'Proxy at {base} refused {path.split("?")[0]} (HTTP {error.code}); check the management key.') from error
     except (OSError, ValueError) as error:
-        raise RuntimeError(f'Proxy at {remote()} is not reachable: {error}') from error
+        raise RuntimeError(f'Proxy at {base} is not reachable: {error}') from error
+
+
+def current_proxy():
+    """Address and management key of the proxy Mako uses: the remote one, or the local Docker one."""
+    if remote():
+        return remote(), settings().get('PROXY_MANAGEMENT_KEY', '')
+    base = f"http://127.0.0.1:{settings().get('CLAUDE_PROXY_PORT', '8317')}"
+    if settings().get('PROXY_MANAGEMENT_KEY'):
+        return base, settings()['PROXY_MANAGEMENT_KEY']
+    # The collector reads the same places: the configured proxy folder, then the older ~/claude-proxy.
+    folders = [Path(os.environ['CLAUDE_PROXY_DIR'])] if os.environ.get('CLAUDE_PROXY_DIR') else []
+    folders += [Path(settings().get('CLAUDE_PROXY_DIR', Path.home() / 'claude-proxy')).expanduser(), Path(paths()['CLAUDE_PROXY_DIR'])]
+    for env in (folder / 'management.env' for folder in folders):
+        found = re.search(r'^MANAGEMENT_PASSWORD=(.+)$', env.read_text() if env.exists() else '', re.M)
+        if found:
+            return base, found.group(1).strip()
+    raise RuntimeError('No local management key found; run mako-capacity init, or use --from with --from-key.')
+
+
+def other_proxy(url, key):
+    parsed = urllib.parse.urlparse(url or '')
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        raise ValueError('Proxy URL must look like https://host:8317')
+    if not key:
+        raise ValueError('That proxy needs its management key.')
+    return url.rstrip('/'), key
+
+
+CREDENTIALS_FORMAT = 'mako-capacity-credentials'
+
+
+def export_credentials(proxy):
+    """Every login file on a proxy, as one bundle. The bundle holds live tokens."""
+    files = {}
+    for row in management('auth-files', proxy=proxy).get('files', []):
+        name = row.get('name') or ''
+        if name.endswith('.json') and '/' not in name and '\\' not in name:
+            files[name] = management('auth-files/download?name=' + urllib.parse.quote(name), proxy=proxy)
+    return {'format': CREDENTIALS_FORMAT, 'version': 1, 'exported': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'proxy': proxy[0], 'files': files}
+
+
+def import_credentials(bundle, proxy, replace=False):
+    """Upload a bundle's login files to a proxy. Returns (added, skipped) file names."""
+    if bundle.get('format') != CREDENTIALS_FORMAT or not isinstance(bundle.get('files'), dict):
+        raise ValueError('This is not a Mako Capacity credentials file.')
+    existing = {row.get('name') for row in management('auth-files', proxy=proxy).get('files', [])}
+    added, skipped = [], []
+    for name, content in sorted(bundle['files'].items()):
+        if not name.endswith('.json') or '/' in name or '\\' in name:
+            continue
+        if name in existing and not replace:
+            skipped.append(name)
+            continue
+        management('auth-files?name=' + urllib.parse.quote(name), body=content, proxy=proxy)
+        added.append(name)
+    return added, skipped
+
+
+def write_secret(path, data):
+    """Write JSON that only this user can read."""
+    path = Path(path).expanduser()
+    handle = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.fchmod(handle, 0o600)
+    with os.fdopen(handle, 'w') as stream:
+        json.dump(data, stream, indent=2)
+        stream.write('\n')
+
+
+SHARED_LOGIN_WARNING = ('Run each login on one proxy only. Providers rotate refresh tokens, so the same login '
+                        'on two proxies can sign the other one out. Delete it from the old proxy after the move.')
 
 
 def use_proxy(url, key):
@@ -287,6 +359,21 @@ def main():
     proxy = commands.add_parser('proxy', help='use a CLIProxyAPI on another machine, or "local" for Docker')
     proxy.add_argument('url', help='for example https://server:8317, or local')
     proxy.add_argument('--key', default=os.environ.get('PROXY_MANAGEMENT_KEY', ''), help='the remote management key')
+    credentials = commands.add_parser('credentials', help='export the proxy logins to a file, import them, or copy them to another proxy')
+    moves = credentials.add_subparsers(dest='action', required=True)
+    for name, text in [('export', 'save every login of the current proxy to a private file'),
+                       ('import', 'upload the logins in a file to a proxy'),
+                       ('copy', 'copy every login from the current proxy straight to another proxy')]:
+        move = moves.add_parser(name, help=text)
+        if name in ('export', 'import'):
+            move.add_argument('file', help='for example mako-credentials.json')
+        if name in ('import', 'copy'):
+            move.add_argument('--to', required=name == 'copy', help='the other proxy, for example https://server:8317 (default: the current proxy)')
+            move.add_argument('--to-key', default=os.environ.get('TO_MANAGEMENT_KEY', ''), help='the other proxy\'s management key')
+            move.add_argument('--replace', action='store_true', help='overwrite logins the other proxy already has')
+        if name in ('export', 'copy'):
+            move.add_argument('--from', dest='source', help='read another proxy instead of the current one')
+            move.add_argument('--from-key', default=os.environ.get('FROM_MANAGEMENT_KEY', ''), help='its management key')
     logs = commands.add_parser('logs', help='show the last 100 proxy log lines')
     logs.add_argument('service', nargs='?', choices=['claude-proxy'])
     agents = commands.add_parser('agents', help='list running coding agents, or report this agent\'s progress')
@@ -305,6 +392,22 @@ def main():
         use_proxy(args.proxy_url, args.key)
     if args.command == 'proxy':
         use_proxy(args.url, args.key)
+    elif args.command == 'credentials':
+        source = other_proxy(args.source, args.from_key) if getattr(args, 'source', None) else None
+        target = other_proxy(args.to, args.to_key) if getattr(args, 'to', None) else None
+        if args.action == 'export':
+            bundle = export_credentials(source or current_proxy())
+            write_secret(args.file, bundle)
+            print(f'Saved {len(bundle["files"])} logins to {args.file} (readable only by you). It holds live tokens: keep it private.')
+        else:
+            if args.action == 'import':
+                bundle = json.loads(Path(args.file).expanduser().read_text())
+            else:
+                bundle = export_credentials(source or current_proxy())
+            target = target or current_proxy()
+            added, skipped = import_credentials(bundle, target, args.replace)
+            print(f'Added {len(added)} logins to {target[0]}.' + (f' Skipped {len(skipped)} it already has; use --replace to overwrite.' if skipped else ''))
+            print(SHARED_LOGIN_WARNING)
     elif args.command == 'init':
         initialize()
     elif args.command == 'install':

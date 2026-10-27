@@ -484,6 +484,25 @@ through an SSH tunnel or a private network such as Tailscale. The server needs
 `allow-remote: true` under `management:` in its `config.yaml`, which this setup
 writes by default.
 
+### Move logins to another proxy
+
+Copy every login from the current proxy to another one, or go through a file:
+
+```sh
+mako-capacity credentials copy --to https://server:8317 --to-key MANAGEMENT_KEY
+mako-capacity credentials export mako-credentials.json     # owner-only file
+mako-capacity credentials import mako-credentials.json --to https://server:8317 --to-key MANAGEMENT_KEY
+```
+
+`--from URL --from-key KEY` reads a proxy other than the current one. Logins the
+target already has are skipped; `--replace` overwrites them. Without `--to`,
+`import` uses the current proxy. The file holds live tokens, so delete it after
+the import.
+
+Keep each login on one proxy. Providers rotate refresh tokens, so the same login
+on two proxies can sign one of them out. After a move, delete the logins from the
+old proxy (**Delete from proxy** in All accounts).
+
 ## Storage and existing proxies
 
 New installations keep persistent data under `~/.mako-capacity/` (on Windows,
