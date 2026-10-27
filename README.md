@@ -15,7 +15,7 @@ bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
   <img src="docs/images/dock.png" alt="The dock with a hover card: rings show percent used per account" width="420">
 </p>
 
-![All accounts: a card per account with quota bars, reset times and today's local usage](docs/images/all-accounts.png)
+![All accounts: a card per account with quota bars, reset times, what each window used, the pace and the share of the plan price](docs/images/all-accounts.png)
 
 Screenshots use demo accounts. Downloads for macOS, Windows and Linux are on the
 [releases page](https://github.com/Mako-L/account-capacity-dock/releases/latest).
@@ -192,7 +192,7 @@ account rotation, and Cursor traffic proxying are not provided by this stack.
 Claude and Codex can show multiple accounts because the proxy keeps a local
 account inventory. Refresh the dock after signing in.
 
-## Token usage and dollar cost on hover
+## Token usage and dollar cost
 
 Every account's hover bubble and overview card include **today's local token
 usage** and **API-equivalent USD cost** from CodeBurn, with separate input, output,
@@ -203,31 +203,21 @@ on-demand spend is shown separately for its billing cycle.
 **Per account:** if your CLIProxyAPI runs the
 [CAP Token Usage Tracker](https://github.com/AITNR/cap-token-usage-tracker) plugin,
 each Claude and Codex card shows the tokens and cost of **that account** over the
-last 24 hours. Under each quota bar, the card also shows what the account used inside
-that window: the current 5-hour window and the current week, so you can compare
-spend with each limit. For Claude, the weekly line also compares that spend with one
-week of the plan's list price (Pro $20, Max 5x $100, Max 20x $200 a month). For
-example, "1,200% of the plan price" means the week used 12 weeks of the plan's price
-at API rates. Codex shows no plan price yet. When a window reaches 100%, the card also says how long
-it took: "Used up in 1d 10h" counts from the window start to the last hour in which
-the account still served requests. Before that, if the current pace would use up the
-window before it resets, the card says "At this pace, full in 1d 2h". The pace is the
-share used so far, divided by the time since the window started.
-
-Agent and subagent cards also show about how much of one account's weekly limit the
-work used, for example "~15% of a week". The dock works out what a full week costs
-from your proxy accounts: each account's weekly spend, divided by the share of the
-week it used. It takes the middle value of all accounts. The model mix changes the
-real limit, so treat this as an estimate.
-
-Each step shows how long it took, and the active step counts up. Steps from Claude's
-todo list and Codex's plan take their times from the transcript. Steps named by the
-observer take their times from when the dock first saw them, about every 6 s.
-
-Agent and subagent cards show how long the work ran: "Running for 12m" while it
-works, and "Took 3h 20m" (from start to last write) once it ends. The plugin counts every request against the login that served it.
+last 24 hours. The plugin counts every request against the login that served it.
 The cost uses CodeBurn's price list, at base API rates. Without the plugin, the
 cards fall back to CodeBurn's totals below.
+
+Under each quota bar, the card also shows what the account used inside that window:
+
+- **Spend:** "Used 690.0M tokens · $402.75" for the current 5-hour window or week.
+- **Plan price:** for Claude, the week compares that spend with one week of the
+  plan's list price (Pro $20, Max 5x $100, Max 20x $200 a month). For example,
+  "1,200% of the plan price" means the week used 12 weeks of the plan's price at
+  API rates. Codex shows no plan price yet.
+- **Pace:** "At this pace, full in 1d 4h" if the share used so far, divided by the
+  time since the window started, would fill the window before it resets.
+- **Used up:** "Used up in 1d 10h" once a window reaches 100%. It counts from the
+  window start to the last hour in which the account still served requests.
 
 CodeBurn reads session logs on this machine. Those logs do not identify which
 proxy account handled a request, so the cards clearly say **all local accounts**:
@@ -357,7 +347,8 @@ pane. Recent activity (the latest tool calls and messages) is hidden by default:
 turn it on with **Show recent activity** in Settings or the dock menu.
 
 Agents keep the order in which they first appeared, so a refresh never moves them.
-The card lists every subagent of the session, running and finished. A hover on a
+The card lists every subagent of the session: running ones first, then finished ones,
+then idle teammates (subagents that wait for their next message). A hover on a
 subagent opens its card beside the first one, and so on through nested subagents and
 workflow runs. Each subagent has its own steps and a progress ring. A workflow run
 groups its agents by phase and shows how many in each phase are done. A long list of
@@ -384,7 +375,7 @@ mako-capacity ui agents             # the same view in a window
 mako-capacity agents                # a plain list in the terminal
 ```
 
-![The agents view: live agents with their steps, subagents and activity](docs/images/agents.png)
+![The agents view: live agents with timed steps, subagents, tokens and cost](docs/images/agents.png)
 
 The steps come from the first source that has them:
 
@@ -401,6 +392,22 @@ The steps come from the first source that has them:
 
 Without any of these, the widget still shows the live tool calls. The agents widget
 only reads files, `ps` and Herdr's socket. It never changes an agent.
+
+Each card also shows input, output and cache tokens with the API-equivalent cost,
+priced with CodeBurn's price list. The agent card adds a total with every subagent.
+
+Agent and subagent cards also show about how much of one account's weekly limit the
+work used, for example "~15% of a week". The dock works out what a full week costs
+from your proxy accounts: each account's weekly spend, divided by the share of the
+week it used. It takes the middle value of all accounts. The model mix changes the
+real limit, so treat this as an estimate.
+
+Each step shows how long it took, and the active step counts up. Steps from Claude's
+todo list and Codex's plan take their times from the transcript. Steps named by the
+observer take their times from when the dock first saw them, about every 6 s.
+
+Agent and subagent cards show how long the work ran: "Running for 12m" while it
+works, and "Took 3h 20m" (from start to last write) once it ends.
 
 ### Text widget
 

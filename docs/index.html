@@ -165,6 +165,7 @@
   .shot { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; background: var(--surface); }
   .shot.video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #111; }
   .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; }
+  #agents .features { grid-template-columns: repeat(2, 1fr); margin-bottom: 32px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
   .card h3 { margin: 0 0 8px; font-size: 18px; }
   .card p { margin: 0; color: var(--muted); font-size: 15px; }
@@ -211,7 +212,7 @@
   @media (max-width: 880px) {
     .herdr { grid-template-columns: 1fr; gap: 32px; }
     .herdr > .shot:last-child { max-width: 180px; justify-self: center; }
-    .features, .downloads, .steps { grid-template-columns: 1fr; }
+    .features, #agents .features, .downloads, .steps { grid-template-columns: 1fr; }
     nav a { margin-left: 14px; }
   }
 </style>
@@ -240,7 +241,7 @@
         <a class="button" href="https://github.com/Mako-L/account-capacity-dock"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>View source</a>
       </div>
       <p class="hint"><span class="wide-only">Hover the dock on the right edge, just like the app.</span><span class="narrow-only">Tap an account in the dock below, just like the app.</span></p>
-      <div class="hero-shot"><img src="images/all-accounts.png" width="1600" height="1303" alt="All accounts dashboard with cards for Claude, Codex and Cursor accounts"></div>
+      <div class="hero-shot"><img src="images/all-accounts.png" width="1180" height="1240" alt="All accounts dashboard: a card per Claude, Codex and Cursor account with quota bars, what each window used, the pace and the share of the plan price"></div>
     </div>
 
     <section id="video" aria-labelledby="video-title">
@@ -253,12 +254,13 @@
 
     <section aria-labelledby="overview-title">
       <h2 id="overview-title">All accounts, one view</h2>
-      <p class="section-lede">Rings turn yellow at 70%, orange at 85% and red at the limit. Every card shows each quota window, its reset time and today's local token use.</p>
+      <p class="section-lede">Rings turn yellow at 70%, orange at 85% and red at the limit. Every card shows each quota window, its reset time, and what that account used inside the window.</p>
       <div class="features">
         <div class="card"><h3>Quota rings</h3><p>Percent used on the tightest window: 5-hour, weekly or per model. Exhausted and disconnected accounts stay visible.</p></div>
-        <div class="card"><h3>Cost on hover</h3><p>Today's tokens and API-equivalent cost from CodeBurn, with input, output and cache counts.</p></div>
+        <div class="card"><h3>Spend per window</h3><p>Tokens and API-equivalent cost for each account inside its 5-hour window and its week, from the proxy's usage tracker and CodeBurn's prices.</p></div>
+        <div class="card"><h3>Pace and plan price</h3><p>"At this pace, full in 1d 4h" before a window runs out, "Used up in 1d 10h" after. The week also shows its share of the plan's list price.</p></div>
         <div class="card"><h3>Manage accounts</h3><p>Hide an account from Mako, or delete its login from the proxy after a confirmation.</p></div>
-        <div class="card"><h3>Local or remote proxy</h3><p>Use CLIProxyAPI in Docker on this machine, or point Mako at a server with its address and key.</p></div>
+        <div class="card"><h3>Proxy or no proxy</h3><p>Use CLIProxyAPI in Docker or on a server. Without a proxy, Mako reads the Claude Code and Codex CLI logins on this machine.</p></div>
         <div class="card"><h3>Your layout</h3><p>Dock on any screen edge, scale it, round or square icons, labels on or off.</p></div>
         <div class="card"><h3>Smarter routing</h3><p>Mako writes quota readings for the <a href="https://github.com/magoz/cpa-expiring-first">Expiring First</a> proxy plugin, so requests use the quota that resets soonest.</p></div>
         <div class="card"><h3>Private by design</h3><p>Credentials stay with your proxy. The snapshot Mako keeps holds no tokens.</p></div>
@@ -359,7 +361,13 @@ herdr plugin action invoke pin-app-right --plugin mako-capacity</code></pre></di
     <section id="agents" aria-labelledby="agents-title">
       <h2 id="agents-title">Your agents, live</h2>
       <p class="section-lede">A second widget shows every Claude Code and Codex session: the task, the step it is on, its progress and its subagents. Hover over an agent to see its steps as a timeline. Steps come from the agent's own task list, from a one-line report the agent writes, or from a small observer model that reads its latest events.</p>
-      <div class="shot"><img src="images/agents.png" width="1120" height="780" alt="The agents view: three working agents with progress bars, and the card of the first one with its steps, subagents and recent activity" loading="lazy"></div>
+      <div class="features">
+        <div class="card"><h3>Timed steps</h3><p>Each step shows how long it took, and the active one counts up. The card says "Running for 52m" or "Took 3h 20m".</p></div>
+        <div class="card"><h3>Subagents and workflows</h3><p>Running subagents first, then finished, then idle teammates. Hover a subagent to open its own card, all the way down the tree.</p></div>
+        <div class="card"><h3>Tokens and cost</h3><p>Input, output and cache tokens with the API-equivalent cost, for the agent alone and with every subagent.</p></div>
+        <div class="card"><h3>Share of a week</h3><p>About how much of one account's weekly limit the work used, for example "~9% of a week".</p></div>
+      </div>
+      <div class="shot"><img src="images/agents.png" width="1120" height="900" alt="The agents view: live agents with progress bars, and the card of the first one with timed steps, subagents and token cost" loading="lazy"></div>
       <div class="code"><pre><code>herdr plugin action invoke pin-agents-right --plugin mako-capacity
 mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div>
     </section>

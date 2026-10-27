@@ -324,7 +324,7 @@ function SubagentRow({ sub, active, onOpen }: { sub: Subagent; active: boolean; 
         </div>
         <Text size={11} color={C.muted} style={ONE_LINE}>{detail}</Text>
       </div>
-      {sub.progress != null ? <Text size={11} weight={600} color={sub.running ? LIVE : C.green} style={{ flexShrink: 0 }}>{`${sub.progress}%`}</Text> : null}
+      {sub.progress != null ? <Text size={11} weight={600} color={sub.running ? LIVE : sub.idle ? C.muted : C.green} style={{ flexShrink: 0 }}>{`${sub.progress}%`}</Text> : null}
       <Text size={14} color={C.muted} style={{ flexShrink: 0 }}>›</Text>
     </Button>
   )
