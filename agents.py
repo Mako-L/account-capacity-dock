@@ -432,10 +432,11 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         if parent in nodes and child in nodes:
             nodes[parent]['children'].append(nodes[child])
     top = [n for key, n in nodes.items() if parents.get(key) not in nodes]
+    # Running subagents come first, then the rest, each group in start order.
     for item in nodes.values():
-        item['children'].sort(key=lambda c: c['started'])
-    top.sort(key=lambda n: n['started'])
-    return top[-SUB_LIMIT:]
+        item['children'].sort(key=lambda c: (not c['running'], c['started']))
+    top.sort(key=lambda n: (n['running'], n['started']))
+    return sorted(top[-SUB_LIMIT:], key=lambda n: not n['running'])
 
 
 def process_starts(pids):
