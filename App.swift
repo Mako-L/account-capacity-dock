@@ -19,7 +19,7 @@ struct WindowSpend: Codable {
     let planPercent: Double?
     var line: String {
         // API-equivalent spend against one week of the plan's price: 300% means three weeks of the plan.
-        let plan = planPercent.map { $0 >= 200 ? String(format: "%.0f× the plan price", $0 / 100) : String(format: "%.0f%% of the plan price", $0) }
+        let plan = planPercent.map { "\(Int($0).formatted())% of the plan price" }
         return ["Used \(tokens.map(formatCount) ?? "—") tokens", costUsd.map { String(format: "$%.2f", $0) }, plan].compactMap { $0 }.joined(separator: " · ")
     }
 }

@@ -61,7 +61,7 @@ const STATES: Record<string, string> = { loginRequired: 'Reconnect', rateLimited
 const stateLabel = (a: Account) => a.status === 'live' ? ((used(a) ?? 0) >= 100 ? 'At limit' : 'Available') : STATES[a.status] ?? 'Unknown'
 const pct = (a: Account) => used(a) == null ? '—' : `${Math.round(used(a)!)}%`
 // API-equivalent spend against one week of the plan's price: 300% means three weeks of the plan.
-const planShare = (p?: number | null) => p == null ? '' : p >= 200 ? ` · ${Math.round(p / 100)}× the plan price` : ` · ${p}% of the plan price`
+const planShare = (p?: number | null) => p == null ? '' : ` · ${p.toLocaleString('en-GB')}% of the plan price`
 const count = (v?: number | null) => v == null ? '—' : v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}K` : `${Math.round(v)}`
 function resetIn(at?: number | null) {
   if (!at) return 'Reset unknown'

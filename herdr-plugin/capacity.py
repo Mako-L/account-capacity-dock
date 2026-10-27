@@ -313,7 +313,7 @@ def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
                         cost += f" · used up in {hours / 24:.0f}d {hours % 24:.0f}h" if hours >= 24 else f" · used up in {hours:.0f}h"
                     share = spent.get('planPercent')
                     if share is not None:
-                        cost += f" · {share / 100:.0f}× plan price" if share >= 200 else f" · {share}% of plan price"
+                        cost += f" · {share:,}% of plan price"
                     lines.append('  ' + dim(fit(f"{' ' * label_width} used {count(spent['tokens'])} tokens{cost}", width - 2)))
             if detail == 3 and account.get('message') and (extended or account.get('status') != 'live'):
                 lines.append('  ' + dim(fit(account['message'], width - 2)))

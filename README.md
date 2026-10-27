@@ -207,8 +207,8 @@ last 24 hours. Under each quota bar, the card also shows what the account used i
 that window: the current 5-hour window and the current week, so you can compare
 spend with each limit. For Claude, the weekly line also compares that spend with one
 week of the plan's list price (Pro $20, Max 5x $100, Max 20x $200 a month). For
-example, "12× the plan price" means the week used 12 weeks of the plan's price at
-API rates. Codex shows no plan price yet. When a window reaches 100%, the card also says how long
+example, "1,200% of the plan price" means the week used 12 weeks of the plan's price
+at API rates. Codex shows no plan price yet. When a window reaches 100%, the card also says how long
 it took: "Used up in 1d 10h" counts from the window start to the last hour in which
 the account still served requests.
 
