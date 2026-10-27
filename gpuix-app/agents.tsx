@@ -9,7 +9,7 @@ import { Bar, BottomShade, C, CACHE, ONE_LINE, ROOT, Scroll, SmallButton, Text, 
 export type Step = { title: string; status: 'done' | 'active' | 'pending' }
 export type Subagent = {
   id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
-  said?: string | null; activity?: Agent['activity']; children?: Subagent[]; kind?: 'agent' | 'workflow' | 'codex'
+  said?: string | null; activity?: Agent['activity']; children?: Subagent[]; idle?: boolean; kind?: 'agent' | 'workflow' | 'codex'
   steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string
 }
 export type Agent = {
@@ -259,7 +259,7 @@ const subLabel = (subs: Subagent[]) => {
 // A subagent's ring: its progress in yellow while it runs, a full green ring once it finished.
 function SubRing({ sub, size }: { sub: Subagent; size: number }) {
   const value = sub.progress ?? (sub.running ? 8 : 100)
-  const color = sub.running ? LIVE : C.green
+  const color = sub.running ? LIVE : sub.idle ? C.muted : C.green
   return (
     <div style={{ width: size, height: size, flexShrink: 0, position: 'relative', alignItems: 'center', justifyContent: 'center', display: 'flex' }}>
       <svg source={TRACK} style={{ position: 'absolute', top: 0, left: 0, width: size, height: size, color: C.line }} />
@@ -279,7 +279,7 @@ const stepCount = (sub: Subagent) => {
 // One subagent: a hover opens its own card beside this one, and so on down the tree.
 function SubagentRow({ sub, active, onOpen }: { sub: Subagent; active: boolean; onOpen: () => void }) {
   const kids = sub.children?.length ?? 0
-  const detail = [sub.running ? '▸ ' + (sub.step || 'Working') : 'Finished', sub.kind === 'workflow' ? sub.summary : stepCount(sub),
+  const detail = [sub.running ? '▸ ' + (sub.step || 'Working') : sub.idle ? 'Idle' : 'Finished', sub.kind === 'workflow' ? sub.summary : stepCount(sub),
                   ago(sub.updated), sub.kind !== 'workflow' && kids ? `${kids} inside` : ''].filter(Boolean).join(' · ')
   return (
     <Button onClick={onOpen} onMouseEnter={onOpen} style={{
@@ -364,7 +364,7 @@ export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; on
               <Text size={11} color={item.kind === 'say' ? C.text : C.muted} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{item.text}</Text>
             </div>))}
         </Section>)}
-      <Text size={10} color={C.muted}>{`${sub.running ? 'Running' : 'Finished'} · last write ${ago(sub.updated)}`}</Text>
+      <Text size={10} color={C.muted}>{`${sub.running ? 'Running' : sub.idle ? 'Idle' : 'Finished'} · last write ${ago(sub.updated)}`}</Text>
     </div>
   )
 }

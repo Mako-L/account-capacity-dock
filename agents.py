@@ -381,6 +381,9 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
             'running': running, 'step': (pending[-1] if pending else None) if running else None,
             'said': found.get('last_text'), 'activity': activity[-4:], 'updated': changed,
             'started': started_at(path, os.stat(path)), 'children': [], 'kind': 'agent', 'phase': phase,
+            # A teammate waits for its next message instead of ending, so a quiet one is idle, not finished.
+            # ponytail: assumes the team is still up while its session runs; Claude Code writes no shutdown mark.
+            'idle': not running and meta.get('taskKind') == 'in_process_teammate',
         }
         steps = as_steps(found.get('todos'))
         if steps:
@@ -438,11 +441,12 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         if parent in nodes and child in nodes:
             nodes[parent]['children'].append(nodes[child])
     top = [n for key, n in nodes.items() if parents.get(key) not in nodes]
-    # Running subagents come first, then the rest, each group in start order.
+    # Running subagents come first, then idle teammates, then finished ones, each group in start order.
+    rank = lambda n: 0 if n['running'] else 1 if n.get('idle') else 2
     for item in nodes.values():
-        item['children'].sort(key=lambda c: (not c['running'], c['started']))
+        item['children'].sort(key=lambda c: (rank(c), c['started']))
     top.sort(key=lambda n: (n['running'], n['started']))
-    return sorted(top[-SUB_LIMIT:], key=lambda n: not n['running'])
+    return sorted(top[-SUB_LIMIT:], key=rank)
 
 
 def process_starts(pids):

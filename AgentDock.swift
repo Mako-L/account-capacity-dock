@@ -26,6 +26,7 @@ struct AgentSubagent: Codable, Identifiable {
     let progress: Double?
     let phase: String?
     let summary: String?
+    let idle: Bool?
 
     var heading: String { kind == "workflow" ? (name ?? "Workflow") : (description ?? name ?? "Subagent") }
     var stepCount: String? {
@@ -33,8 +34,8 @@ struct AgentSubagent: Codable, Identifiable {
         guard let steps, !steps.isEmpty else { return nil }
         return "\(steps.filter { $0.status == "done" }.count)/\(steps.count) steps"
     }
-    var signal: Color { running == true ? .yellow : .green }
-    var stateLabel: String { running == true ? "Working" : "Finished" }
+    var signal: Color { running == true ? .yellow : idle == true ? .gray : .green }
+    var stateLabel: String { running == true ? "Working" : idle == true ? "Idle" : "Finished" }
     var kindLabel: String { kind == "workflow" ? "Workflow" : kind == "codex" ? "Codex" : (name ?? "Subagent") }
     func withoutActivity() -> AgentSubagent {
         var copy = self
@@ -420,7 +421,7 @@ struct SubagentList: View {
                     }
                 }
                 let kids = sub.kind == "workflow" ? 0 : sub.children?.count ?? 0
-                Text([sub.running == true ? "▸ " + (sub.step ?? "Working") : "Finished", sub.stepCount, ago(sub.updated),
+                Text([sub.running == true ? "▸ " + (sub.step ?? "Working") : sub.stateLabel, sub.stepCount, ago(sub.updated),
                       kids > 0 ? "\(kids) inside" : nil].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
