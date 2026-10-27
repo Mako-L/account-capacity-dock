@@ -305,6 +305,10 @@ def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
                 fill = round(min(max(window['used'], 0), 100) / 100 * bar_width)
                 bar = rgb(signal_color({}, window['used']), '━' * fill) + dim('─' * (bar_width - fill))
                 lines.append(f"  {label} {bar} {window['used']:3.0f}%{dim(' ' + tail)}")
+                if extended and detail == 3 and window.get('fullIn'):
+                    hours = window['fullIn'] / 3600
+                    pace = f'{hours / 24:.0f}d {hours % 24:.0f}h' if hours >= 24 else f'{hours:.0f}h' if hours >= 1 else f"{window['fullIn'] / 60:.0f}m"
+                    lines.append('  ' + dim(fit(f"{' ' * label_width} at this pace, full in {pace}", width - 2)))
                 spent = window.get('spent')
                 if extended and detail == 3 and spent and spent.get('tokens'):
                     cost = '' if spent.get('costUsd') is None else f" · ${spent['costUsd']:.2f}"

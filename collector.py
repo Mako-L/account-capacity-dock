@@ -182,9 +182,14 @@ def window_usage(accounts):
             length = WINDOW_SECONDS.get(window['label'])
             if not length:
                 continue
+            reset = window.get('resetAt')
+            if reset and reset > now and 0 < window['used'] < 100:
+                # At this pace: the time the window took for its share so far, scaled to the rest.
+                elapsed = now - (reset - length)
+                left = elapsed * (100 - window['used']) / window['used']
+                window['fullIn'] = left if left < reset - now else None
             if entry.get('source') != 'CLI proxy':
                 continue
-            reset = window.get('resetAt')
             start = (reset - length) if reset and reset > now else now - length
             begin = max(start, now - length) // 3600 * 3600
             used = proxy_usage(f'start={stamp(begin)}&end={end}')

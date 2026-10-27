@@ -9,6 +9,7 @@ struct CapacityWindow: Codable, Identifiable {
     let detail: String?
     let spent: WindowSpend?
     let usedUpIn: Double?
+    let fullIn: Double?
     var id: String { label }
 }
 
@@ -318,6 +319,7 @@ struct AccountCard: View {
                         Text(resetTime(window.resetAt)).font(.system(size: 10)).foregroundStyle(.secondary)
                         if let detail = window.detail { Text(detail).font(.system(size: 10)).foregroundStyle(.secondary) }
                         if let spent = window.spent { Text(spent.line).font(.system(size: 10)).foregroundStyle(.secondary) }
+                        if let fullIn = window.fullIn { Text("At this pace, full in \(span(fullIn))").font(.system(size: 10)).foregroundStyle(.secondary) }
                         if let usedUpIn = window.usedUpIn { Text("Used up in \(span(usedUpIn))").font(.system(size: 10)).foregroundStyle(.secondary) }
                     }
                 }

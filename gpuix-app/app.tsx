@@ -41,7 +41,7 @@ const ICON: Record<string, string> = {
 const CUBE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M12 .13 1.89 5.68 1.47 6.4v11.19l.42.72 9.61 5.55h1l9.61-5.55.42-.72V6.4l-.42-.72L12.5.13Z"/></svg>'
 const CUBE_FACET = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M2.66 6.34h18.55l.3.51-9.28 16.07-.23-.06V12.34l-.3-.51-9.11-5.26Z"/></svg>'
 
-type Window = { label: string; used: number; resetAt?: number | null; detail?: string | null; spent?: { tokens?: number | null; costUsd?: number | null; planPercent?: number | null }; usedUpIn?: number | null }
+type Window = { label: string; used: number; resetAt?: number | null; detail?: string | null; spent?: { tokens?: number | null; costUsd?: number | null; planPercent?: number | null }; usedUpIn?: number | null; fullIn?: number | null }
 type Usage = { tokens?: number | null; inputTokens?: number | null; outputTokens?: number | null; costUsd?: number | null; status?: string; scope?: string }
 type Account = {
   id: string; provider: string; title: string; email: string; plan: string; status: string; message: string
@@ -167,6 +167,7 @@ function Card({ account, all, onAction, confirm }: {
           </div>
           <Bar value={w.used} color={w.used >= 100 ? C.red : PROVIDER[account.provider]} />
           <Text size={10} color={C.muted}>{w.detail ?? resetIn(w.resetAt)}</Text>
+          {w.fullIn ? <Text size={10} color={C.muted}>{`At this pace, full in ${span(w.fullIn)}`}</Text> : null}
           {w.usedUpIn ? <Text size={10} color={C.muted}>{`Used up in ${span(w.usedUpIn)}`}</Text> : null}
           {w.spent ? <Text size={10} color={C.muted}>{`Used ${count(w.spent.tokens)} tokens${w.spent.costUsd == null ? '' : ` · $${w.spent.costUsd.toFixed(2)}`}${planShare(w.spent.planPercent)}`}</Text> : null}
         </div>))}

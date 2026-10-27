@@ -74,6 +74,15 @@ class CapacityParsingTests(unittest.TestCase):
         self.assertEqual((codex['inputTokens'], codex['cacheReadTokens']), (10, 40))
         self.assertEqual(claude['scope'], 'account')
 
+    def test_the_pace_so_far_says_when_a_window_fills(self):
+        now = collector.time.time()
+        # A 5-hour window, 1 h in and 40% used: 60% left at 40% an hour is 1.5 h, before the reset.
+        fast = {'label': '5-hour', 'used': 40, 'resetAt': now + 4 * 3600}
+        slow = {'label': 'Weekly', 'used': 5, 'resetAt': now + 6 * 86400}
+        collector.window_usage([{'source': 'Claude Code login', 'windows': [fast, slow]}])
+        self.assertAlmostEqual(fast['fullIn'], 1.5 * 3600, delta=5)
+        self.assertIsNone(slow['fullIn'])
+
     def test_a_full_window_reports_when_it_ran_out(self):
         series = [{'hour': '2026-10-20T00:00:00Z', 'requests': 5, 'failed_requests': 0},
                   {'hour': '2026-10-20T03:00:00Z', 'requests': 9, 'failed_requests': 1},

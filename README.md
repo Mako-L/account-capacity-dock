@@ -210,7 +210,9 @@ week of the plan's list price (Pro $20, Max 5x $100, Max 20x $200 a month). For
 example, "1,200% of the plan price" means the week used 12 weeks of the plan's price
 at API rates. Codex shows no plan price yet. When a window reaches 100%, the card also says how long
 it took: "Used up in 1d 10h" counts from the window start to the last hour in which
-the account still served requests.
+the account still served requests. Before that, if the current pace would use up the
+window before it resets, the card says "At this pace, full in 1d 2h". The pace is the
+share used so far, divided by the time since the window started.
 
 Agent and subagent cards show how long the work ran: "Running for 12m" while it
 works, and "Took 3h 20m" (from start to last write) once it ends. The plugin counts every request against the login that served it.
