@@ -131,6 +131,8 @@
   .bubble .bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,.09); overflow: hidden; margin: 0 0 4px; }
   .bubble .bar i { display: block; height: 100%; border-radius: 3px; }
   .bubble .reset { font-size: 11px; color: #9a9aa2; margin: 0 0 12px; }
+  /* The window's own lines (reset, pace, spend) sit together under its bar. */
+  .bubble .reset:has(+ .reset) { margin-bottom: 3px; }
   .bubble .msg { font-size: 13px; color: #9a9aa2; margin: 0 0 12px; }
   .bubble .usage { border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; font-size: 12px; color: #c9c9cf; }
   .bubble .usage div { display: flex; justify-content: space-between; }
@@ -388,19 +390,29 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   // Demo accounts for the live dock clone. Same rules as the app: ring = most constrained window
   // (Cursor: Cursor Models), green under 70%, yellow from 70, orange from 85, red at 100.
   const H = 3600 * 1000, now = Date.now();
+  // Window: [label, % used, hours to reset, { tokens, cost, plan %, full in h, used up in h }].
   const ACCOUNTS = [
-    { p: 'Claude', t: 'studio', e: 'studio@example.com', s: 'Available', w: [['5-hour', 22, 3.1], ['Weekly', 38, 109]] },
-    { p: 'Claude', t: 'research', e: 'research@example.com', s: 'Available', w: [['5-hour', 64, 1.3], ['Weekly', 81, 46]] },
-    { p: 'Claude', t: 'side-project', e: 'side@example.com', s: 'At limit', w: [['5-hour', 100, 0.5], ['Weekly', 100, 14]] },
+    { p: 'Claude', t: 'studio', e: 'studio@example.com', s: 'Available', day: ['48.2M', '$41.87'], w: [
+      ['5-hour', 22, 3.1, { tokens: '31.0M', cost: '$18.40' }], ['Weekly', 38, 109, { tokens: '288.0M', cost: '$164.20', plan: '356%', full: 96 }]] },
+    { p: 'Claude', t: 'research', e: 'research@example.com', s: 'Available', day: ['170.0M', '$96.30'], w: [
+      ['5-hour', 64, 1.3, { tokens: '104.0M', cost: '$61.10' }], ['Weekly', 81, 46, { tokens: '690.0M', cost: '$402.75', plan: '873%', full: 28 }]] },
+    { p: 'Claude', t: 'side-project', e: 'side@example.com', s: 'At limit', day: ['150.0M', '$88.12'], w: [
+      ['5-hour', 100, 0.5, { tokens: '121.0M', cost: '$74.90' }], ['Weekly', 100, 14, { tokens: '905.0M', cost: '$512.60', plan: '1,111%', usedUp: 34 }]] },
     { p: 'Claude', t: 'archive', e: 'archive@example.com', s: 'Reconnect', w: [], m: 'Sign in again in the provider app or proxy.' },
-    { p: 'Codex', t: 'Pro Max', e: 'builder@example.com', s: 'Available', plan: 'Pro Max', w: [['Weekly', 12, 149]] },
-    { p: 'Codex', t: 'Pro', e: 'reviewer@example.com', s: 'Available', plan: 'Pro', w: [['5-hour', 47, 2.4], ['Weekly', 73, 59]] },
+    { p: 'Codex', t: 'Pro Max', e: 'builder@example.com', s: 'Available', plan: 'Pro Max', day: ['17.0M', '$9.80'], w: [
+      ['Weekly', 12, 149, { tokens: '41.0M', cost: '$22.15', full: 139 }]] },
+    { p: 'Codex', t: 'Pro', e: 'reviewer@example.com', s: 'Available', plan: 'Pro', day: ['26.0M', '$14.60'], w: [
+      ['5-hour', 47, 2.4, { tokens: '12.0M', cost: '$6.30' }], ['Weekly', 73, 59, { tokens: '96.0M', cost: '$51.90', full: 40 }]] },
     { p: 'Cursor', t: 'cursor', e: 'dev@example.com', s: 'Available', plan: 'Pro', w: [['Cursor Models', 28, 400], ['Other Models', 9, 400], ['Grok Bot', 3, 20]] },
   ];
-  const TODAY = { Claude: ['48.2M', '$41.87'], Codex: ['3.4M', '$6.12'], Cursor: ['0', '$0.00'] };
+  const TODAY = { Cursor: ['5.1M', '$3.25'] };
   const PROVIDER = { Claude: '#e69860', Codex: '#5cd6b3', Cursor: '#b384f2' };
   const used = a => a.p === 'Cursor' ? a.w[0][1] : a.w.length ? Math.max(...a.w.map(w => w[1])) : null;
   const signal = a => a.s === 'Reconnect' ? '#ff9f0a' : used(a) >= 100 ? '#ff453a' : used(a) >= 85 ? '#ff9f0a' : used(a) >= 70 ? '#ffd60a' : '#30d158';
+  const span = h => { const m = Math.round(h * 60); return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
+  // What the account used inside one window, as the app's card shows it under the bar.
+  const spent = x => !x ? '' : [x.full ? `At this pace, full in ${span(x.full)}` : '', x.usedUp ? `Used up in ${span(x.usedUp)}` : '',
+    `Used ${x.tokens} tokens · ${x.cost}${x.plan ? ` · ${x.plan} of the plan price` : ''}`].filter(Boolean).map(t => `<p class="reset">${t}</p>`).join('');
   const reset = h => { const m = Math.round(h * 60); return m < 60 ? `Resets in ${m}m` : m < 1440 ? `Resets in ${Math.floor(m / 60)}h ${m % 60}m` : `Resets in ${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
   // Circular ring (the app's "Circle" icon shape) that starts at the top and runs clockwise.
   const RING = 'M23 4 a19 19 0 1 1 0 38 a19 19 0 1 1 0 -38';
@@ -457,10 +469,10 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
       <div style="height:10px"></div>
       ${a.w.length ? a.w.map(w => `<div class="row"><span>${w[0]}</span><span>${w[1]}% used</span></div>
         <div class="bar"><i style="width:${w[1]}%;background:${w[1] >= 100 ? '#ff453a' : PROVIDER[a.p]}"></i></div>
-        <p class="reset">${reset(w[2])}</p>`).join('') : `<p class="msg">${a.m}</p>`}
-      <div class="usage"><div><b>Today · local ${a.p === 'Cursor' ? 'Cursor CLI' : a.p} usage</b></div>
-        <div><span>Tokens</span><span>${TODAY[a.p][0]}</span></div>
-        <div><span>API-equivalent cost</span><span>${TODAY[a.p][1]}</span></div></div>
+        <p class="reset">${reset(w[2])}</p>${spent(w[3])}`).join('') : `<p class="msg">${a.m}</p>`}
+      ${a.day || TODAY[a.p] ? `<div class="usage"><div><b>${a.day ? 'Last 24 h · this account' : 'Today · local Cursor CLI usage'}</b></div>
+        <div><span>Tokens</span><span>${(a.day || TODAY[a.p])[0]}</span></div>
+        <div><span>API-equivalent cost</span><span>${(a.day || TODAY[a.p])[1]}</span></div></div>` : ''}
       <p class="src">${a.p === 'Cursor' ? 'Cursor CLI' : 'CLI proxy'} · demo account</p>`;
     if (matchMedia('(max-width: 760px)').matches) { bubble.classList.add('open'); return; }
     const r = cell.getBoundingClientRect(), b = bubble.offsetHeight;
