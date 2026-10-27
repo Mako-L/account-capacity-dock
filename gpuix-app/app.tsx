@@ -88,6 +88,19 @@ function readSettings(): Record<string, string> {
   try { return JSON.parse(readFileSync(path.join(HOME, 'settings.json'), 'utf8')) } catch { return {} }
 }
 
+// CLIProxyAPI's own web panel, where logins are added and removed.
+function proxyPanel() {
+  const settings = readSettings()
+  return `${(settings.PROXY_URL || `http://127.0.0.1:${settings.CLAUDE_PROXY_PORT || '8317'}`).replace(/\/+$/, '')}/management.html`
+}
+function openProxyPanel(): string {
+  const url = proxyPanel()
+  // Over SSH a browser would open on the server, so the address is shown instead.
+  if (process.env.SSH_CONNECTION) return `Proxy panel: ${url}`
+  const command = process.platform === 'darwin' ? ['open', url] : process.platform === 'win32' ? ['cmd', '/c', 'start', '', url] : ['xdg-open', url]
+  try { return Bun.spawnSync(command).exitCode === 0 ? '' : `Proxy panel: ${url}` } catch { return `Proxy panel: ${url}` }
+}
+
 // No names or emails, for screen sharing: every view then leaves the name out.
 const masked = (accounts: Account[]): Account[] => accounts.map(a => ({ ...a, title: '', email: '' }))
 
@@ -393,6 +406,7 @@ function App() {
           {WIDGET === 'app' && <IconButton small={tiny} icon="grid" label="All accounts" active={view === 'accounts'} onClick={() => { setOpened(null); setView(view === 'accounts' ? 'dock' : 'accounts') }} />}
           <IconButton small={tiny} icon="gear" label="Settings" active={view === 'settings'} onClick={() => { setOpened(null); setView(view === 'settings' ? HOME_VIEW : 'settings') }} />
           {!tiny && view !== 'agents' && <IconButton icon="refresh" label="Refresh" onClick={() => !busy && collect(['--refresh'])} />}
+          {view !== 'agents' && <IconButton small={tiny} icon="server" label="Proxy panel" onClick={() => setMessage(openProxyPanel())} />}
           {view !== 'agents' && <IconButton small={tiny} icon={showNames ? 'eye' : 'eyeOff'} label={showNames ? 'Hide account names' : 'Show account names'} onClick={toggleNames} />}
           {PIN_STATE && <IconButton small={tiny} icon="pin" label={pinned ? 'Unpin' : 'Pin to every tab'} active={pinned} onClick={togglePin} />}
         </div>
@@ -408,6 +422,7 @@ function App() {
         <div style={{ flexGrow: 1 }} />
         {message ? <Text size={12} color={C.muted} style={{ maxWidth: 420, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{message}</Text> : null}
         {PIN_STATE && <SmallButton label={pinned ? 'Unpin' : 'Pin to every tab'} onClick={togglePin} />}
+        <SmallButton label="Proxy panel" onClick={() => setMessage(openProxyPanel())} />
         {view !== 'agents' && <SmallButton label={busy ? 'Refreshing…' : 'Refresh'} onClick={() => !busy && collect(['--refresh'])} />}
       </div>
       {snapshot.warning ? <div style={{ paddingLeft: 16, paddingBottom: 8 }}><Text size={12} color={C.red}>{snapshot.warning}</Text></div> : null}
@@ -448,6 +463,7 @@ function App() {
           <div style={{ display: 'flex', gap: 8 }}>
             <SmallButton label="Save and test" primary onClick={() => !busy && saveProxy(false)} />
             <SmallButton label="Use local proxy" onClick={() => !busy && saveProxy(true)} />
+            <SmallButton label="Open proxy panel" onClick={() => setMessage(openProxyPanel())} />
           </div>
           <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
           <Text size={17} weight={600}>Privacy</Text>

@@ -229,7 +229,9 @@ ssh -t my-server 'cd account-capacity-dock && ./capacity ui --terminal'
 On macOS, the dock's **All accounts** and **Settings** buttons open this app when
 [Bun](https://bun.sh) is installed, so the dock and the terminal share one dashboard.
 Its Settings page also holds the dock settings: size, opacity, icon shape, names,
-screen edge and agents. The first click installs the GPUIX packages into
+screen edge and agents. The **Proxy panel** button opens CLIProxyAPI's web panel
+(`/management.html`), where you add and remove logins. Over SSH it shows the address
+instead. The first click installs the GPUIX packages into
 `~/.mako-capacity/gpuix-app`, which takes a few seconds. Until that finishes, or
 without Bun, the buttons open the built-in macOS windows.
 
