@@ -10,14 +10,14 @@ export type Step = { title: string; status: 'done' | 'active' | 'pending' }
 export type Subagent = {
   id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
   said?: string | null; activity?: Agent['activity']; children?: Subagent[]; idle?: boolean; kind?: 'agent' | 'workflow' | 'codex'
-  steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string; usage?: Usage | null
+  steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string; usage?: Usage | null; started?: number | null
 }
 export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
 export type Agent = {
   id: string; pane: string | null; agent: string; name: string; tabName?: string | null; status: string; title?: string | null; cwd: string; project: string
   task?: string | null; prompt?: string | null; now?: string | null; said?: string | null; steps: Step[]
   activity: { at: number | null; text: string; kind: 'say' | 'tool' }[]; updated?: number | null; source: string
-  progress: number | null; stepCount?: [number, number]; subagents: Subagent[]; usage?: Usage | null; totalUsage?: Usage | null
+  progress: number | null; stepCount?: [number, number]; subagents: Subagent[]; usage?: Usage | null; totalUsage?: Usage | null; started?: number | null
 }
 type Snapshot = { at?: number; agents: Agent[]; observer?: boolean }
 
@@ -39,6 +39,18 @@ const SOURCE: Record<string, string> = {
   tasks: 'Steps from the agent’s own task list', report: 'Reported by the agent',
   observer: 'Steps named by the observer model', activity: 'Live tool calls; no steps yet',
 }
+
+// A length of time, short: 45s, 12m, 3h 20m, 2d 4h.
+export function span(seconds: number) {
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  if (s < 86400) return `${Math.floor(s / 3600)}h${s % 3600 >= 60 ? ` ${Math.floor(s % 3600 / 60)}m` : ''}`
+  return `${Math.floor(s / 86400)}d${s % 86400 >= 3600 ? ` ${Math.floor(s % 86400 / 3600)}h` : ''}`
+}
+// How long a piece of work ran: still going, or the time from its start to its last write.
+const runTime = (started?: number | null, updated?: number | null, running?: boolean) =>
+  !started ? '' : running ? `Running for ${span(Date.now() / 1000 - started)}` : updated ? `Took ${span(updated - started)}` : ''
 
 export function ago(at?: number | null) {
   if (!at) return ''
@@ -258,7 +270,7 @@ export function AgentDetail({ agent, onFocus, onSubagent, openSub }: { agent: Ag
           <Text size={11} color={C.muted}>{usageLine(agent.usage)}</Text>
           {agent.totalUsage && agent.totalUsage.cost !== agent.usage.cost ? <Text size={11} color={C.muted}>{`With subagents: ${usageLine(agent.totalUsage)}`}</Text> : null}
         </Section>)}
-      <Text size={10} color={C.muted}>{`${SOURCE[agent.source] ?? ''}${agent.pane ? ' · pane ' + agent.pane : ''}`}</Text>
+      <Text size={10} color={C.muted}>{[runTime(agent.started, agent.updated, agent.status === 'working' || agent.status === 'blocked'), SOURCE[agent.source], agent.pane ? 'pane ' + agent.pane : ''].filter(Boolean).join(' · ')}</Text>
     </div>
   )
 }
@@ -380,7 +392,7 @@ export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; on
         <Section title="Tokens">
           <Text size={11} color={C.muted}>{usageLine(sub.usage)}</Text>
         </Section>)}
-      <Text size={10} color={C.muted}>{`${sub.running ? 'Running' : sub.idle ? 'Idle' : 'Finished'} · last write ${ago(sub.updated)}`}</Text>
+      <Text size={10} color={C.muted}>{[sub.running ? 'Running' : sub.idle ? 'Idle' : 'Finished', runTime(sub.started, sub.updated, sub.running), `last write ${ago(sub.updated)}`].filter(Boolean).join(' · ')}</Text>
     </div>
   )
 }

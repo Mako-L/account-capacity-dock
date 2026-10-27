@@ -183,7 +183,7 @@ def kitty_image(png, offset=0):
 
 
 def count(value):
-    return f'{value / 1e6:.1f}M' if value >= 1e6 else f'{value / 1e3:.1f}K' if value >= 1e3 else f'{value:.0f}'
+    return f'{value / 1e9:.1f}B' if value >= 1e9 else f'{value / 1e6:.1f}M' if value >= 1e6 else f'{value / 1e3:.1f}K' if value >= 1e3 else f'{value:.0f}'
 
 
 RING_ONLY = 12
@@ -305,6 +305,16 @@ def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
                 fill = round(min(max(window['used'], 0), 100) / 100 * bar_width)
                 bar = rgb(signal_color({}, window['used']), '━' * fill) + dim('─' * (bar_width - fill))
                 lines.append(f"  {label} {bar} {window['used']:3.0f}%{dim(' ' + tail)}")
+                spent = window.get('spent')
+                if extended and detail == 3 and spent and spent.get('tokens'):
+                    cost = '' if spent.get('costUsd') is None else f" · ${spent['costUsd']:.2f}"
+                    if window.get('usedUpIn'):
+                        hours = window['usedUpIn'] / 3600
+                        cost += f" · used up in {hours / 24:.0f}d {hours % 24:.0f}h" if hours >= 24 else f" · used up in {hours:.0f}h"
+                    share = spent.get('planPercent')
+                    if share is not None:
+                        cost += f" · {share / 100:.0f}× plan price" if share >= 200 else f" · {share}% of plan price"
+                    lines.append('  ' + dim(fit(f"{' ' * label_width} used {count(spent['tokens'])} tokens{cost}", width - 2)))
             if detail == 3 and account.get('message') and (extended or account.get('status') != 'live'):
                 lines.append('  ' + dim(fit(account['message'], width - 2)))
             if detail == 3 or not rings:

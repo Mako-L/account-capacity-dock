@@ -28,6 +28,7 @@ struct AgentSubagent: Codable, Identifiable {
     let summary: String?
     let idle: Bool?
     let usage: AgentUsage?
+    let started: Double?
 
     var heading: String { kind == "workflow" ? (name ?? "Workflow") : (description ?? name ?? "Subagent") }
     var stepCount: String? {
@@ -92,6 +93,7 @@ struct AgentItem: Codable, Identifiable {
     var subagents: [AgentSubagent]?
     let usage: AgentUsage?
     let totalUsage: AgentUsage?
+    let started: Double?
 
     var provider: String { agent == "codex" ? "Codex" : "Claude" }
     var heading: String { task ?? title ?? name ?? provider }
@@ -120,6 +122,21 @@ struct AgentItem: Codable, Identifiable {
 
 struct AgentSnapshot: Codable {
     let agents: [AgentItem]
+}
+
+/// A length of time, short: 45s, 12m, 3h 20m, 2d 4h.
+func span(_ seconds: Double) -> String {
+    let s = max(0, Int(seconds))
+    if s < 60 { return "\(s)s" }
+    if s < 3600 { return "\(s / 60)m" }
+    if s < 86400 { return s % 3600 / 60 == 0 ? "\(s / 3600)h" : "\(s / 3600)h \(s % 3600 / 60)m" }
+    return s % 86400 / 3600 == 0 ? "\(s / 86400)d" : "\(s / 86400)d \(s % 86400 / 3600)h"
+}
+
+/// How long a piece of work ran: still going, or the time from its start to its last write.
+func runTime(started: Double?, updated: Double?, running: Bool) -> String? {
+    guard let started else { return nil }
+    return running ? "Running for " + span(Date().timeIntervalSince1970 - started) : updated.map { "Took " + span($0 - started) }
 }
 
 func ago(_ timestamp: Double?) -> String {
@@ -341,7 +358,8 @@ struct AgentCard: View {
                 }
             }
             HStack {
-                Text(ago(agent.updated)).font(.system(size: 10)).foregroundStyle(.secondary)
+                Text([runTime(started: agent.started, updated: agent.updated, running: agent.live), ago(agent.updated)].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
                 Spacer()
                 if agent.pane != nil { Button("Go to pane", action: focus) }
             }
@@ -526,7 +544,8 @@ struct SubagentCard: View {
                 cardSection("Tokens")
                 Text(usage).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Text("Last write \(ago(sub.updated))").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text([runTime(started: sub.started, updated: sub.updated, running: sub.running == true), "last write \(ago(sub.updated))"].compactMap { $0 }.joined(separator: " · "))
+                .font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .padding(16)
         .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 18))

@@ -7,7 +7,21 @@ struct CapacityWindow: Codable, Identifiable {
     let used: Double
     let resetAt: Double?
     let detail: String?
+    let spent: WindowSpend?
+    let usedUpIn: Double?
     var id: String { label }
+}
+
+/// What this account used inside one quota window, from the proxy's usage tracker.
+struct WindowSpend: Codable {
+    let tokens: Double?
+    let costUsd: Double?
+    let planPercent: Double?
+    var line: String {
+        // API-equivalent spend against one week of the plan's price: 300% means three weeks of the plan.
+        let plan = planPercent.map { $0 >= 200 ? String(format: "%.0f× the plan price", $0 / 100) : String(format: "%.0f%% of the plan price", $0) }
+        return ["Used \(tokens.map(formatCount) ?? "—") tokens", costUsd.map { String(format: "$%.2f", $0) }, plan].compactMap { $0 }.joined(separator: " · ")
+    }
 }
 
 struct CapacityAccount: Codable, Identifiable {
@@ -56,6 +70,7 @@ struct LocalUsage: Codable {
 }
 
 func formatCount(_ value: Double) -> String {
+    if value >= 1_000_000_000 { return String(format: "%.1fB", value / 1_000_000_000) }
     if value >= 1_000_000 { return String(format: "%.1fM", value / 1_000_000) }
     if value >= 1_000 { return String(format: "%.1fK", value / 1_000) }
     return String(format: "%.0f", value)
@@ -302,6 +317,8 @@ struct AccountCard: View {
                         }.frame(height: 5)
                         Text(resetTime(window.resetAt)).font(.system(size: 10)).foregroundStyle(.secondary)
                         if let detail = window.detail { Text(detail).font(.system(size: 10)).foregroundStyle(.secondary) }
+                        if let spent = window.spent { Text(spent.line).font(.system(size: 10)).foregroundStyle(.secondary) }
+                        if let usedUpIn = window.usedUpIn { Text("Used up in \(span(usedUpIn))").font(.system(size: 10)).foregroundStyle(.secondary) }
                     }
                 }
                 if !account.message.isEmpty {

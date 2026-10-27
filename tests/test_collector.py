@@ -51,14 +51,41 @@ class CapacityParsingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             prices = Path(directory) / 'prices.json'
             prices.write_text(json.dumps({'data': {'m': price}}))
-            with patch.object(collector, 'PRICES', prices), patch.object(collector, 'management', return_value={'items': items}):
+            with patch.object(collector, 'PRICES', prices), patch.object(collector, 'management', return_value={'items': items}) as asked, \
+                    patch.object(collector, 'cache_dir', return_value=Path(directory)):
                 usage = collector.proxy_usage()
+                entry = {'source': 'CLI proxy', 'provider': 'Claude', 'email': 'a@x.test', 'subscription': {'name': 'Pro', 'monthlyUsd': 52 / 12},
+                         'windows': [{'label': '5-hour', 'used': 40, 'resetAt': collector.time.time() + 3600}, {'label': 'Weekly · Fable', 'used': 0},
+                                     {'label': 'Weekly', 'used': 50}]}
+                collector.window_usage([entry])
+                collector.window_usage([entry])
+        # One query for 24 h, one per window (5-hour, Weekly), and the second run reads the cache.
+        self.assertIn('start=', asked.call_args_list[1].args[0])
+        self.assertEqual(asked.call_count, 3)
+        self.assertEqual(entry['windows'][0]['spent']['tokens'], 129)
+        self.assertNotIn('spent', entry['windows'][1])
+        # 43 USD spent against a plan that costs 1 USD a week.
+        self.assertEqual(entry['windows'][2]['spent']['planPercent'], 4300)
+        self.assertNotIn('planPercent', entry['windows'][0]['spent'])
         claude, codex = usage['claude-a@x.test'], usage['codex-b@x.test']
         self.assertEqual((claude['inputTokens'], claude['cacheReadTokens'], claude['tokens']), (20, 100, 129))
         self.assertAlmostEqual(claude['costUsd'], 20 + 8 + 10 + 5)
         # Codex counts cached tokens inside the input: only 10 of the 50 are fresh.
         self.assertEqual((codex['inputTokens'], codex['cacheReadTokens']), (10, 40))
         self.assertEqual(claude['scope'], 'account')
+
+    def test_a_full_window_reports_when_it_ran_out(self):
+        series = [{'hour': '2026-10-20T00:00:00Z', 'requests': 5, 'failed_requests': 0},
+                  {'hour': '2026-10-20T03:00:00Z', 'requests': 9, 'failed_requests': 1},
+                  {'hour': '2026-10-20T04:00:00Z', 'requests': 4, 'failed_requests': 4}]
+        begin = collector.dt.datetime(2026, 10, 20, tzinfo=collector.dt.timezone.utc).timestamp()
+        with tempfile.TemporaryDirectory() as directory, patch.object(collector, 'cache_dir', return_value=Path(directory)), \
+                patch.object(collector, 'management', return_value={'series': series}) as asked:
+            took = collector.used_up_in('claude-a@x.test', begin, '2026-10-21T00:00:00Z')
+            again = collector.used_up_in('claude-a@x.test', begin, '2026-10-21T00:00:00Z')
+        # The 04:00 hour only failed: the limit ran out at the end of the 03:00 hour.
+        self.assertEqual((took, again), (4 * 3600, 4 * 3600))
+        self.assertEqual(asked.call_count, 1)
 
     def test_without_a_proxy_the_local_claude_and_codex_logins_show(self):
         with tempfile.TemporaryDirectory() as directory:

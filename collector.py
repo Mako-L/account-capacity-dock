@@ -67,21 +67,41 @@ WARNINGS = []  # ponytail: module-level, one collector run per process.
 PRICES = Path.home() / '.cache/codeburn/litellm-pricing.json'
 
 
-def proxy_usage():
-    """Tokens and API-equivalent cost per proxy account over the last 24 h, keyed 'claude-<email>'.
+def tracker_items(query):
+    """Rows of the CAP Token Usage Tracker plugin for one time range, or None without the plugin.
+
+    A week query can take 5 s, so each query runs at most every 5 minutes. Each collector
+    run is a new process, so the rows wait in a file (counts only, no credentials).
+    """
+    path = cache_dir() / 'tracker-usage.json'
+    cache = read_json(path)
+    held = cache.get(query)
+    if held and time.time() - held[0] < 300:
+        return held[1]
+    try:
+        items = management('plugins/cap-token-usage-tracker/stats/groups?' + query, root='/v0/resource/').get('items') or []
+    except (OSError, ValueError, RuntimeError, urllib.error.URLError):
+        return held[1] if held else None
+    cache = {key: value for key, value in cache.items() if time.time() - value[0] < 3600}
+    cache[query] = (time.time(), items)
+    write_private(path, cache)
+    return items
+
+
+def proxy_usage(query='range=24h'):
+    """Tokens and API-equivalent cost per proxy account for one time range, keyed 'claude-<email>'.
 
     The CAP Token Usage Tracker plugin counts each request against the login that served it.
     Prices come from CodeBurn's price list. Without the plugin this returns nothing.
     """
-    try:
-        items = management('plugins/cap-token-usage-tracker/stats/groups?range=24h', root='/v0/resource/').get('items') or []
-    except (OSError, ValueError, RuntimeError, urllib.error.URLError):
+    items = tracker_items(query)
+    if items is None:
         return {}
     prices = read_json(PRICES).get('data') or {}
     found = {}
     for item in items:
         total = found.setdefault(str(item.get('source', '')).lower(), {
-            'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'costUsd': 0.0, 'unpricedModels': 0})
+            'source': item.get('source'), 'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'costUsd': 0.0, 'unpricedModels': 0})
         read, write, output = item.get('cache_read_tokens') or 0, item.get('cache_creation_tokens') or 0, item.get('output_tokens') or 0
         # OpenAI counts cached tokens inside the input, Anthropic counts them apart.
         fresh = (item.get('input_tokens') or 0) - (read if item.get('provider') == 'codex' else 0)
@@ -98,6 +118,86 @@ def proxy_usage():
         total.update(tokens=total['inputTokens'] + total['outputTokens'] + total['cacheReadTokens'] + total['cacheWriteTokens'],
                      scope='account', status='live', fetchedAt=now, message='', estimated=False)
     return found
+
+
+WINDOW_SECONDS = {'5-hour': 5 * 3600, 'Weekly': 7 * 86400}
+# Monthly list prices in USD. ponytail: hard-coded, update when Anthropic changes them.
+CLAUDE_TIERS = {'default_claude_max_20x': ('Max 20x', 200), 'default_claude_max_5x': ('Max 5x', 100)}
+
+
+def claude_subscription(headers):
+    """The Claude plan behind a login and its monthly price, read once from the profile endpoint."""
+    try:
+        request = urllib.request.Request('https://api.anthropic.com/api/oauth/profile', headers=headers)
+        with urllib.request.urlopen(request, timeout=10) as response:
+            profile = json.load(response)
+    except (OSError, ValueError, TimeoutError):
+        return None
+    tier = (profile.get('organization') or {}).get('rate_limit_tier')
+    if tier in CLAUDE_TIERS:
+        name, price = CLAUDE_TIERS[tier]
+    elif (profile.get('account') or {}).get('has_claude_pro'):
+        name, price = 'Pro', 20
+    else:
+        return None
+    return {'name': name, 'monthlyUsd': price}
+
+
+def used_up_in(source, begin, end):
+    """Seconds from the window start to the end of the last hour in which this account still served requests.
+
+    A full account fails every request, so its last good hour is when the limit ran out.
+    ponytail: hour precision, as fine as the tracker's buckets.
+    """
+    query = f'source={urllib.parse.quote(source)}&start={dt.datetime.fromtimestamp(begin, dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ}&end={end}'
+    path = cache_dir() / 'tracker-usage.json'
+    cache = read_json(path)
+    held = cache.get(query)
+    if held and time.time() - held[0] < 300:
+        return held[1]
+    try:
+        series = management('plugins/cap-token-usage-tracker/stats?' + query, root='/v0/resource/').get('series') or []
+    except (OSError, ValueError, RuntimeError, urllib.error.URLError):
+        return held[1] if held else None
+    hours = [dt.datetime.fromisoformat(row['hour'].replace('Z', '+00:00')).timestamp() for row in series
+             if (row.get('requests') or 0) > (row.get('failed_requests') or 0)]
+    result = max(hours) + 3600 - begin if hours else None
+    cache[query] = (time.time(), result)
+    write_private(path, cache)
+    return result
+
+
+def window_usage(accounts):
+    """Tokens and cost of each account inside its own 5-hour and weekly quota windows.
+
+    A window starts one length before its reset. The tracker keeps hourly buckets,
+    so starts round down to the hour and accounts with the same start share one query.
+    """
+    now = time.time()
+    stamp = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    # The next full hour as the end keeps each query the same for an hour, so the cache holds.
+    end = stamp((now // 3600 + 1) * 3600)
+    for entry in accounts:
+        for window in entry['windows']:
+            length = WINDOW_SECONDS.get(window['label'])
+            if not length:
+                continue
+            if entry.get('source') != 'CLI proxy':
+                continue
+            reset = window.get('resetAt')
+            start = (reset - length) if reset and reset > now else now - length
+            begin = max(start, now - length) // 3600 * 3600
+            used = proxy_usage(f'start={stamp(begin)}&end={end}')
+            spent = used.get(f"{entry['provider']}-{entry['email']}".lower())
+            if spent:
+                window['spent'] = {'tokens': spent['tokens'], 'costUsd': spent['costUsd']}
+                plan = entry.get('subscription')
+                if plan and window['label'] == 'Weekly':
+                    # API-equivalent spend this week against one week of the plan's price.
+                    window['spent']['planPercent'] = round(100 * spent['costUsd'] / (plan['monthlyUsd'] * 12 / 52))
+            if spent and window['used'] >= 100:
+                # The tracker names Claude logins 'claude-…' and Codex logins 'Codex-…': use its own spelling.
+                window['usedUpIn'] = used_up_in(spent['source'], begin, end)
 
 
 def remote_auths():
@@ -395,7 +495,7 @@ def fetch(item, previous, force=False):
         entry.update(status='loginRequired', message=entry.get('message') or 'Reconnect this account to read capacity.', windows=[], onDemandUsd=None, nextPollAt=now + 300)
         return entry
     if old:
-        for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan', 'onDemandUsd'):
+        for key in ('windows', 'status', 'message', 'fetchedAt', 'nextPollAt', 'plan', 'onDemandUsd', 'subscription'):
             if key in old:
                 entry[key] = old[key]
         if now < old.get('nextPollAt', 0) and (not force or old.get('status') == 'rateLimited'):
@@ -410,6 +510,8 @@ def fetch(item, previous, force=False):
             data = json.load(response)
         if entry['provider'] == 'Claude':
             entry['windows'] = claude_windows(data)
+            if not entry.get('subscription'):
+                entry['subscription'] = claude_subscription(headers)
         elif entry['provider'] == 'Codex':
             entry['windows'] = codex_windows(data)
             entry['plan'] = PLANS.get(data.get('plan_type'), data.get('plan_type') or entry['plan'])
@@ -562,6 +664,7 @@ def collect(force=False, include_usage=True):
     # The proxy's usage tracker counts each account apart. CodeBurn only knows one total per provider.
     # One small request, so it runs on every refresh, even when CodeBurn is skipped.
     accounts = proxy_usage()
+    window_usage(result)
     idle = {'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'tokens': 0, 'costUsd': 0.0,
             'scope': 'account', 'status': 'live', 'fetchedAt': time.time(), 'message': ''}
     for entry in result:

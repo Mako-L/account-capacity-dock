@@ -806,6 +806,7 @@ def collect(run_observer=False):
         used_panes.add(pane)
         agent = base(pane or f'pid-{session["pid"]}', info)
         agent['session'] = session['sessionId']
+        agent['started'] = (session.get('startedAt') or 0) / 1000 or None
         transcript = transcripts.get(session['sessionId'])
         if not transcript or not os.path.exists(transcript):
             transcript = transcripts[session['sessionId']] = transcript_of(session['sessionId'], session.get('cwd', ''), session.get('root', CLAUDE))
@@ -844,6 +845,7 @@ def collect(run_observer=False):
         used_panes.add(pane)
         agent = base(pane or f'pid-{pid}', info or {'agent': 'codex', 'cwd': '', 'agent_status': 'working'})
         agent['session'] = Path(rollout).stem if rollout else None
+        agent['started'] = started_at(rollout, os.stat(rollout)) if rollout and os.path.exists(rollout) else None
         agent = finish(agent, found, updated, rollout)
         agent['subagents'] = []
         agent['usage'] = (found or {}).get('usage')
