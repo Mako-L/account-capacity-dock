@@ -295,10 +295,31 @@ def workflow_meta(script):
     return {'name': pick('name'), 'description': clip(pick('description'), 90), 'phases': [t[1] for t in titles][:12]}
 
 
+def time_steps(times, steps, at, previous):
+    """Note when each step starts and ends, keyed by its title.
+
+    A step starts the first time it shows as in progress. A step that jumps straight to done
+    started at the previous plan update. ponytail: only the transcript tail is read, so a very
+    long session can lose the start of its oldest steps.
+    """
+    if at is None:
+        return
+    for step in steps:
+        title, status = step.get('title'), step.get('status')
+        mark = times.setdefault(title, {})
+        if status in ('in_progress', 'active'):
+            mark.setdefault('start', at)
+        elif status in ('completed', 'done'):
+            mark.setdefault('start', previous or at)
+            mark.setdefault('end', at)
+    for step in steps:
+        step.update(times.get(step.get('title'), {}))
+
+
 def read_claude(events):
     """Task, steps, current tool calls and recent activity from Claude Code transcript events."""
     found = {'title': None, 'prompt': None, 'todos': None, 'pending': {}, 'activity': [], 'last_text': None, 'workflows': {}}
-    tasks, launches = {}, {}
+    tasks, launches, times, last_plan = {}, {}, {}, None
     for event in events:
         kind = event.get('type')
         if kind == 'ai-title':
@@ -337,10 +358,14 @@ def read_claude(events):
                 launches[block.get('id')] = workflow_meta(data['script'])
             if name == 'TodoWrite' and isinstance(data.get('todos'), list):
                 found['todos'] = [{'title': t.get('content'), 'active': t.get('activeForm'), 'status': t.get('status')} for t in data['todos']]
+                time_steps(times, found['todos'], at, last_plan)
+                last_plan = at
             if name == 'TaskUpdate' and str(data.get('taskId')) in tasks:
                 task = tasks[str(data['taskId'])]
                 task['status'] = data.get('status') or task['status']
                 task['title'] = data.get('subject') or task['title']
+                time_steps(times, [task], at, last_plan)
+                last_plan = at
     if tasks and not found['todos']:
         found['todos'] = [t for t in tasks.values() if t['status'] != 'deleted']
     found['activity'] = found['activity'][-8:]
@@ -364,9 +389,19 @@ def started_at(path, stat):
 
 
 def as_steps(todos):
-    return [{'title': clip(t.get('active') if t.get('status') == 'in_progress' and t.get('active') else t.get('title'), 70),
-             'status': {'completed': 'done', 'in_progress': 'active'}.get(t.get('status'), t.get('status') if t.get('status') in ('done', 'active') else 'pending')}
-            for t in todos or [] if t.get('title')]
+    steps = []
+    for t in todos or []:
+        if not t.get('title'):
+            continue
+        status = {'completed': 'done', 'in_progress': 'active'}.get(t.get('status'), t.get('status') if t.get('status') in ('done', 'active') else 'pending')
+        step = {'title': clip(t.get('active') if t.get('status') == 'in_progress' and t.get('active') else t.get('title'), 70), 'status': status}
+        # A done step keeps how long it took. An active one keeps its start, so the view counts up.
+        if status == 'done' and t.get('start') and t.get('end'):
+            step['took'] = round(t['end'] - t['start'])
+        elif status == 'active' and t.get('start'):
+            step['since'] = t['start']
+        steps.append(step)
+    return steps
 
 
 def with_progress(item, steps, guess=None):
@@ -514,8 +549,8 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         if parent in nodes and child in nodes:
             nodes[parent]['children'].append(nodes[child])
     top = [n for key, n in nodes.items() if parents.get(key) not in nodes]
-    # Running subagents come first, then idle teammates, then finished ones, each group in start order.
-    rank = lambda n: 0 if n['running'] else 1 if n.get('idle') else 2
+    # Running subagents come first, then finished ones, then idle teammates, each group in start order.
+    rank = lambda n: 0 if n['running'] else 2 if n.get('idle') else 1
     for item in nodes.values():
         item['children'].sort(key=lambda c: (rank(c), c['started']))
     top.sort(key=lambda n: (n['running'], n['started']))
@@ -580,7 +615,7 @@ def transcript_of(session, cwd, root=CLAUDE):
 
 def read_codex(events):
     found = {'title': None, 'prompt': None, 'todos': None, 'pending': {}, 'activity': [], 'last_text': None, 'usage': None}
-    model = None
+    model, times, last_plan = None, {}, None
     for event in events:
         payload = event.get('payload') or {}
         kind = payload.get('type')
@@ -610,6 +645,8 @@ def read_codex(events):
                 data = {}
             if name == 'update_plan' and isinstance(data.get('plan'), list):
                 found['todos'] = [{'title': s.get('step'), 'status': s.get('status')} for s in data['plan']]
+                time_steps(times, found['todos'], at, last_plan)
+                last_plan = at
                 continue
             command = data.get('command') or payload.get('input') or ''
             text = clip(' '.join(command) if isinstance(command, list) else command, 70) or name
@@ -714,6 +751,40 @@ def observer_input(agent, found, previous):
 
 
 # ---- Snapshot ----------------------------------------------------------------
+
+def clock_steps(agents, times, now):
+    """Time steps that have no time from the transcript, such as the observer's, by when the dock saw them.
+
+    `times` maps 'agent-or-subagent id|step title' to {'start', 'end'} across runs.
+    ponytail: as precise as the refresh, about 6 s, and the observer renames steps now and then.
+    """
+    kept = {}
+
+    def visit(owner, steps):
+        for step in steps or []:
+            if step.get('took') is not None or step.get('since'):
+                continue
+            key = f"{owner}|{step.get('title')}"
+            mark = dict(times.get(key) or {})
+            if step['status'] == 'active':
+                mark.setdefault('start', now)
+                step['since'] = mark['start']
+            elif step['status'] == 'done':
+                if mark.get('start'):
+                    mark.setdefault('end', now)
+                    step['took'] = round(mark['end'] - mark['start'])
+            if mark:
+                kept[key] = mark
+
+    def walk(items):
+        for item in items:
+            visit(item['id'], item.get('steps'))
+            walk(item.get('children') or [])
+    for agent in agents:
+        visit(agent['id'], agent.get('steps'))
+        walk(agent.get('subagents') or [])
+    return kept
+
 
 def week_share(agents):
     """Mark each usage with about how much of one account's weekly limit it used.
@@ -898,6 +969,7 @@ def collect(run_observer=False):
         # The total counts the agent and every subagent below it, workflows through their agents.
         agent['totalUsage'] = sum_usage([agent.get('usage'), *tree_usage(agent.get('subagents') or [])])
     week_share(agents)
+    step_times = clock_steps(agents, previous.get('stepTimes') or {}, now)
 
     # Agents keep the order in which they first appeared, so a refresh never moves them.
     seen = {key: at for key, at in previous.get('seen', {}).items() if any(a['id'] == key for a in agents)}
@@ -905,7 +977,7 @@ def collect(run_observer=False):
         seen.setdefault(agent['id'], now)
     agents.sort(key=lambda a: (seen[a['id']], a['id']))
     live = {s['sessionId'] for s in sessions}
-    snapshot = {'at': now, 'agents': agents, 'seen': seen, 'usage': {k: v for k, v in USAGE.items() if os.path.exists(k)}, 'rollouts': rollouts, 'workflows': workflows, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
+    snapshot = {'at': now, 'agents': agents, 'seen': seen, 'stepTimes': step_times, 'usage': {k: v for k, v in USAGE.items() if os.path.exists(k)}, 'rollouts': rollouts, 'workflows': workflows, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
                 'pids': {str(pid): pane for pid, pane in by_pid.items()},
                 'sessions': checked,
                 'transcripts': {k: v for k, v in transcripts.items() if k in live}}

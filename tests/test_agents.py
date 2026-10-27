@@ -35,6 +35,25 @@ class ClaudeTranscriptTests(unittest.TestCase):
         self.assertEqual(found['activity'][-1]['text'], 'Run the payment tests')
         self.assertEqual(found['last_text'], 'Now the tests.')
 
+    def test_steps_keep_how_long_they_took(self):
+        def plan(at, *statuses):
+            todos = [{'content': name, 'activeForm': name, 'status': status} for name, status in zip(('Read', 'Fix', 'Test'), statuses)]
+            return assistant({'type': 'tool_use', 'id': at, 'name': 'TodoWrite', 'input': {'todos': todos}}, at=at)
+        events = [plan('2026-10-22T10:00:00Z', 'in_progress', 'pending', 'pending'),
+                  plan('2026-10-22T10:05:00Z', 'completed', 'in_progress', 'pending'),
+                  # Test jumps straight to done: it started at the previous plan update.
+                  plan('2026-10-22T10:07:00Z', 'completed', 'completed', 'completed')]
+        steps = agents.as_steps(agents.read_claude(events)['todos'])
+        self.assertEqual([s['took'] for s in steps], [300, 120, 120])
+
+    def test_observer_steps_get_times_from_when_the_dock_saw_them(self):
+        agent = {'id': 'a', 'steps': [{'title': 'Fix', 'status': 'active'}], 'subagents': []}
+        times = agents.clock_steps([agent], {}, 100)
+        self.assertEqual(agent['steps'][0]['since'], 100)
+        agent = {'id': 'a', 'steps': [{'title': 'Fix', 'status': 'done'}], 'subagents': []}
+        agents.clock_steps([agent], times, 160)
+        self.assertEqual(agent['steps'][0]['took'], 60)
+
     def test_hook_and_meta_messages_are_not_the_prompt(self):
         events = [
             {'type': 'user', 'message': {'content': 'fix the login crash'}},

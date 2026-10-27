@@ -8,6 +8,13 @@ import SwiftUI
 struct AgentStep: Codable, Hashable {
     let title: String?
     let status: String?
+    let took: Double?
+    let since: Double?
+    /// How long a done step took, or how long the active one runs so far.
+    var time: String? {
+        if let took { return span(took) }
+        return since.map { span(Date().timeIntervalSince1970 - $0) }
+    }
 }
 
 struct AgentSubagent: Codable, Identifiable {
@@ -390,6 +397,8 @@ struct StepList: View {
                     Text(step.title ?? "").foregroundStyle(step.status == "pending" ? .secondary : .primary)
                         .fontWeight(step.status == "active" ? .semibold : .regular)
                         .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    if let time = step.time { Text(time).foregroundStyle(.secondary).monospacedDigit() }
                 }.font(.caption)
             }
         }

@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { Bar, BottomShade, C, CACHE, ONE_LINE, ROOT, Scroll, SmallButton, Text, TRACK, arcSvg, run } from './ui'
 
-export type Step = { title: string; status: 'done' | 'active' | 'pending' }
+export type Step = { title: string; status: 'done' | 'active' | 'pending'; took?: number | null; since?: number | null }
+
 export type Subagent = {
   id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
   said?: string | null; activity?: Agent['activity']; children?: Subagent[]; idle?: boolean; kind?: 'agent' | 'workflow' | 'codex'
@@ -48,6 +49,8 @@ export function span(seconds: number) {
   if (s < 86400) return `${Math.floor(s / 3600)}h${s % 3600 >= 60 ? ` ${Math.floor(s % 3600 / 60)}m` : ''}`
   return `${Math.floor(s / 86400)}d${s % 86400 >= 3600 ? ` ${Math.floor(s % 86400 / 3600)}h` : ''}`
 }
+// How long a done step took, or how long the active one runs so far.
+const stepTime = (s: Step) => s.took != null ? span(s.took) : s.since ? span(Date.now() / 1000 - s.since) : ''
 // How long a piece of work ran: still going, or the time from its start to its last write.
 const runTime = (started?: number | null, updated?: number | null, running?: boolean) =>
   !started ? '' : running ? `Running for ${span(Date.now() / 1000 - started)}` : updated ? `Took ${span(updated - started)}` : ''
@@ -219,6 +222,7 @@ function Timeline({ steps }: { steps: Step[] }) {
             </div>
             <Text size={12} color={step.status === 'pending' ? C.muted : C.text} weight={step.status === 'active' ? 600 : undefined}
                   style={{ paddingBottom: 10, flexGrow: 1, flexShrink: 1, minWidth: 0, color }}>{step.title}</Text>
+            {stepTime(step) ? <Text size={11} color={C.muted} style={{ flexShrink: 0 }}>{stepTime(step)}</Text> : null}
           </div>
         )
       })}

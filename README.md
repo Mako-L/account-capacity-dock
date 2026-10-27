@@ -220,6 +220,10 @@ from your proxy accounts: each account's weekly spend, divided by the share of t
 week it used. It takes the middle value of all accounts. The model mix changes the
 real limit, so treat this as an estimate.
 
+Each step shows how long it took, and the active step counts up. Steps from Claude's
+todo list and Codex's plan take their times from the transcript. Steps named by the
+observer take their times from when the dock first saw them, about every 6 s.
+
 Agent and subagent cards show how long the work ran: "Running for 12m" while it
 works, and "Took 3h 20m" (from start to last write) once it ends. The plugin counts every request against the login that served it.
 The cost uses CodeBurn's price list, at base API rates. Without the plugin, the
