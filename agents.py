@@ -715,6 +715,31 @@ def observer_input(agent, found, previous):
 
 # ---- Snapshot ----------------------------------------------------------------
 
+def week_share(agents):
+    """Mark each usage with about how much of one account's weekly limit it used.
+
+    What a full week costs at API prices comes from the dock's own snapshot: each account's
+    weekly spend divided by the share of the week it used.
+    ponytail: the middle value over accounts, and the model mix changes it, so the share is an estimate.
+    """
+    limits = {}
+    for account in read_json(cache_dir() / 'snapshot.json').get('accounts', []):
+        for window in account.get('windows', []):
+            cost = (window.get('spent') or {}).get('costUsd')
+            if window.get('label') == 'Weekly' and cost and window.get('used', 0) >= 10:
+                limits.setdefault(account['provider'].lower(), []).append(cost / (window['used'] / 100))
+    week = {provider: sorted(values)[len(values) // 2] for provider, values in limits.items()}
+
+    def every(items):
+        return [u for i in items for u in [i.get('usage')] + every(i.get('children') or [])]
+    for agent in agents:
+        limit = week.get(agent['agent'])
+        for usage in (agent.get('usage'), agent.get('totalUsage'), *every(agent.get('subagents') or [])):
+            if usage and limit and usage.get('cost') is not None:
+                usage['weekPercent'] = round(100 * usage['cost'] / limit, 1)
+    return week
+
+
 def collect(run_observer=False):
     now = time.time()
     previous = read_json(SNAPSHOT)
@@ -872,6 +897,7 @@ def collect(run_observer=False):
     for agent in agents:
         # The total counts the agent and every subagent below it, workflows through their agents.
         agent['totalUsage'] = sum_usage([agent.get('usage'), *tree_usage(agent.get('subagents') or [])])
+    week_share(agents)
 
     # Agents keep the order in which they first appeared, so a refresh never moves them.
     seen = {key: at for key, at in previous.get('seen', {}).items() if any(a['id'] == key for a in agents)}

@@ -12,7 +12,7 @@ export type Subagent = {
   said?: string | null; activity?: Agent['activity']; children?: Subagent[]; idle?: boolean; kind?: 'agent' | 'workflow' | 'codex'
   steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string; usage?: Usage | null; started?: number | null
 }
-export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
+export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null; weekPercent?: number | null }
 export type Agent = {
   id: string; pane: string | null; agent: string; name: string; tabName?: string | null; status: string; title?: string | null; cwd: string; project: string
   task?: string | null; prompt?: string | null; now?: string | null; said?: string | null; steps: Step[]
@@ -183,7 +183,9 @@ function AgentLine({ agent, active, onHover, onOpen }: { agent: Agent; active: b
 const count = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : `${n}`
 // Tokens in and out, cache reads and writes, and the API price, as one short line.
 const usageLine = (u?: Usage | null) => u
-  ? [u.cost != null ? `$${u.cost.toFixed(2)}` : '', `in ${count(u.input)}`, `out ${count(u.output)}`, `cache ${count(u.cacheRead)} read · ${count(u.cacheWrite)} write`].filter(Boolean).join(' · ')
+  ? [u.cost != null ? `$${u.cost.toFixed(2)}` : '',
+     // About how much of one account's weekly limit this work used, from what a full week costs.
+     u.weekPercent == null ? '' : u.weekPercent < 1 ? '<1% of a week' : `~${Math.round(u.weekPercent)}% of a week`, `in ${count(u.input)}`, `out ${count(u.output)}`, `cache ${count(u.cacheRead)} read · ${count(u.cacheWrite)} write`].filter(Boolean).join(' · ')
   : ''
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

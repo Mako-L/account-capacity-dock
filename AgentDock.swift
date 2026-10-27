@@ -53,6 +53,7 @@ struct AgentUsage: Codable, Hashable {
     let cacheRead: Double?
     let cacheWrite: Double?
     let cost: Double?
+    let weekPercent: Double?
 }
 
 /// Tokens in and out, cache reads and writes, and the API price, as one short line.
@@ -63,7 +64,9 @@ func usageLine(_ usage: AgentUsage?) -> String? {
         return v >= 1e9 ? String(format: "%.1fB", v / 1e9) : v >= 1e6 ? String(format: "%.1fM", v / 1e6) : v >= 1e3 ? String(format: "%.0fK", v / 1e3) : String(Int(v))
     }
     let cost = usage.cost.map { String(format: "$%.2f", $0) }
-    return [cost, "in \(count(usage.input))", "out \(count(usage.output))", "cache \(count(usage.cacheRead)) read · \(count(usage.cacheWrite)) write"]
+    // About how much of one account's weekly limit this work used, from what a full week costs.
+    let week = usage.weekPercent.map { $0 < 1 ? "<1% of a week" : String(format: "~%.0f%% of a week", $0) }
+    return [cost, week, "in \(count(usage.input))", "out \(count(usage.output))", "cache \(count(usage.cacheRead)) read · \(count(usage.cacheWrite)) write"]
         .compactMap { $0 }.joined(separator: " · ")
 }
 

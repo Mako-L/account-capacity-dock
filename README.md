@@ -214,6 +214,12 @@ the account still served requests. Before that, if the current pace would use up
 window before it resets, the card says "At this pace, full in 1d 2h". The pace is the
 share used so far, divided by the time since the window started.
 
+Agent and subagent cards also show about how much of one account's weekly limit the
+work used, for example "~15% of a week". The dock works out what a full week costs
+from your proxy accounts: each account's weekly spend, divided by the share of the
+week it used. It takes the middle value of all accounts. The model mix changes the
+real limit, so treat this as an estimate.
+
 Agent and subagent cards show how long the work ran: "Running for 12m" while it
 works, and "Took 3h 20m" (from start to last write) once it ends. The plugin counts every request against the login that served it.
 The cost uses CodeBurn's price list, at base API rates. Without the plugin, the

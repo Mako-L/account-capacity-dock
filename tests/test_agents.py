@@ -165,6 +165,20 @@ class UsageTests(unittest.TestCase):
         self.assertIsNone(agents.sum_usage([second, {'input': 1, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'cost': None}])['cost'])
 
 
+class WeekShareTests(unittest.TestCase):
+    def test_an_agent_share_of_a_week_comes_from_what_a_full_week_costs(self):
+        # Accounts that used 50% and 100% of their week for 100 USD and 300 USD: a week costs 200 or 300, middle 300.
+        snapshot = {'accounts': [{'provider': 'Claude', 'windows': [{'label': 'Weekly', 'used': 50, 'spent': {'costUsd': 100}}]},
+                                 {'provider': 'Claude', 'windows': [{'label': 'Weekly', 'used': 100, 'spent': {'costUsd': 300}}]}]}
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / 'snapshot.json').write_text(json.dumps(snapshot))
+            usage = {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'cost': 30}
+            agent = {'id': 'a', 'agent': 'claude', 'usage': usage, 'subagents': []}
+            with mock.patch.object(agents, 'cache_dir', return_value=Path(folder)):
+                self.assertEqual(agents.week_share([agent]), {'claude': 300})
+        self.assertEqual(agent['usage']['weekPercent'], 10)
+
+
 class ClaudeSessionTests(unittest.TestCase):
     def test_a_session_file_whose_pid_was_reused_is_skipped(self):
         with tempfile.TemporaryDirectory() as folder:
