@@ -193,6 +193,8 @@
     background: #2a2210; color: #f5dd9d; font-size: 15px;
   }
   .note strong { color: #ffe9ad; }
+  .note a { color: #ffe9ad; }
+  #install .note { margin-top: 0; margin-bottom: 24px; }
   footer { padding: 40px 0 64px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); }
   footer a { color: var(--text); }
   @media (max-width: 560px) {
@@ -291,6 +293,7 @@
     <section id="install" aria-labelledby="install-title">
       <h2 id="install-title">Install with the setup CLI</h2>
       <p class="section-lede">The CLI builds the app, installs CodeBurn and starts CLIProxyAPI in Docker. Prerequisites: Git, Python 3.9+, Node.js 22.13+ and Docker with Compose v2.</p>
+      <p class="note" id="terms"><strong>A proxy can break the provider's terms.</strong> Anthropic's Consumer Terms allow Claude Free, Pro and Max logins only in Claude Code and Claude.ai, and Anthropic says other tools that use these logins break those terms (<a href="https://www.theregister.com/software/2026/02/20/anthropic-clarifies-ban-on-third-party-tool-access-to-claude/5014546">report</a>). CLIProxyAPI is such a tool, and the dock's own quota check may count too. OpenAI's <a href="https://openai.com/policies/row-terms-of-use/">Terms of Use</a> forbid sharing a login, and a proxy that pools several accounts is not an approved path. This is not legal advice: read each provider's current terms and use the proxy at your own risk. Without a proxy, the dock reads only the Claude Code and Codex logins on this machine.</p>
       <div class="steps">
         <div>
           <h3>macOS and Linux</h3>

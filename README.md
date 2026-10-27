@@ -27,6 +27,25 @@ Screenshots use demo accounts. Downloads for macOS, Windows and Linux are on the
 > Hands-on testing on both is on the [roadmap](#roadmap). Please open an issue if
 > something breaks.
 
+> [!CAUTION]
+> **Routing subscription logins through a proxy can break the provider's terms.**
+> Anthropic's Consumer Terms allow Claude Free, Pro and Max logins only in Claude Code
+> and Claude.ai. Anthropic says that using these login tokens in any other product,
+> tool or service breaks those terms, and it can suspend the account
+> ([report](https://www.theregister.com/software/2026/02/20/anthropic-clarifies-ban-on-third-party-tool-access-to-claude/5014546)).
+> CLIProxyAPI is such a tool. The dock also sends these tokens to Anthropic's usage
+> endpoint, which may count too. For third-party tools, Anthropic points to API keys.
+>
+> OpenAI's [Terms of Use](https://openai.com/policies/row-terms-of-use/) forbid
+> sharing your login or making your account available to anyone else. OpenAI allows
+> your own ChatGPT plan in Codex and in apps that you
+> [connect through OpenAI](https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites).
+> A proxy that pools several accounts is not one of those paths.
+>
+> This project does not give legal advice. Read the current terms of each provider,
+> and use the proxy at your own risk. Without a proxy, the dock reads only the
+> Claude Code and Codex logins on this machine.
+
 The original Swift/AppKit renderer remains the default on macOS to preserve its
 appearance and menu-bar integration. Windows and Linux use the native Rust/egui
 port in `native/`, with the same dock geometry and assets. Quota collection and
