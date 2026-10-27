@@ -42,7 +42,7 @@ const CUBE = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path 
 const CUBE_FACET = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M2.66 6.34h18.55l.3.51-9.28 16.07-.23-.06V12.34l-.3-.51-9.11-5.26Z"/></svg>'
 
 type Window = { label: string; used: number; resetAt?: number | null; detail?: string | null }
-type Usage = { tokens?: number | null; inputTokens?: number | null; outputTokens?: number | null; costUsd?: number | null; status?: string }
+type Usage = { tokens?: number | null; inputTokens?: number | null; outputTokens?: number | null; costUsd?: number | null; status?: string; scope?: string }
 type Account = {
   id: string; provider: string; title: string; email: string; plan: string; status: string; message: string
   source: string; windows: Window[]; fetchedAt?: number | null; localUsage?: Usage | null; proxyRef?: string | null
@@ -167,12 +167,12 @@ function Card({ account, all, onAction, confirm }: {
           <Text size={10} color={C.muted}>{w.detail ?? resetIn(w.resetAt)}</Text>
         </div>))}
       <div style={{ height: 1, backgroundColor: '#ffffff14' }} />
-      <Text size={11} weight={600}>{`Today · local ${account.provider === 'Cursor' ? 'Cursor CLI' : account.provider} usage`}</Text>
+      <Text size={11} weight={600}>{usage?.scope === 'account' ? 'Last 24 h · this account' : `Today · local ${account.provider === 'Cursor' ? 'Cursor CLI' : account.provider} usage`}</Text>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text size={12}>Tokens</Text><Text size={12}>{count(usage?.tokens)}</Text></div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <Text size={12} style={{ ...ONE_LINE, flexShrink: 1, minWidth: 0 }}>API-equivalent cost</Text><Text size={12} style={{ flexShrink: 0 }}>{usage?.costUsd == null ? '—' : `$${usage.costUsd.toFixed(2)}`}</Text>
       </div>
-      <Text size={10} color={C.muted}>CodeBurn · all local accounts · not your bill</Text>
+      <Text size={10} color={C.muted}>{usage?.scope === 'account' ? 'Proxy usage tracker · CodeBurn prices · not your bill' : 'CodeBurn · all local accounts · not your bill'}</Text>
       {confirm && onAction && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
           <Text size={12} color={C.red}>{`Delete ${account.email || account.title || 'this account'} from the ${account.provider} proxy? You cannot undo this.`}</Text>

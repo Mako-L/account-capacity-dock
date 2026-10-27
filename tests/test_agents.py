@@ -145,6 +145,26 @@ class SubagentTreeTests(unittest.TestCase):
         self.assertFalse(tree['agent-done']['running'])
 
 
+class UsageTests(unittest.TestCase):
+    def test_a_message_counts_once_and_new_lines_add_on(self):
+        def line(id, out):
+            return json.dumps({'type': 'assistant', 'message': {'id': id, 'model': 'priced', 'usage': {
+                'input_tokens': 10, 'output_tokens': out, 'cache_read_input_tokens': 100, 'cache_creation_input_tokens': 5}}}) + '\n'
+        price = {'inputCostPerToken': 1, 'outputCostPerToken': 2, 'cacheReadCostPerToken': 0.1, 'cacheWriteCostPerToken': 1}
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(agents, '_prices', {'priced': price}), \
+                mock.patch.dict(agents.USAGE, clear=True):
+            path = Path(folder) / 's.jsonl'
+            path.write_text(line('m1', 4) + line('m1', 4))
+            first = dict(agents.claude_usage(str(path)))
+            with path.open('a') as handle:
+                handle.write(line('m2', 6))
+            second = agents.claude_usage(str(path))
+        self.assertEqual((first['input'], first['output'], first['cacheRead'], first['cacheWrite']), (10, 4, 100, 5))
+        self.assertAlmostEqual(first['cost'], 10 + 8 + 10 + 5)
+        self.assertEqual(second['output'], 10)
+        self.assertIsNone(agents.sum_usage([second, {'input': 1, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'cost': None}])['cost'])
+
+
 class ClaudeSessionTests(unittest.TestCase):
     def test_a_session_file_whose_pid_was_reused_is_skipped(self):
         with tempfile.TemporaryDirectory() as folder:

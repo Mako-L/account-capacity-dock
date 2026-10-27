@@ -41,6 +41,25 @@ class CapacityParsingTests(unittest.TestCase):
             self.assertEqual(rows[1]['email'], 'codex@example.test')
             self.assertNotIn('private-', json.dumps(rows))
 
+    def test_proxy_usage_is_counted_per_account_and_priced(self):
+        items = [
+            {'source': 'claude-A@x.test', 'provider': 'claude', 'model': 'm', 'input_tokens': 10, 'output_tokens': 2, 'cache_read_tokens': 100, 'cache_creation_tokens': 5},
+            {'source': 'claude-a@x.test', 'provider': 'claude', 'model': 'm', 'input_tokens': 10, 'output_tokens': 2, 'cache_read_tokens': 0, 'cache_creation_tokens': 0},
+            {'source': 'Codex-b@x.test', 'provider': 'codex', 'model': 'm', 'input_tokens': 50, 'output_tokens': 1, 'cache_read_tokens': 40, 'cache_creation_tokens': 0},
+        ]
+        price = {'inputCostPerToken': 1, 'outputCostPerToken': 2, 'cacheReadCostPerToken': 0.1, 'cacheWriteCostPerToken': 1}
+        with tempfile.TemporaryDirectory() as directory:
+            prices = Path(directory) / 'prices.json'
+            prices.write_text(json.dumps({'data': {'m': price}}))
+            with patch.object(collector, 'PRICES', prices), patch.object(collector, 'management', return_value={'items': items}):
+                usage = collector.proxy_usage()
+        claude, codex = usage['claude-a@x.test'], usage['codex-b@x.test']
+        self.assertEqual((claude['inputTokens'], claude['cacheReadTokens'], claude['tokens']), (20, 100, 129))
+        self.assertAlmostEqual(claude['costUsd'], 20 + 8 + 10 + 5)
+        # Codex counts cached tokens inside the input: only 10 of the 50 are fresh.
+        self.assertEqual((codex['inputTokens'], codex['cacheReadTokens']), (10, 40))
+        self.assertEqual(claude['scope'], 'account')
+
     def test_without_a_proxy_the_local_claude_and_codex_logins_show(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)

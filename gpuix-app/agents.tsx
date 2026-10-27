@@ -10,13 +10,14 @@ export type Step = { title: string; status: 'done' | 'active' | 'pending' }
 export type Subagent = {
   id: string; name: string; description?: string | null; model?: string; running: boolean; step?: string | null; updated: number
   said?: string | null; activity?: Agent['activity']; children?: Subagent[]; idle?: boolean; kind?: 'agent' | 'workflow' | 'codex'
-  steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string
+  steps?: Step[]; progress?: number | null; phase?: string | null; summary?: string; usage?: Usage | null
 }
+export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number | null }
 export type Agent = {
   id: string; pane: string | null; agent: string; name: string; tabName?: string | null; status: string; title?: string | null; cwd: string; project: string
   task?: string | null; prompt?: string | null; now?: string | null; said?: string | null; steps: Step[]
   activity: { at: number | null; text: string; kind: 'say' | 'tool' }[]; updated?: number | null; source: string
-  progress: number | null; stepCount?: [number, number]; subagents: Subagent[]
+  progress: number | null; stepCount?: [number, number]; subagents: Subagent[]; usage?: Usage | null; totalUsage?: Usage | null
 }
 type Snapshot = { at?: number; agents: Agent[]; observer?: boolean }
 
@@ -167,6 +168,12 @@ function AgentLine({ agent, active, onHover, onOpen }: { agent: Agent; active: b
   )
 }
 
+const count = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : `${n}`
+// Tokens in and out, cache reads and writes, and the API price, as one short line.
+const usageLine = (u?: Usage | null) => u
+  ? [u.cost != null ? `$${u.cost.toFixed(2)}` : '', `in ${count(u.input)}`, `out ${count(u.output)}`, `cache ${count(u.cacheRead)} read · ${count(u.cacheWrite)} write`].filter(Boolean).join(' · ')
+  : ''
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -245,6 +252,11 @@ export function AgentDetail({ agent, onFocus, onSubagent, openSub }: { agent: Ag
               <Text size={10} color={C.muted} style={{ width: 48, flexShrink: 0 }}>{ago(item.at)}</Text>
               <Text size={11} color={item.kind === 'say' ? C.text : C.muted} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{item.text}</Text>
             </div>))}
+        </Section>)}
+      {agent.usage && (
+        <Section title="Tokens">
+          <Text size={11} color={C.muted}>{usageLine(agent.usage)}</Text>
+          {agent.totalUsage && agent.totalUsage.cost !== agent.usage.cost ? <Text size={11} color={C.muted}>{`With subagents: ${usageLine(agent.totalUsage)}`}</Text> : null}
         </Section>)}
       <Text size={10} color={C.muted}>{`${SOURCE[agent.source] ?? ''}${agent.pane ? ' · pane ' + agent.pane : ''}`}</Text>
     </div>
@@ -363,6 +375,10 @@ export function SubagentDetail({ sub, onSubagent, openSub }: { sub: Subagent; on
               <Text size={10} color={C.muted} style={{ width: 48, flexShrink: 0 }}>{ago(item.at)}</Text>
               <Text size={11} color={item.kind === 'say' ? C.text : C.muted} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{item.text}</Text>
             </div>))}
+        </Section>)}
+      {sub.usage && (
+        <Section title="Tokens">
+          <Text size={11} color={C.muted}>{usageLine(sub.usage)}</Text>
         </Section>)}
       <Text size={10} color={C.muted}>{`${sub.running ? 'Running' : sub.idle ? 'Idle' : 'Finished'} · last write ${ago(sub.updated)}`}</Text>
     </div>

@@ -181,6 +181,13 @@ cache-read, and cache-write counts. Cursor uses CodeBurn's `cursor-agent` source
 so its CLI usage is separate from editor usage. Cursor's provider-reported
 on-demand spend is shown separately for its billing cycle.
 
+**Per account:** if your CLIProxyAPI runs the
+[CAP Token Usage Tracker](https://github.com/AITNR/cap-token-usage-tracker) plugin,
+each Claude and Codex card shows the tokens and cost of **that account** over the
+last 24 hours. The plugin counts every request against the login that served it.
+The cost uses CodeBurn's price list, at base API rates. Without the plugin, the
+cards fall back to CodeBurn's totals below.
+
 CodeBurn reads session logs on this machine. Those logs do not identify which
 proxy account handled a request, so the cards clearly say **all local accounts**:
 these are provider/tool totals, repeated for matching accounts, and must not be

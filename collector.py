@@ -48,7 +48,7 @@ def proxy_base():
     return setting('PROXY_URL', '').rstrip('/') or 'http://127.0.0.1:' + str(setting('CLAUDE_PROXY_PORT', '8317'))
 
 
-def management(path, method='GET'):
+def management(path, method='GET', root='/v0/management/'):
     """Call the CLIProxyAPI management API and return its JSON reply."""
     key = setting('PROXY_MANAGEMENT_KEY', '')
     if not key:
@@ -57,13 +57,47 @@ def management(path, method='GET'):
         key = found.group(1).strip() if found else ''
     if not key:
         raise RuntimeError('Proxy management key not found; set it in Mako settings.')
-    request = urllib.request.Request(proxy_base() + '/v0/management/' + path, method=method,
+    request = urllib.request.Request(proxy_base() + root + path, method=method,
                                      headers={'Authorization': 'Bearer ' + key})
     with urllib.request.urlopen(request, timeout=12) as response:
         return json.load(response)
 
 
 WARNINGS = []  # ponytail: module-level, one collector run per process.
+PRICES = Path.home() / '.cache/codeburn/litellm-pricing.json'
+
+
+def proxy_usage():
+    """Tokens and API-equivalent cost per proxy account over the last 24 h, keyed 'claude-<email>'.
+
+    The CAP Token Usage Tracker plugin counts each request against the login that served it.
+    Prices come from CodeBurn's price list. Without the plugin this returns nothing.
+    """
+    try:
+        items = management('plugins/cap-token-usage-tracker/stats/groups?range=24h', root='/v0/resource/').get('items') or []
+    except (OSError, ValueError, RuntimeError, urllib.error.URLError):
+        return {}
+    prices = read_json(PRICES).get('data') or {}
+    found = {}
+    for item in items:
+        total = found.setdefault(str(item.get('source', '')).lower(), {
+            'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'costUsd': 0.0, 'unpricedModels': 0})
+        read, write, output = item.get('cache_read_tokens') or 0, item.get('cache_creation_tokens') or 0, item.get('output_tokens') or 0
+        # OpenAI counts cached tokens inside the input, Anthropic counts them apart.
+        fresh = (item.get('input_tokens') or 0) - (read if item.get('provider') == 'codex' else 0)
+        for key, value in (('inputTokens', fresh), ('outputTokens', output), ('cacheReadTokens', read), ('cacheWriteTokens', write)):
+            total[key] += value
+        price = prices.get(item.get('model') or '')
+        if price:
+            total['costUsd'] += fresh * price['inputCostPerToken'] + output * price['outputCostPerToken'] \
+                + read * price.get('cacheReadCostPerToken', 0) + write * price.get('cacheWriteCostPerToken', 0)
+        elif fresh or output:
+            total['unpricedModels'] += 1
+    now = time.time()
+    for total in found.values():
+        total.update(tokens=total['inputTokens'] + total['outputTokens'] + total['cacheReadTokens'] + total['cacheWriteTokens'],
+                     scope='account', status='live', fetchedAt=now, message='', estimated=False)
+    return found
 
 
 def remote_auths():
@@ -525,8 +559,16 @@ def collect(force=False, include_usage=True):
     else:
         cached_usage = read_json(cache_dir() / 'codeburn-usage.json')
         usage = cached_usage.get('providers', {}) if cached_usage.get('day') == dt.date.today().isoformat() else {}
+    # The proxy's usage tracker counts each account apart. CodeBurn only knows one total per provider.
+    accounts = proxy_usage() if include_usage else {}
+    idle = {'inputTokens': 0, 'outputTokens': 0, 'cacheReadTokens': 0, 'cacheWriteTokens': 0, 'tokens': 0, 'costUsd': 0.0,
+            'scope': 'account', 'status': 'live', 'fetchedAt': time.time(), 'message': ''}
     for entry in result:
-        entry['localUsage'] = usage.get(entry['provider'], {'status': 'partial', 'message': 'Indexing local usage…'})
+        if accounts and entry['provider'] != 'Cursor':
+            # With the tracker on, an account it never saw sent no requests through the proxy in 24 h.
+            entry['localUsage'] = accounts.get(f"{entry['provider']}-{entry['email']}".lower(), idle)
+        else:
+            entry['localUsage'] = usage.get(entry['provider'], {'status': 'partial', 'message': 'Indexing local usage…'})
     snapshot = {'updatedAt': time.time(), 'accounts': result, 'hidden': hidden,
                 'warning': ' '.join(WARNINGS) or None}
     write_private(CACHE, snapshot)

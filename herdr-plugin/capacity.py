@@ -310,15 +310,18 @@ def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
             if detail == 3 or not rings:
                 lines.append('')
         if extended and detail == 3:
-            # CodeBurn counts local usage per provider, not per account.
+            # The proxy's usage tracker counts each account. CodeBurn alone gives one total per provider.
             today = {}
             for account in accounts:
                 usage = account.get('localUsage') or {}
                 if usage.get('tokens'):
-                    today.setdefault(account['provider'], usage)
-            for provider, usage in today.items():
+                    key = account['id'] if usage.get('scope') == 'account' else account['provider']
+                    name = (account.get('title') or account['provider']) if usage.get('scope') == 'account' and names else account['provider']
+                    today.setdefault(key, (name, usage))
+            for name, usage in today.values():
                 cost = '' if usage.get('costUsd') is None else f" · ${usage['costUsd']:.2f} API-equivalent"
-                lines.append(dim(fit(f"Today · local {provider}: {count(usage['tokens'])} tokens{cost}", width)))
+                when = 'Last 24 h' if usage.get('scope') == 'account' else 'Today · local'
+                lines.append(dim(fit(f"{when} {name}: {count(usage['tokens'])} tokens{cost}", width)))
             if today:
                 lines.append('')
         keys = f"r refresh · p {'unpin' if pinned() else 'pin'} · n {'hide' if names else 'show'} names · q quit"

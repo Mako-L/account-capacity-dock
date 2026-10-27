@@ -52,6 +52,7 @@ struct LocalUsage: Codable {
     let status: String
     let fetchedAt: Double?
     let message: String?
+    let scope: String?
 }
 
 func formatCount(_ value: Double) -> String {
@@ -309,7 +310,7 @@ struct AccountCard: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 Divider().overlay(.white.opacity(0.08))
-                Text("Today · local \(account.provider == "Cursor" ? "Cursor CLI" : account.provider) usage")
+                Text(account.localUsage?.scope == "account" ? "Last 24 h · this account" : "Today · local \(account.provider == "Cursor" ? "Cursor CLI" : account.provider) usage")
                     .font(.system(size: 11, weight: .semibold))
                 HStack {
                     Text("Tokens\(account.localUsage?.estimated == true ? " (estimated)" : "")")
@@ -325,7 +326,7 @@ struct AccountCard: View {
                     Text("Input \(usage.inputTokens.map(formatCount) ?? "—") · Output \(usage.outputTokens.map(formatCount) ?? "—")\nCache read \(usage.cacheReadTokens.map(formatCount) ?? "—") · Write \(usage.cacheWriteTokens.map(formatCount) ?? "—")")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
-                Text("CodeBurn · all local accounts · not your bill")
+                Text(account.localUsage?.scope == "account" ? "Proxy usage tracker · CodeBurn prices · not your bill" : "CodeBurn · all local accounts · not your bill")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 if let usage = account.localUsage {
                     if usage.status != "live" {

@@ -27,6 +27,7 @@ struct AgentSubagent: Codable, Identifiable {
     let phase: String?
     let summary: String?
     let idle: Bool?
+    let usage: AgentUsage?
 
     var heading: String { kind == "workflow" ? (name ?? "Workflow") : (description ?? name ?? "Subagent") }
     var stepCount: String? {
@@ -43,6 +44,26 @@ struct AgentSubagent: Codable, Identifiable {
         copy.children = children?.map { $0.withoutActivity() }
         return copy
     }
+}
+
+struct AgentUsage: Codable, Hashable {
+    let input: Double?
+    let output: Double?
+    let cacheRead: Double?
+    let cacheWrite: Double?
+    let cost: Double?
+}
+
+/// Tokens in and out, cache reads and writes, and the API price, as one short line.
+func usageLine(_ usage: AgentUsage?) -> String? {
+    guard let usage else { return nil }
+    let count: (Double?) -> String = { value in
+        let v = value ?? 0
+        return v >= 1e9 ? String(format: "%.1fB", v / 1e9) : v >= 1e6 ? String(format: "%.1fM", v / 1e6) : v >= 1e3 ? String(format: "%.0fK", v / 1e3) : String(Int(v))
+    }
+    let cost = usage.cost.map { String(format: "$%.2f", $0) }
+    return [cost, "in \(count(usage.input))", "out \(count(usage.output))", "cache \(count(usage.cacheRead)) read · \(count(usage.cacheWrite)) write"]
+        .compactMap { $0 }.joined(separator: " · ")
 }
 
 struct AgentEvent: Codable, Hashable {
@@ -69,6 +90,8 @@ struct AgentItem: Codable, Identifiable {
     let progress: Double?
     let stepCount: [Int]?
     var subagents: [AgentSubagent]?
+    let usage: AgentUsage?
+    let totalUsage: AgentUsage?
 
     var provider: String { agent == "codex" ? "Codex" : "Claude" }
     var heading: String { task ?? title ?? name ?? provider }
@@ -310,6 +333,13 @@ struct AgentCard: View {
                     }.font(.system(size: 10))
                 }
             }
+            if let own = usageLine(agent.usage) {
+                cardSection("Tokens")
+                Text(own).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if agent.totalUsage != agent.usage, let total = usageLine(agent.totalUsage) {
+                    Text("With subagents: " + total).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             HStack {
                 Text(ago(agent.updated)).font(.system(size: 10)).foregroundStyle(.secondary)
                 Spacer()
@@ -491,6 +521,10 @@ struct SubagentCard: View {
                         Text(item.text).foregroundStyle(item.kind == "say" ? .primary : .secondary).lineLimit(1)
                     }.font(.system(size: 10))
                 }
+            }
+            if let usage = usageLine(sub.usage) {
+                cardSection("Tokens")
+                Text(usage).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Text("Last write \(ago(sub.updated))").font(.system(size: 10)).foregroundStyle(.secondary)
         }

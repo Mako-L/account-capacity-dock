@@ -46,6 +46,9 @@ RECENT = 15 * 60  # finished subagents stay listed this long
 SUB_RECENT = 6 * 3600  # finished subagents of a live session stay in its tree this long
 SUB_LIMIT = 30     # newest top-level subagents kept per agent
 SUB_TAIL = 200_000  # bytes read from the end of a subagent transcript
+# CodeBurn's price list, kept fresh by codeburn itself: dollars per token for each model.
+PRICES = HOME / '.cache' / 'codeburn' / 'litellm-pricing.json'
+USAGE = {}  # transcript path -> running token totals, carried between runs in the snapshot
 
 
 def setup_dir():
@@ -57,6 +60,75 @@ def read_json(path, default=None):
         return json.loads(Path(path).read_text())
     except (OSError, ValueError):
         return {} if default is None else default
+
+
+_prices = None
+
+
+def price_of(model):
+    global _prices
+    if _prices is None:
+        _prices = read_json(PRICES).get('data') or {}
+    return _prices.get((model or '').split('[')[0])
+
+
+def add_cost(totals, model, fresh, output, read, write):
+    """Add one model call to the totals. Cost stays None once a model has no price in CodeBurn's list."""
+    for key, value in (('input', fresh), ('output', output), ('cacheRead', read), ('cacheWrite', write)):
+        totals[key] = totals.get(key, 0) + value
+    price = price_of(model)
+    if totals.get('cost', 0) is not None and price:
+        # ponytail: base rates only, no fast-mode or long-context surcharge.
+        totals['cost'] = totals.get('cost', 0) + fresh * price['inputCostPerToken'] + output * price['outputCostPerToken'] \
+            + read * price.get('cacheReadCostPerToken', 0) + write * price.get('cacheWriteCostPerToken', 0)
+    elif model and model != '<synthetic>':
+        totals['cost'] = None
+    return totals
+
+
+def claude_usage(path):
+    """Token totals of a whole Claude transcript. Each run reads only the lines added since the last one."""
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return None
+    state = USAGE.get(path)
+    if not state or state['offset'] > size:
+        state = {'offset': 0, 'last': None, 'tokens': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'cost': 0}}
+    if state['offset'] < size:
+        state = {**state, 'tokens': dict(state['tokens'])}
+        with open(path, 'rb') as handle:
+            handle.seek(state['offset'])
+            data = handle.read()
+        end = data.rfind(b'\n') + 1
+        for line in data[:end].splitlines():
+            if b'"usage"' not in line:
+                continue
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            message = event.get('message') or {}
+            used = message.get('usage')
+            # Claude Code writes one line per content block, each with the same usage: count a message once.
+            if event.get('type') != 'assistant' or not isinstance(used, dict) or message.get('id') == state['last']:
+                continue
+            state['last'] = message.get('id')
+            add_cost(state['tokens'], message.get('model'), used.get('input_tokens') or 0, used.get('output_tokens') or 0,
+                     used.get('cache_read_input_tokens') or 0, used.get('cache_creation_input_tokens') or 0)
+        state['offset'] += end
+    USAGE[path] = state
+    return state['tokens']
+
+
+def sum_usage(items):
+    """Totals of several token counts. One unpriced part makes the cost unknown."""
+    items = [i for i in items if i]
+    if not items:
+        return None
+    total = {key: sum(i.get(key, 0) for i in items) for key in ('input', 'output', 'cacheRead', 'cacheWrite')}
+    total['cost'] = None if any(i.get('cost') is None for i in items) else sum(i['cost'] for i in items)
+    return total
 
 
 def setting(key, default=''):
@@ -343,7 +415,7 @@ def workflow_node(folder, children, finished, journal, meta):
         'description': meta.get('description') or count, 'summary': count, 'model': '',
         'running': running, 'step': next((c['step'] for c in children if c['running']), None), 'said': None,
         'activity': [], 'updated': max(c['updated'] for c in children), 'started': children[0]['started'],
-        'children': children, 'steps': steps,
+        'children': children, 'steps': steps, 'usage': sum_usage(c.get('usage') for c in children),
         'progress': round(100 * score / len(phases)) if phases else (round(100 * len(finished) / total) if total else None),
     }
 
@@ -384,6 +456,7 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
             # A teammate waits for its next message instead of ending, so a quiet one is idle, not finished.
             # ponytail: assumes the team is still up while its session runs; Claude Code writes no shutdown mark.
             'idle': not running and meta.get('taskKind') == 'in_process_teammate',
+            'usage': claude_usage(str(path)),
         }
         steps = as_steps(found.get('todos'))
         if steps:
@@ -506,11 +579,20 @@ def transcript_of(session, cwd, root=CLAUDE):
 # ---- Codex ------------------------------------------------------------------
 
 def read_codex(events):
-    found = {'title': None, 'prompt': None, 'todos': None, 'pending': {}, 'activity': [], 'last_text': None}
+    found = {'title': None, 'prompt': None, 'todos': None, 'pending': {}, 'activity': [], 'last_text': None, 'usage': None}
+    model = None
     for event in events:
         payload = event.get('payload') or {}
         kind = payload.get('type')
         at = stamp(event)
+        if event.get('type') == 'turn_context':
+            model = payload.get('model') or model
+        if kind == 'token_count' and isinstance((payload.get('info') or {}).get('total_token_usage'), dict):
+            # Codex keeps a running total for the whole session, so the last one is enough.
+            used = payload['info']['total_token_usage']
+            cached = used.get('cached_input_tokens') or 0
+            found['usage'] = add_cost({}, model, (used.get('input_tokens') or 0) - cached, used.get('output_tokens') or 0,
+                                      cached, used.get('cache_write_input_tokens') or 0)
         if kind == 'user_message' and payload.get('message'):
             found['prompt'] = clip(payload['message'], 160)
         if kind == 'message' and payload.get('role') == 'user':
@@ -637,6 +719,8 @@ def collect(run_observer=False):
     now = time.time()
     previous = read_json(SNAPSHOT)
     cache = previous.get('parsed', {})
+    USAGE.clear()
+    USAGE.update(previous.get('usage') or {})
     observed_dir = setup_dir() / 'agents' / 'observer'
     panes = {a['pane_id']: a for a in herdr_agents()}
     labels = herdr_labels() if panes else {}
@@ -730,6 +814,7 @@ def collect(run_observer=False):
         for run, meta in ((found or {}).get('workflows') or {}).items():
             workflows[run] = meta
         agent['subagents'] = subagent_tree(transcript, now, parse, workflows, observed_dir, watch) if transcript else []
+        agent['usage'] = claude_usage(transcript) if transcript else None
         agents.append(agent)
 
     for pid in codex:
@@ -751,7 +836,8 @@ def collect(run_observer=False):
             owner['subagents'].append({'id': f'codex-{pid}', 'name': 'Codex', 'description': (found or {}).get('prompt'),
                                        'model': '', 'running': True, 'step': ((found or {}).get('pending') or [None])[-1],
                                        'said': (found or {}).get('last_text'), 'activity': ((found or {}).get('activity') or [])[-4:],
-                                       'updated': updated or now, 'started': updated or now, 'children': [], 'kind': 'codex'})
+                                       'updated': updated or now, 'started': updated or now, 'children': [], 'kind': 'codex',
+                                       'usage': (found or {}).get('usage')})
             continue
         if pane in used_panes or (not pane and not rollout):
             continue
@@ -760,6 +846,7 @@ def collect(run_observer=False):
         agent['session'] = Path(rollout).stem if rollout else None
         agent = finish(agent, found, updated, rollout)
         agent['subagents'] = []
+        agent['usage'] = (found or {}).get('usage')
         agents.append(agent)
 
     for pane, info in panes.items():
@@ -778,13 +865,19 @@ def collect(run_observer=False):
                     agent.update({'steps': result.get('steps') or [], 'progress': result.get('progress'), 'source': 'observer',
                                   'task': result.get('task') or agent['task']})
 
+    def tree_usage(items):
+        return [u for i in items for u in ([i.get('usage')] if i.get('kind') != 'workflow' else []) + tree_usage(i.get('children') or [])]
+    for agent in agents:
+        # The total counts the agent and every subagent below it, workflows through their agents.
+        agent['totalUsage'] = sum_usage([agent.get('usage'), *tree_usage(agent.get('subagents') or [])])
+
     # Agents keep the order in which they first appeared, so a refresh never moves them.
     seen = {key: at for key, at in previous.get('seen', {}).items() if any(a['id'] == key for a in agents)}
     for agent in agents:
         seen.setdefault(agent['id'], now)
     agents.sort(key=lambda a: (seen[a['id']], a['id']))
     live = {s['sessionId'] for s in sessions}
-    snapshot = {'at': now, 'agents': agents, 'seen': seen, 'rollouts': rollouts, 'workflows': workflows, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
+    snapshot = {'at': now, 'agents': agents, 'seen': seen, 'usage': {k: v for k, v in USAGE.items() if os.path.exists(k)}, 'rollouts': rollouts, 'workflows': workflows, 'observer': setting('AGENT_OBSERVER', '1') != '0', 'parsed': parsed,
                 'pids': {str(pid): pane for pid, pane in by_pid.items()},
                 'sessions': checked,
                 'transcripts': {k: v for k, v in transcripts.items() if k in live}}
