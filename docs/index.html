@@ -97,8 +97,26 @@
   .dock { position: fixed; top: 50%; right: 0; width: 68px; transform: translateY(-50%); z-index: 20; }
   .dock svg.surface { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .dock .items { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 30px 0 30px 6px; }
-  .dock .handle { width: 16px; height: 11px; margin-bottom: 4px; display: grid; gap: 3px; }
-  .dock .handle i { display: block; height: 2px; border-radius: 1px; background: #8e8e93; }
+  /* The switch at the top of the dock, as in the app with agents in the dock: accounts or agents. */
+  .dock .switch { display: flex; gap: 2px; padding: 2px; margin-bottom: 6px; border-radius: 8px; background: rgba(255,255,255,.07); }
+  .dock .switch button { all: unset; display: grid; place-items: center; width: 24px; height: 20px; border-radius: 6px; color: #8e8e93; cursor: pointer; }
+  .dock .switch button[aria-pressed="true"] { background: rgba(255,255,255,.18); color: #fff; }
+  .dock .switch button:focus-visible { outline: 2px solid #64a8ff; }
+  .dock .switch svg { width: 13px; height: 13px; }
+  .cell .dot { position: absolute; right: 0; bottom: 0; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #050505; }
+  .bubble .pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+  .bubble .task { font-weight: 600; margin: 12px 0 10px; line-height: 1.35; }
+  .bubble .now { font-size: 12px; padding: 8px 10px; border-radius: 10px; margin: 0 0 12px; }
+  .bubble h4 { font-size: 10px; letter-spacing: .06em; color: #9a9aa2; margin: 12px 0 8px; }
+  .bubble .step { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0 0 6px; }
+  .bubble .step i { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid; box-sizing: border-box; }
+  .bubble .step span:first-of-type { flex: 1; }
+  .bubble .step .time { color: #9a9aa2; font-variant-numeric: tabular-nums; }
+  .bubble .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0 0 8px; }
+  .bubble .sub .ring { flex: none; }
+  .bubble .sub div { flex: 1; min-width: 0; }
+  .bubble .sub b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bubble .sub small { color: #9a9aa2; font-size: 11px; }
   .cell { all: unset; box-sizing: border-box; width: 56px; padding: 4px 0 3px; border-radius: 12px; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .cell:hover, .cell:focus-visible, .cell[aria-expanded="true"] { background: rgba(255,255,255,.07); }
@@ -150,7 +168,8 @@
     .wrap { padding: 0 16px; }
     .dock { top: auto; bottom: 0; left: 0; right: 0; width: auto; transform: none;
       background: #050505; border-top: 1px solid rgba(255,255,255,.16); border-radius: 18px 18px 0 0; }
-    .dock svg.surface, .dock .handle, .dock .tools, .cell .name, .cell .models { display: none; }
+    .dock svg.surface, .dock .tools, .cell .name, .cell .models { display: none; }
+    .dock .switch { flex-direction: column; margin: 0 6px 0 0; align-self: center; }
     .dock .items { flex-direction: row; justify-content: flex-start; gap: 4px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
       max-height: none; overflow-x: auto; overflow-y: hidden; }
     .cell { width: 52px; flex: none; }
@@ -242,7 +261,7 @@
         <a class="button primary" id="primary-download" href="#download"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download 1.0</a>
         <a class="button" href="https://github.com/Mako-L/account-capacity-dock"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>View source</a>
       </div>
-      <p class="hint"><span class="wide-only">Hover the dock on the right edge, just like the app.</span><span class="narrow-only">Tap an account in the dock below, just like the app.</span></p>
+      <p class="hint"><span class="wide-only">Hover the dock on the right edge, just like the app. The switch at its top shows your agents.</span><span class="narrow-only">Tap an account in the dock below, just like the app. The switch on its left shows your agents.</span></p>
       <div class="hero-shot"><img src="images/all-accounts.png" width="1180" height="1240" alt="All accounts dashboard: a card per Claude, Codex and Cursor account with quota bars, what each window used, the pace and the share of the plan price"></div>
     </div>
 
@@ -382,7 +401,10 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
 <aside class="dock" aria-label="Live demo of the dock, with demo accounts">
   <svg class="surface" aria-hidden="true"><path id="dock-path" fill="#050505" stroke="rgba(255,255,255,.16)" stroke-width="1"/></svg>
   <div class="items" id="dock-items">
-    <div class="handle" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="switch" role="group" aria-label="Dock shows">
+      <button type="button" data-mode="accounts" aria-pressed="true" title="Accounts" aria-label="Accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4.5 16a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/></svg></button>
+      <button type="button" data-mode="agents" aria-pressed="false" title="Agents" aria-label="Agents"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg></button>
+    </div>
   </div>
 </aside>
 <div class="bubble" id="bubble" role="tooltip"></div>
@@ -422,26 +444,59 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
       <path d="${RING}" fill="none" stroke="${signal(a)}" stroke-width="4.5" stroke-linecap="round" pathLength="100" stroke-dasharray="${used(a) || 0} 100" style="${used(a) ? '' : 'display:none'}"/>
     </svg>${a.p === 'Cursor' ? CUBE : `<img src="images/${a.p.toLowerCase()}.png" alt="">`}</div>`;
 
+  // Demo agents for the switch's second view: the same colours as the app, yellow working, red needs you, green finished.
+  const LIVE = { working: ['#ffd60a', 'Working'], blocked: ['#ff453a', 'Needs you'], done: ['#30d158', 'Finished'], idle: ['#8e8e93', 'Idle'] };
+  const AGENTS = [
+    { p: 'Claude', t: 'checkout-api', s: 'working', pct: 60, task: 'Add webhook handling for failed payments', now: 'Subagent: Review retry logic for races',
+      steps: [['Read the payment routes', 'done', '4m'], ['Add the webhook handler', 'done', '21m'], ['Review retries with a subagent', 'active', '6m'], ['Run the payment tests'], ['Open the pull request']],
+      subs: [['Review retry logic for races', 'working', 50, 'Read src/queue/worker.ts · 2/4 steps'], ['payment-tests', 'working', 67, 'Workflow · 3 of 5 agents done'],
+             ['Find where webhooks are verified', 'done', 100, 'Finished · Took 6m'], ['Draft the release note', 'idle', 100, 'Idle · 1/1 steps']],
+      cost: '$18.42 · ~8% of a week', total: '$26.42 · ~9% of a week', ran: 'Running for 52m' },
+    { p: 'Codex', t: 'design-system', s: 'working', pct: 25, task: 'Define dark mode colour tokens', now: 'Edit tokens.css',
+      steps: [['List every colour in use', 'done', '7m'], ['Define the tokens', 'active', '2m'], ['Swap the old values'], ['Check contrast']], subs: [], cost: '$6.10 · ~3% of a week', ran: 'Running for 21m' },
+    { p: 'Claude', t: 'mobile-app', s: 'blocked', pct: 67, task: 'Fix the login crash on Android', now: 'Waiting for your answer',
+      steps: [['Reproduce the crash', 'done', '9m'], ['Find the null token', 'done', '6m'], ['Ask before the schema change', 'active', '4m']], subs: [], cost: '$9.75 · ~4% of a week', ran: 'Running for 38m' },
+    { p: 'Claude', t: 'docs-site', s: 'done', pct: 100, task: 'Rewrite the install guide',
+      steps: [['Read the old guide', 'done', '3m'], ['Write the new steps', 'done', '15m'], ['Check every link', 'done', '2m']], subs: [], cost: '$3.20 · ~1% of a week', ran: 'Took 20m' },
+  ];
+  const agentRing = (g, size) => ring({ p: g.p, w: [['', g.pct]], s: '' }, size).replace(/stroke="#(30d158|ffd60a|ff9f0a|ff453a)"/, `stroke="${LIVE[g.s][0]}"`);
+
   const items = document.getElementById('dock-items');
-  ACCOUNTS.forEach((a, i) => {
-    const pct = used(a) == null ? '—' : used(a) + '%';
-    const cell = document.createElement('button');
-    cell.className = 'cell';
-    cell.setAttribute('aria-label', `${a.p} ${a.t}: ${pct} used, ${a.s}`);
-    cell.setAttribute('aria-expanded', 'false');
-    cell.innerHTML = ring(a, 36) + (a.p === 'Cursor'
-      ? `<div class="models">${a.w.map(w => `<span>${w[0].split(' ')[0].replace('Cursor', 'Models')}</span><b style="color:${w[1] >= 70 ? '#ffd60a' : '#30d158'}">${w[1]}%</b>`).join('')}</div>`
-      : `<span class="pct" style="color:${signal(a)}">${pct}</span><span class="name">${a.t}</span>`);
-    cell.addEventListener('mouseenter', () => { if (matchMedia('(hover: hover)').matches) show(i, cell); });
-    // Keyboard focus only: a tap also focuses the button, and the click below toggles the card.
-    cell.addEventListener('focus', () => { if (cell.matches(':focus-visible')) show(i, cell); });
-    cell.addEventListener('click', () => bubble.classList.contains('open') && current === i ? hide() : show(i, cell));
-    items.appendChild(cell);
-  });
-  items.insertAdjacentHTML('beforeend', `<div class="tools" aria-hidden="true">
+  let mode = 'accounts';
+  function cells() {
+    items.querySelectorAll('.cell, .tools').forEach(c => c.remove());
+    const list = mode === 'accounts' ? ACCOUNTS : AGENTS;
+    list.forEach((a, i) => {
+      const cell = document.createElement('button');
+      cell.className = 'cell';
+      cell.setAttribute('aria-expanded', 'false');
+      if (mode === 'agents') {
+        cell.setAttribute('aria-label', `${a.t}: ${LIVE[a.s][1]}, ${a.pct}%`);
+        cell.innerHTML = agentRing(a, 36) + `<span class="pct" style="color:${LIVE[a.s][0]}">${a.pct}%</span><span class="name">${a.t}</span>`;
+      } else {
+        const pct = used(a) == null ? '—' : used(a) + '%';
+        cell.setAttribute('aria-label', `${a.p} ${a.t}: ${pct} used, ${a.s}`);
+        cell.innerHTML = ring(a, 36) + (a.p === 'Cursor'
+          ? `<div class="models">${a.w.map(w => `<span>${w[0].split(' ')[0].replace('Cursor', 'Models')}</span><b style="color:${w[1] >= 70 ? '#ffd60a' : '#30d158'}">${w[1]}%</b>`).join('')}</div>`
+          : `<span class="pct" style="color:${signal(a)}">${pct}</span><span class="name">${a.t}</span>`);
+      }
+      cell.addEventListener('mouseenter', () => { if (matchMedia('(hover: hover)').matches) show(i, cell); });
+      // Keyboard focus only: a tap also focuses the button, and the click below toggles the card.
+      cell.addEventListener('focus', () => { if (cell.matches(':focus-visible')) show(i, cell); });
+      cell.addEventListener('click', () => bubble.classList.contains('open') && current === i ? hide() : show(i, cell));
+      items.appendChild(cell);
+    });
+    items.insertAdjacentHTML('beforeend', TOOLS);
+  }
+  document.querySelectorAll('.switch button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.switch button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    hide(); cells(); drawDock();
+  }));
+  const TOOLS = `<div class="tools" aria-hidden="true">
     <svg width="18" height="18" viewBox="0 0 18 18"><g fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="2"/><rect x="10" y="1" width="7" height="7" rx="2"/><rect x="1" y="10" width="7" height="7" rx="2"/><rect x="10" y="10" width="7" height="7" rx="2"/></g></svg>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-  </div>`);
+  </div>`;
 
   // The dock outline from design.rs: flares into the screen edge at top and bottom.
   const dock = document.querySelector('.dock');
@@ -461,6 +516,7 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
     clearTimeout(closeTimer);
     document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', String(c === cell)));
     current = i;
+    if (mode === 'agents') return place(cell, agentCard(AGENTS[i]));
     const a = ACCOUNTS[i], pct = used(a) == null ? '—' : used(a) + '%';
     bubble.innerHTML = `<p class="prov" style="color:${PROVIDER[a.p]}">${a.p.toUpperCase()}</p>
       <div class="head">${ring(a, 40)}<span class="title">${a.t}</span><span class="big" style="color:${signal(a)}">${pct}</span></div>
@@ -474,6 +530,26 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
         <div><span>Tokens</span><span>${(a.day || TODAY[a.p])[0]}</span></div>
         <div><span>API-equivalent cost</span><span>${(a.day || TODAY[a.p])[1]}</span></div></div>` : ''}
       <p class="src">${a.p === 'Cursor' ? 'Cursor CLI' : 'CLI proxy'} · demo account</p>`;
+    place(cell);
+  }
+  // The agent card, like the app's: task, the step it is on, timed steps, subagents and cost.
+  function agentCard(g) {
+    const [color, label] = LIVE[g.s];
+    const mark = st => st === 'done' ? '#30d158' : st === 'active' ? color : '#48484a';
+    return `<p class="prov" style="color:${PROVIDER[g.p]}">${g.p.toUpperCase()} <span class="pill" style="color:${color};background:${color}29">${label}</span></p>
+      <div class="head">${agentRing(g, 40)}<span class="title">${g.t}</span><span class="big" style="color:${color}">${g.pct}%</span></div>
+      <p class="task">${g.task}</p>
+      ${g.now ? `<p class="now" style="background:${color}17;border:1px solid ${color}40">${g.now}</p>` : ''}
+      <h4>STEPS · ${g.steps.filter(x => x[1] === 'done').length} OF ${g.steps.length}</h4>
+      ${g.steps.map(([title, st, time]) => `<p class="step"><i style="border-color:${mark(st)};${st === 'done' ? `background:${mark(st)}` : ''}"></i><span style="${st ? '' : 'color:#9a9aa2'}">${title}</span>${time ? `<span class="time">${time}</span>` : ''}</p>`).join('')}
+      ${g.subs.length ? `<h4>SUBAGENTS · ${g.subs.length}, ${g.subs.filter(x => x[1] === 'working').length} RUNNING</h4>` + g.subs.map(([title, st, pct, line]) =>
+        `<div class="sub">${agentRing({ p: g.p, s: st, pct }, 26)}<div><b>${title}</b><small>${line}</small></div><small style="color:${LIVE[st][0]}">${pct}%</small></div>`).join('') : ''}
+      <div class="usage"><div><b>Tokens</b></div><div><span>This agent</span><span>${g.cost}</span></div>
+        ${g.total ? `<div><span>With subagents</span><span>${g.total}</span></div>` : ''}</div>
+      <p class="src">${g.ran} · demo agent</p>`;
+  }
+  function place(cell, html) {
+    if (html) bubble.innerHTML = html;
     if (matchMedia('(max-width: 760px)').matches) { bubble.classList.add('open'); return; }
     const r = cell.getBoundingClientRect(), b = bubble.offsetHeight;
     const top = Math.min(Math.max(12, r.top + r.height / 2 - b / 2), innerHeight - b - 12);
@@ -481,6 +557,7 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
     bubble.style.setProperty('--tail', (r.top + r.height / 2 - top) + 'px');
     bubble.classList.add('open');
   }
+  cells(); drawDock();
   function hide() {
     bubble.classList.remove('open'); current = -1;
     document.querySelectorAll('.cell').forEach(c => c.setAttribute('aria-expanded', 'false'));
