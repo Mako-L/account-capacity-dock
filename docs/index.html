@@ -58,11 +58,30 @@
   .hint { color: var(--muted); font-size: 14px; margin: 20px 0 0; }
   .narrow-only { display: none; }
   @media (max-width: 760px) { .wide-only { display: none; } .narrow-only { display: inline; } }
+  /* A beam in the ring colours (green, yellow, red) runs round the hero image's edge, after libraries.dev/beam. */
+  @property --beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  @keyframes beam { to { --beam: 360deg; } }
   .hero-shot {
-    position: relative; margin: 40px auto 0; max-width: 1040px; border-radius: 18px; overflow: hidden;
+    position: relative; isolation: isolate; margin: 40px auto 0; max-width: 1040px; border-radius: 18px;
     border: 1px solid var(--border);
-    box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03), 0 -20px 140px rgba(48,209,88,.10);
+    box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03);
+    --beam-colours: transparent 0deg, transparent 200deg, #30d158 250deg, #ffd60a 295deg, #ff453a 335deg, transparent 360deg;
   }
+  .hero-shot img { border-radius: inherit; }
+  .hero-shot::before, .hero-shot::after {
+    content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+    background: conic-gradient(from var(--beam), var(--beam-colours));
+    animation: beam 7s linear infinite;
+  }
+  /* The sharp line on the border. */
+  .hero-shot::before {
+    z-index: 1; padding: 2px;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  }
+  /* The soft glow behind it. */
+  .hero-shot::after { z-index: -1; inset: -6px; filter: blur(28px); opacity: .45; }
+  @media (prefers-reduced-motion: reduce) { .hero-shot::before, .hero-shot::after { animation: none; --beam: 140deg; } }
   h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; margin: 0 0 20px; letter-spacing: -0.02em; }
   .lede { color: var(--muted); font-size: 19px; margin: 0 0 32px; max-width: 34em; }
   .providers { display: flex; gap: 16px; margin: 0 0 32px; padding: 0; list-style: none; font-size: 15px; color: var(--muted); }
