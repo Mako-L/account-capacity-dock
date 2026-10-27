@@ -18,8 +18,10 @@ const HOME_VIEW: View = WIDGET === 'agents' ? 'agents' : 'dock'
 const PIN_STATE = process.env.HERDR_PLUGIN_STATE_DIR
   ? path.join(process.env.HERDR_PLUGIN_STATE_DIR, WIDGET === 'agents' ? 'pinned-agents' : 'pinned-side') : null
 
-// Set when the desktop app opens this window: its preferences domain, which holds the dock settings.
+// The desktop app's preferences domain, which holds the dock settings. The app passes it to its own window.
+// A Herdr pane on the same Mac finds it too, once the desktop app has saved a setting.
 const DOCK = process.env.MAKO_DOCK_DEFAULTS
+  ?? (process.platform === 'darwin' && Bun.spawnSync(['defaults', 'read', 'com.mako-l.capacity']).exitCode === 0 ? 'com.mako-l.capacity' : undefined)
 const DOCK_DEFAULTS: Record<string, string> = { dockScale: '1', dockOpacity: '1', roundIcons: '0', showNames: '1', dockEdge: 'right', agentsInDock: '0' }
 function readDock(): Record<string, string> {
   if (!DOCK) return {}
@@ -311,6 +313,58 @@ function App() {
   const namesButton = <SmallButton label={showNames ? 'Hide account names' : 'Show account names'} onClick={toggleNames} />
   const current = accounts[Math.min(hovered, accounts.length - 1)]
 
+  // One settings page for the window and the Herdr pane: a narrow pane gets the same sections.
+  const settings = <>
+    <Text size={17} weight={600}>Proxy server</Text>
+    <Text size={12} color={C.muted}>Leave the address empty to use the local Docker proxy. Saving checks that the server answers.</Text>
+    <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
+      style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
+    <input value={proxyKey} placeholder={readSettings().PROXY_MANAGEMENT_KEY ? 'Management key (saved; type to replace)' : 'Management key'}
+      onChange={e => setProxyKey(String(e.value ?? ''))}
+      style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <SmallButton label="Save and test" primary onClick={() => !busy && saveProxy(false)} />
+      <SmallButton label="Use local proxy" onClick={() => !busy && saveProxy(true)} />
+      <SmallButton label="Open proxy panel" onClick={() => setMessage(openProxyPanel())} />
+    </div>
+    <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
+    <Text size={17} weight={600}>Privacy</Text>
+    <Text size={12} color={C.muted}>Hiding names removes account names and emails, here and in the Herdr widget.</Text>
+    <div style={{ display: 'flex' }}>{namesButton}</div>
+    <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
+    <Text size={17} weight={600}>Agents</Text>
+    <Text size={12} color={C.muted}>
+      The observer asks a small model through your proxy to name each busy agent's task and steps, at most once a minute per agent.
+      Agents can also report their own steps: mako-capacity agents report "Step" --done 2 --total 5
+    </Text>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}{activityButton}</div>
+    <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
+    <Text size={17} weight={600}>Hidden accounts</Text>
+    {hidden.length === 0 && <Text size={12} color={C.muted}>No hidden accounts.</Text>}
+    {hidden.map(([id, label]) => (
+      <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Text size={13} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{label}</Text>
+        <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
+      </div>))}
+    {DOCK ? <>
+      <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
+      <Text size={17} weight={600}>Dock</Text>
+      <Text size={12} color={C.muted}>Changes apply to the desktop dock at once, also from Herdr.</Text>
+      <Text size={12} color={C.muted}>Size</Text>
+      {stepper('dockScale', 0.65, 1.4)}
+      <Text size={12} color={C.muted}>Background opacity</Text>
+      {stepper('dockOpacity', 0.25, 1)}
+      <Text size={12} color={C.muted}>Icon shape</Text>
+      {choice('roundIcons', 'bool', [['Rounded square', false], ['Circle', true]])}
+      <Text size={12} color={C.muted}>Account names</Text>
+      {choice('showNames', 'bool', [['Show', true], ['Hide', false]])}
+      <Text size={12} color={C.muted}>Screen edge</Text>
+      {choice('dockEdge', 'string', [['Right', 'right'], ['Left', 'left'], ['Top', 'top'], ['Bottom', 'bottom'], ['Floating', 'floating']])}
+      <Text size={12} color={C.muted}>Agents</Text>
+      {choice('agentsInDock', 'bool', [['Own dock', false], ['In this dock', true]])}
+    </> : <Text size={11} color={C.muted} style={{ paddingTop: 12 }}>Dock size, edge and icon shape are set in the desktop dock.</Text>}
+  </>
+
   async function act(account: Account, action: 'hide' | 'delete' | 'confirm' | 'cancel') {
     if (action === 'confirm') return setConfirm(account.id)
     setConfirm(null)
@@ -378,24 +432,8 @@ function App() {
         </Scroll></>
     } else {
       body = <>{back('Settings', () => setView(HOME_VIEW))}
-        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 12, paddingRight: 12, paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Text size={12} color={C.muted}>Proxy address, empty for the local Docker proxy.</Text>
-          <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
-            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
-          <input value={proxyKey} placeholder={readSettings().PROXY_MANAGEMENT_KEY ? 'Key (saved; type to replace)' : 'Management key'}
-            onChange={e => setProxyKey(String(e.value ?? ''))}
-            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <SmallButton label="Save and test" primary onClick={() => !busy && saveProxy(false)} />
-            <SmallButton label="Use local" onClick={() => !busy && saveProxy(true)} />
-          </div>
-          <div style={{ display: 'flex' }}>{namesButton}</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}{activityButton}</div>
-          {hidden.map(([id, label]) => (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Text size={12} style={{ ...ONE_LINE, flexGrow: 1, flexShrink: 1, minWidth: 0 }}>{label}</Text>
-              <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
-            </div>))}
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', paddingLeft: 12, paddingRight: 12, paddingBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {settings}
         </Scroll></>
     }
     return (
@@ -459,55 +497,9 @@ function App() {
         </Scroll>)}
 
       {view === 'settings' && (
-        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>
-          <Text size={17} weight={600}>Proxy server</Text>
-          <Text size={12} color={C.muted}>Leave the address empty to use the local Docker proxy. Saving checks that the server answers.</Text>
-          <input value={proxyUrl} placeholder="https://server:8317" onChange={e => setProxyUrl(String(e.value ?? ''))}
-            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
-          <input value={proxyKey} placeholder={readSettings().PROXY_MANAGEMENT_KEY ? 'Management key (saved; type to replace)' : 'Management key'}
-            onChange={e => setProxyKey(String(e.value ?? ''))}
-            style={{ backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8, color: C.text, fontSize: 13, borderWidth: 1, borderColor: '#ffffff1f' }} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <SmallButton label="Save and test" primary onClick={() => !busy && saveProxy(false)} />
-            <SmallButton label="Use local proxy" onClick={() => !busy && saveProxy(true)} />
-            <SmallButton label="Open proxy panel" onClick={() => setMessage(openProxyPanel())} />
-          </div>
-          <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
-          <Text size={17} weight={600}>Privacy</Text>
-          <Text size={12} color={C.muted}>Hiding names removes account names and emails, here and in the Herdr widget.</Text>
-          <div style={{ display: 'flex' }}>{namesButton}</div>
-          <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
-          <Text size={17} weight={600}>Agents</Text>
-          <Text size={12} color={C.muted}>
-            The observer asks a small model through your proxy to name each busy agent's task and steps, at most once a minute per agent.
-            Agents can also report their own steps: mako-capacity agents report "Step" --done 2 --total 5
-          </Text>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{observerButton}{idleButton}{activityButton}</div>
-          <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
-          <Text size={17} weight={600}>Hidden accounts</Text>
-          {hidden.length === 0 && <Text size={12} color={C.muted}>No hidden accounts.</Text>}
-          {hidden.map(([id, label]) => (
-            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Text size={13} style={{ flexGrow: 1 }}>{label}</Text>
-              <SmallButton label="Restore" onClick={async () => { if (await collect(['--restore', id])) setMessage('Restored.') }} />
-            </div>))}
-          {DOCK ? <>
-            <div style={{ height: 1, backgroundColor: '#ffffff14', marginTop: 8, marginBottom: 8 }} />
-            <Text size={17} weight={600}>Dock</Text>
-            <Text size={12} color={C.muted}>Changes apply to the desktop dock at once.</Text>
-            <Text size={12} color={C.muted}>Size</Text>
-            {stepper('dockScale', 0.65, 1.4)}
-            <Text size={12} color={C.muted}>Background opacity</Text>
-            {stepper('dockOpacity', 0.25, 1)}
-            <Text size={12} color={C.muted}>Icon shape</Text>
-            {choice('roundIcons', 'bool', [['Rounded square', false], ['Circle', true]])}
-            <Text size={12} color={C.muted}>Account names</Text>
-            {choice('showNames', 'bool', [['Show', true], ['Hide', false]])}
-            <Text size={12} color={C.muted}>Screen edge</Text>
-            {choice('dockEdge', 'string', [['Right', 'right'], ['Left', 'left'], ['Top', 'top'], ['Bottom', 'bottom'], ['Floating', 'floating']])}
-            <Text size={12} color={C.muted}>Agents</Text>
-            {choice('agentsInDock', 'bool', [['Own dock', false], ['In this dock', true]])}
-          </> : <Text size={11} color={C.muted} style={{ paddingTop: 12 }}>Dock size, edge and icon shape are set in the desktop dock.</Text>}
+        // The scroller spans the window, so its shades run edge to edge; the column sits in the middle.
+        <Scroll style={{ flexGrow: 1, overflowY: 'scroll', padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 12 }}>{settings}</div>
         </Scroll>)}
     </div>
   )

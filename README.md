@@ -282,6 +282,8 @@ buttons at the bottom open All accounts, Settings and Refresh. Two buttons are n
 - **Pin:** the widget follows you to every tab. Press it again to unpin.
 - **Eye:** hides account names and emails, so you can share your screen. The text
   widget and Settings use the same switch.
+- **Gear:** opens the full Settings page, the same one as in the window: proxy, privacy,
+  agents, hidden accounts and, on a Mac with the desktop app, the dock settings.
 
 The narrow pane on the right shows names hidden.
 
