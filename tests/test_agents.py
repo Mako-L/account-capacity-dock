@@ -53,8 +53,14 @@ class ClaudeTranscriptTests(unittest.TestCase):
         self.assertEqual(agent['steps'][0]['since'], 100)
         agent = {'id': 'a', 'status': 'working', 'steps': [{'title': 'Fix', 'status': 'done'}, {'title': 'Test', 'status': 'done'}], 'subagents': []}
         agents.clock_steps([agent], times, 160)
-        # Test jumped straight to done: it starts where Fix ended, so it gets a time too.
-        self.assertEqual([s['took'] for s in agent['steps']], [60, 0])
+        # Test showed up done in the same refresh that Fix ended: the dock never saw it run, so no time.
+        self.assertEqual([s.get('took') for s in agent['steps']], [60, None])
+
+    def test_a_step_the_observer_renames_as_it_finishes_keeps_its_time(self):
+        times = agents.clock_steps([{'id': 'a', 'status': 'working', 'steps': [{'title': 'Read', 'status': 'active'}], 'subagents': []}], {}, 100)
+        agent = {'id': 'a', 'status': 'working', 'steps': [{'title': 'Read the code', 'status': 'done'}, {'title': 'Fix', 'status': 'active'}], 'subagents': []}
+        agents.clock_steps([agent], times, 160)
+        self.assertEqual(agent['steps'][0]['took'], 60)
 
     def test_a_stopped_agent_stops_its_active_step_clock(self):
         agent = {'id': 'a', 'status': 'idle', 'updated': 400, 'steps': [{'title': 'Fix', 'status': 'active', 'since': 100}], 'subagents': []}

@@ -766,6 +766,9 @@ def clock_steps(agents, times, now):
         # A step first seen done or active starts where the step before it ended.
         # A stopped agent's active step stops counting at its last event.
         last = min(now, updated or now)
+        # The observer renames a step when it finishes it: the first new done step starts at the agent's last mark.
+        marks = [v for key, mark in times.items() if key.startswith(owner + '|') for k, v in mark.items() if k != 'seen']
+        renamed = max(marks) if marks and running else None
         prev_end = None
         for step in steps or []:
             if step.get('took') is not None or step.get('since'):
@@ -774,9 +777,12 @@ def clock_steps(agents, times, now):
                 prev_end = None
                 continue
             key = f"{owner}|{step.get('title')}"
-            mark = dict(times.get(key) or {})
-            if not mark.get('start') and (prev_end or (step['status'] == 'active' and running)):
-                mark['start'] = prev_end or now
+            if key not in times and step['status'] == 'done' and renamed and renamed < now and not prev_end:
+                prev_end, renamed = renamed, None
+            mark = dict(times.get(key) or {}, seen=now) if key not in times else dict(times[key])
+            # ponytail: steps that show up done together share no time, so only the first one gets it.
+            if not mark.get('start') and ((prev_end and prev_end < now) or (step['status'] == 'active' and running)):
+                mark['start'] = prev_end if prev_end and prev_end < now else now
             if step['status'] == 'active' and mark.get('start'):
                 if running:
                     step['since'] = mark['start']
@@ -786,8 +792,7 @@ def clock_steps(agents, times, now):
                 mark.setdefault('end', max(mark['start'], now if running else last))
                 step['took'] = round(mark['end'] - mark['start'])
             prev_end = mark.get('end') if step['status'] == 'done' else None
-            if mark:
-                kept[key] = mark
+            kept[key] = mark
 
     def walk(items):
         for item in items:
