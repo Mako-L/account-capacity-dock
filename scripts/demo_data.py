@@ -96,7 +96,9 @@ checkout_subs = [
         children=[sub('s1a', 'fork', 'Check the lock around retries', minutes=3, cost=0.41, steps=[step('Read lock.ts', 'done', took=48), step('Trace callers', 'done', took=71)])]),
     sub('wf1', 'payment-tests', 'Run the payment test matrix', running=True, minutes=9, kind='workflow', summary='3 of 5 agents done', cost=4.12,
         step_now='tests:refunds', steps=[step('Build', 'done', took=180), step('Unit', 'done', took=210), step('Integration', 'active', since=150)],
-        children=[sub('w1', 'tests:api', 'API tests', minutes=4, cost=0.9, phase='Unit'), sub('w2', 'tests:refunds', 'Refund tests', running=True, minutes=2, cost=0.7, phase='Integration')]),
+        # Running first, then finished, then idle: the order agents.py gives.
+        children=[sub('w2', 'tests:refunds', 'Refund tests', running=True, minutes=2, cost=0.7, phase='Integration', step_now='Run refunds.spec.ts'),
+                  sub('w1', 'tests:api', 'API tests', minutes=4, cost=0.9, phase='Unit')]),
     sub('s2', 'Explore', 'Find where webhooks are verified', minutes=18, cost=0.66, model='haiku', steps=[
         step('Search for signature checks', 'done', took=40), step('Read the webhook router', 'done', took=65)]),
     sub('s3', 'docs-writer', 'Draft the release note', idle=True, minutes=41, cost=0.38, steps=[step('Draft the note', 'done', took=210)]),

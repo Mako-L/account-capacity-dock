@@ -23,6 +23,12 @@ title = "Agents"
 placement = "split"
 command = ["sh", "-c", "MAKO_WIDGET=agents exec python3 \"$HERDR_PLUGIN_ROOT/../scripts/capacity.py\" ui agents --terminal"]
 
+[[panes]]
+id = "agents-text"
+title = "Agents"
+placement = "split"
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/agents_tui.py\""]
+
 [[actions]]
 id = "open-right"
 title = "Mako Capacity: dock on the right"
@@ -76,6 +82,24 @@ id = "pin-agents-left"
 title = "Mako Capacity: pin agents on the left in every tab"
 contexts = ["global", "workspace", "pane"]
 command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left agents"]
+
+[[actions]]
+id = "open-agents-text-right"
+title = "Mako Capacity: agents as text on the right"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" right agents text"]
+
+[[actions]]
+id = "pin-agents-text-right"
+title = "Mako Capacity: pin agents as text on the right in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin right agents text"]
+
+[[actions]]
+id = "pin-agents-text-left"
+title = "Mako Capacity: pin agents as text on the left in every tab"
+contexts = ["global", "workspace", "pane"]
+command = ["sh", "-c", "exec python3 \"$HERDR_PLUGIN_ROOT/open.py\" pin left agents text"]
 
 [[actions]]
 id = "unpin-agents"

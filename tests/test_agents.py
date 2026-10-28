@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import sys
 import tempfile
@@ -255,6 +256,41 @@ class AgentsWidgetPinTests(unittest.TestCase):
             opener.pin('right', 'agents', opener.AGENTS)
             self.assertEqual(opener.pinned(opener.AGENTS), ('right', 'agents'))
             self.assertEqual(opener.pinned(opener.CAPACITY), ('', 'capacity'))
+
+
+class AgentsTextWidgetTests(unittest.TestCase):
+    def setUp(self):
+        if sys.platform == 'win32':
+            self.skipTest('The text widget runs inside Herdr on macOS and Linux only.')
+        sys.path.insert(0, str(ROOT / 'herdr-plugin'))
+        import agents_tui
+        self.tui = agents_tui
+
+    def test_cards_show_timed_steps_subagents_in_order_and_cost(self):
+        now = 1_000_000
+        sub = lambda id, running=False, idle=False: {'id': id, 'name': id, 'description': id, 'running': running, 'idle': idle,
+                                                     'progress': 50 if running else 100, 'started': now - 600, 'updated': now - 60}
+        agent = {'id': 'w1:p1', 'agent': 'claude', 'name': 'shop', 'status': 'working', 'task': 'Fix login', 'progress': 50,
+                 'started': now - 3600, 'pane': 'w1:p1',
+                 'steps': [{'title': 'Read', 'status': 'done', 'took': 240}, {'title': 'Write', 'status': 'active', 'since': now - 90}],
+                 'subagents': [sub('busy', running=True), sub('ended'), sub('waiting', idle=True)],
+                 'usage': {'input': 1, 'output': 2, 'cacheRead': 3, 'cacheWrite': 4, 'cost': 2.5, 'weekPercent': 3.2},
+                 'totalUsage': {'input': 1, 'output': 2, 'cacheRead': 3, 'cacheWrite': 4, 'cost': 4.0, 'weekPercent': 5}}
+        plain = lambda lines: [re.sub(r'\x1b\[[0-9;]*m', '', line) for line in lines]
+        card = plain(self.tui.detail_view(agent, 'agent', 46, 0, now, {}).lines)
+        text = '\n'.join(card)
+        self.assertIn('4m', next(line for line in card if 'Read' in line))
+        self.assertIn('1m', next(line for line in card if 'Write' in line))
+        self.assertLess(text.index('busy'), text.index('ended'))
+        self.assertLess(text.index('ended'), text.index('waiting'))
+        self.assertIn('$4.00 · ~5% of a week', text)
+        self.assertIn('Running for 1h', text)
+        self.assertTrue(all(len(line) <= 46 for line in card))
+        self.assertEqual(self.tui.list_view([agent, dict(agent, id='w2', status='idle')], 46, 0, now).targets.count(('agent', 'w2')), 1)
+
+    def test_keys_read_arrows_escape_and_clicks(self):
+        self.assertEqual(self.tui.keys_of('\x1b[A\x1b[Bj\r\x1bq'), ['up', 'down', 'down', 'enter', 'back', 'q'])
+        self.assertEqual(self.tui.keys_of('\x1b[<0;5;7M\x1b[<0;5;7m\x1b[<65;1;1M'), [('mouse', 0, 5, 7), ('mouse', 65, 1, 1)])
 
 
 if __name__ == '__main__':

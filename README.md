@@ -466,6 +466,20 @@ used per account (`✳` Claude, `◎` Codex, `⬡` Cursor) with a pie (`○◔�
 tab_bar_right = [{ type = "command", command = "python3 \"$HOME/Documents/GitHub/account-capacity-dock/herdr-plugin/capacity.py\" --status", interval_seconds = 60, timeout_seconds = 30 }]
 ```
 
+### Agents as plain text
+
+If your terminal has no Kitty graphics, use the text widget. It shows the same list,
+cards, steps with their times, subagents and tokens with plain characters.
+Keys: ↑ ↓ to move, ⏎ to open a card, esc to go back, `g` to go to the agent's pane,
+`i` to show idle agents, `a` to show recent activity, `q` to quit. The mouse also clicks and scrolls.
+
+```sh
+herdr plugin action invoke pin-agents-text-right --plugin mako-capacity   # or pin-agents-text-left
+python3 herdr-plugin/agents_tui.py   # the same view in any terminal
+```
+
+![The text agents widget in a terminal: the list, an agent card, a workflow card](docs/images/herdr-agents-text.png)
+
 ## Operations and troubleshooting
 
 ```sh

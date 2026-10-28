@@ -110,8 +110,9 @@ def side_of(widget, pane):
 
 def main(args):
     kind = AGENTS if 'agents' in args else CAPACITY
-    entry = 'app' if 'app' in args else kind.entry
-    args = [a for a in args if a not in ('app', 'agents')]
+    # 'app' picks the GPUIX app. 'text' picks the plain-text agents widget.
+    entry = 'app' if 'app' in args else 'agents-text' if kind is AGENTS and 'text' in args else kind.entry
+    args = [a for a in args if a not in ('app', 'agents', 'text')]
     if args[:1] == ['ensure']:
         return ensure()
     if args[:1] == ['toggle']:
