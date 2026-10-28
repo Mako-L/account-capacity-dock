@@ -584,10 +584,12 @@ def claude_sessions(checked=None):
     for path in (p for root in claude_dirs() for p in (root / 'sessions').glob('*.json')):
         data = read_json(path)
         if isinstance(data.get('pid'), int) and data.get('sessionId'):
-            try:
-                os.kill(data['pid'], 0)
-            except OSError:
-                continue
+            # On Windows signal 0 is CTRL_C_EVENT, so os.kill would interrupt the process. ps decides there.
+            if os.name != 'nt':
+                try:
+                    os.kill(data['pid'], 0)
+                except OSError:
+                    continue
             data['root'] = str(path.parent.parent)
             found.append(data)
     # A session file can outlive its process, and macOS then gives the pid to a new one.
