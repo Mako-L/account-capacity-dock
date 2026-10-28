@@ -331,6 +331,7 @@ def read_claude(events):
             # Subagent transcripts mark every event as a sidechain: their tool results still close calls.
             if words and not event.get('isSidechain') and not event.get('isMeta') and not words.startswith(('<', 'Another Claude session', 'Stop hook feedback', '[Request interrupted', 'Caveat:')):
                 found['prompt'] = clip(words, 160)
+                found['asked'] = stamp(event)
             for block in content if isinstance(content, list) else []:
                 if isinstance(block, dict) and block.get('type') == 'tool_result':
                     call = found['pending'].pop(block.get('tool_use_id'), None)
@@ -634,6 +635,7 @@ def read_codex(events):
             words = ' '.join(b.get('text', '') for b in payload.get('content') or [] if isinstance(b, dict) and b.get('type') == 'input_text').strip()
             if words and not words.startswith('<'):
                 found['prompt'] = clip(words, 160)
+                found['asked'] = stamp(event)
         if kind in ('agent_message',) and payload.get('message'):
             found['last_text'] = clip(payload['message'], 160)
             found['activity'].append({'at': at, 'text': clip(payload['message'], 90), 'kind': 'say'})
@@ -760,28 +762,39 @@ def clock_steps(agents, times, now):
     """
     kept = {}
 
-    def visit(owner, steps):
+    def visit(owner, steps, running, updated):
+        # A step first seen done or active starts where the step before it ended.
+        # A stopped agent's active step stops counting at its last event.
+        last = min(now, updated or now)
+        prev_end = None
         for step in steps or []:
             if step.get('took') is not None or step.get('since'):
+                if step.get('since') and step['status'] == 'active' and not running:
+                    step['took'] = max(0, round(last - step.pop('since')))
+                prev_end = None
                 continue
             key = f"{owner}|{step.get('title')}"
             mark = dict(times.get(key) or {})
-            if step['status'] == 'active':
-                mark.setdefault('start', now)
-                step['since'] = mark['start']
-            elif step['status'] == 'done':
-                if mark.get('start'):
-                    mark.setdefault('end', now)
-                    step['took'] = round(mark['end'] - mark['start'])
+            if not mark.get('start') and (prev_end or (step['status'] == 'active' and running)):
+                mark['start'] = prev_end or now
+            if step['status'] == 'active' and mark.get('start'):
+                if running:
+                    step['since'] = mark['start']
+                else:
+                    step['took'] = max(0, round(last - mark['start']))
+            elif step['status'] == 'done' and mark.get('start'):
+                mark.setdefault('end', max(mark['start'], now if running else last))
+                step['took'] = round(mark['end'] - mark['start'])
+            prev_end = mark.get('end') if step['status'] == 'done' else None
             if mark:
                 kept[key] = mark
 
     def walk(items):
         for item in items:
-            visit(item['id'], item.get('steps'))
+            visit(item['id'], item.get('steps'), item.get('running'), item.get('updated'))
             walk(item.get('children') or [])
     for agent in agents:
-        visit(agent['id'], agent.get('steps'))
+        visit(agent['id'], agent.get('steps'), agent.get('status') == 'working', agent.get('updated'))
         walk(agent.get('subagents') or [])
     return kept
 
@@ -875,6 +888,8 @@ def collect(run_observer=False):
             'said': found.get('last_text'), 'steps': steps, 'activity': found.get('activity', []),
             'updated': updated, 'source': 'tasks' if steps else 'activity', 'transcript': transcript,
         })
+        # The run time counts from the last request, not from when the session opened.
+        agent['started'] = max(agent.get('started') or 0, found.get('asked') or 0) or None
         observed = read_json(observed_dir / f'{agent["session"]}.json') if agent.get('session') else {}
         if observed.get('result') and not steps and now - observed.get('at', 0) < 3600:
             result = observed['result']

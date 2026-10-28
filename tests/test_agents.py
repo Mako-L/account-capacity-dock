@@ -48,12 +48,23 @@ class ClaudeTranscriptTests(unittest.TestCase):
         self.assertEqual([s['took'] for s in steps], [300, 120, 120])
 
     def test_observer_steps_get_times_from_when_the_dock_saw_them(self):
-        agent = {'id': 'a', 'steps': [{'title': 'Fix', 'status': 'active'}], 'subagents': []}
+        agent = {'id': 'a', 'status': 'working', 'steps': [{'title': 'Fix', 'status': 'active'}], 'subagents': []}
         times = agents.clock_steps([agent], {}, 100)
         self.assertEqual(agent['steps'][0]['since'], 100)
-        agent = {'id': 'a', 'steps': [{'title': 'Fix', 'status': 'done'}], 'subagents': []}
+        agent = {'id': 'a', 'status': 'working', 'steps': [{'title': 'Fix', 'status': 'done'}, {'title': 'Test', 'status': 'done'}], 'subagents': []}
         agents.clock_steps([agent], times, 160)
-        self.assertEqual(agent['steps'][0]['took'], 60)
+        # Test jumped straight to done: it starts where Fix ended, so it gets a time too.
+        self.assertEqual([s['took'] for s in agent['steps']], [60, 0])
+
+    def test_a_stopped_agent_stops_its_active_step_clock(self):
+        agent = {'id': 'a', 'status': 'idle', 'updated': 400, 'steps': [{'title': 'Fix', 'status': 'active', 'since': 100}], 'subagents': []}
+        agents.clock_steps([agent], {}, 9000)
+        self.assertEqual(agent['steps'][0], {'title': 'Fix', 'status': 'active', 'took': 300})
+
+    def test_the_run_time_counts_from_the_last_request(self):
+        events = [{'type': 'user', 'timestamp': '2026-10-22T10:00:00Z', 'message': {'content': 'first job'}},
+                  {'type': 'user', 'timestamp': '2026-10-22T12:00:00Z', 'message': {'content': 'second job'}}]
+        self.assertEqual(agents.read_claude(events)['asked'], agents.stamp(events[1]))
 
     def test_hook_and_meta_messages_are_not_the_prompt(self):
         events = [
