@@ -186,7 +186,9 @@
     .cell .name { display: none; }
   }
   /* Very short screens: the dock scrolls instead of running off the top and bottom. */
-  .dock .items { max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none; }
+  .dock .items { max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
+    /* The dock body runs from 24 px below its top flare to 24 px above its bottom flare: scrolled cells stay inside it. */
+    clip-path: inset(24px 0 24px 0); }
   .dock .items::-webkit-scrollbar { display: none; }
   /* Phones: the dock moves to the bottom edge, as the app can, and the card opens above it. */
   @media (max-width: 760px) {
@@ -197,7 +199,7 @@
     .dock svg.surface, .dock .tools, .cell .name, .cell .models { display: none; }
     .dock .switch { flex-direction: column; margin: 0 6px 0 0; align-self: center; }
     .dock .items { flex-direction: row; justify-content: flex-start; gap: 4px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-      max-height: none; overflow-x: auto; overflow-y: hidden; }
+      max-height: none; overflow-x: auto; overflow-y: hidden; clip-path: none; }
     .cell { width: 52px; flex: none; }
     .cell .pct { font-size: 13px; }
     .ring { width: 38px !important; height: 38px !important; }
