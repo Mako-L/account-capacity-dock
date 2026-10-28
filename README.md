@@ -7,7 +7,7 @@ edge flares, quota rings, provider icons, account labels, and inward-facing hove
 bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
 <p align="center">
-  <a href="https://mako-l.github.io/account-capacity-dock/#video"><img src="docs/media/showreel.gif" alt="30-second film: quota rings fill, turn red at the limit and count down to the reset" width="640"></a>
+  <a href="https://mako-l.github.io/account-capacity-dock/#video"><img src="docs/media/showreel.gif" alt="30-second film: quota rings fill, agent cards open with timed steps and subagents, then the end title" width="640"></a>
   <br><sub>Click for the full film with sound.</sub>
 </p>
 
