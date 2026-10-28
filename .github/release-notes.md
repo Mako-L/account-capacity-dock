@@ -1,6 +1,6 @@
 Mako Capacity 1.1 brings your agents into the dock: timed steps, subagents, workflows and the cost of each agent.
 
-[![What is new in 1.1](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.gif)](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.mp4)
+[![What is new in 1.1](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.gif?v=2)](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.mp4)
 
 [Watch the film with sound](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.mp4) (22 seconds, demo data).
 
