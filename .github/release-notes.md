@@ -1,4 +1,8 @@
-First stable release of Mako Capacity: one view of how much capacity is left on every Claude, Codex and Cursor account.
+Mako Capacity 1.1 brings your agents into the dock: timed steps, subagents, workflows and the cost of each agent.
+
+[![What is new in 1.1](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.gif)](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.mp4)
+
+[Watch the film with sound](https://mako-l.github.io/account-capacity-dock/media/whats-new-1.1.mp4) (22 seconds, demo data).
 
 ## Downloads
 
@@ -19,10 +23,14 @@ The app needs Python 3.9 or newer. To add accounts, run CLIProxyAPI in Docker or
 
 **Windows:** the app is not signed, so SmartScreen may warn on first run. Choose **More info**, then **Run anyway**.
 
-## What is in 1.0
+## What is new in 1.1
 
-- A dock with a quota ring per account, hover details and an All accounts dashboard.
-- Hide, restore and delete accounts from the dashboard.
-- Claude and Codex logins through one CLIProxyAPI, local or on another machine.
-- A Herdr widget with rings, layouts that follow the pane width, and pinning: `herdr plugin install Mako-L/account-capacity-dock/herdr-plugin`.
-- Today's local token use and API-equivalent cost from CodeBurn.
+- **Agents in the dock:** a switch moves between accounts and agents. Each agent shows a progress ring, a status colour and its Herdr workspace name.
+- **Agent cards:** the task, the current step and how long each step took.
+- **Subagents and workflows:** each one opens its own card. They list running, then finished, then idle.
+- **Cost per agent:** tokens, API-equivalent cost and about how much of a weekly limit each agent used.
+- **Account cards:** spend per quota window, share of the plan price, when a window fills at this pace.
+- **No proxy needed:** the dock reads the local Claude Code and Codex logins.
+- **Herdr:** a plain-text agents widget, and the GPUIX app pinned in a pane.
+
+The full list is in [CHANGELOG.md](https://github.com/Mako-L/account-capacity-dock/blob/main/CHANGELOG.md).

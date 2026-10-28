@@ -19,6 +19,7 @@ bubbles inspired by [CodeBurn](https://github.com/getagentseal/codeburn).
 
 Screenshots use demo accounts. Downloads for macOS, Windows and Linux are on the
 [releases page](https://github.com/Mako-L/account-capacity-dock/releases/latest).
+What changed in each version is in [CHANGELOG.md](CHANGELOG.md). Version 1.1 brings agents into the dock.
 
 > [!WARNING]
 > **Windows and Linux are untested.** The developer has only run Mako Capacity on
