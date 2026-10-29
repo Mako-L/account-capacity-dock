@@ -217,6 +217,8 @@ Under each quota bar, the card also shows what the account used inside that wind
   API rates. Codex shows no plan price yet.
 - **Pace:** "At this pace, full in 1d 4h" if the share used so far, divided by the
   time since the window started, would fill the window before it resets.
+  If it would not, the card says where the window ends up: "At this pace, about
+  79% at the reset".
 - **Used up:** "Used up in 1d 10h" once a window reaches 100%. It counts from the
   window start to the last hour in which the account still served requests.
 

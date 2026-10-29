@@ -25,6 +25,7 @@ def window(label, used, reset_hours, cost=None, tokens=None, plan=None, used_up=
     if 0 < used < 100 and elapsed > 0:
         left = elapsed * (100 - used) / used
         w['fullIn'] = left if now + left < w['resetAt'] else None
+        w['atReset'] = None if w['fullIn'] else round(used * length / elapsed)
     if used_up:
         w['usedUpIn'] = used_up * H
     return w

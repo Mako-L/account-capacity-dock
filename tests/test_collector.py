@@ -82,6 +82,9 @@ class CapacityParsingTests(unittest.TestCase):
         collector.window_usage([{'source': 'Claude Code login', 'windows': [fast, slow]}])
         self.assertAlmostEqual(fast['fullIn'], 1.5 * 3600, delta=5)
         self.assertIsNone(slow['fullIn'])
+        # 5% in the first day of seven ends near 35%, so the card says that instead.
+        self.assertEqual(slow['atReset'], 35)
+        self.assertIsNone(fast['atReset'])
 
     def test_a_full_window_reports_when_it_ran_out(self):
         series = [{'hour': '2026-10-20T00:00:00Z', 'requests': 5, 'failed_requests': 0},

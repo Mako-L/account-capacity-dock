@@ -313,7 +313,7 @@
       <div class="features">
         <div class="card"><h3>Quota rings</h3><p>Percent used on the tightest window: 5-hour, weekly or per model. Exhausted and disconnected accounts stay visible.</p></div>
         <div class="card"><h3>Spend per window</h3><p>Tokens and API-equivalent cost for each account inside its 5-hour window and its week, from the proxy's usage tracker and CodeBurn's prices.</p></div>
-        <div class="card"><h3>Pace and plan price</h3><p>"At this pace, full in 1d 4h" before a window runs out, "Used up in 1d 10h" after. The week also shows its share of the plan's list price.</p></div>
+        <div class="card"><h3>Pace and plan price</h3><p>"At this pace, full in 1d 4h" before a window runs out, "about 79% at the reset" when it will not, "Used up in 1d 10h" after. The week also shows its share of the plan's list price.</p></div>
         <div class="card"><h3>Manage accounts</h3><p>Hide an account from Mako, or delete its login from the proxy after a confirmation.</p></div>
         <div class="card"><h3>Proxy or no proxy</h3><p>Use CLIProxyAPI in Docker or on a server. Without a proxy, Mako reads the Claude Code and Codex CLI logins on this machine.</p></div>
         <div class="card"><h3>Your layout</h3><p>Dock on any screen edge, scale it, round or square icons, labels on or off.</p></div>
@@ -468,19 +468,19 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   // Demo accounts for the live dock clone. Same rules as the app: ring = most constrained window
   // (Cursor: Cursor Models), green under 70%, yellow from 70, orange from 85, red at 100.
   const H = 3600 * 1000, now = Date.now();
-  // Window: [label, % used, hours to reset, { tokens, cost, plan %, full in h, used up in h }].
+  // Window: [label, % used, hours to reset, { tokens, cost, plan %, full in h, % at reset, used up in h }].
   const ACCOUNTS = [
     { p: 'Claude', t: 'studio', e: 'studio@example.com', s: 'Available', day: ['48.2M', '$41.87'], w: [
-      ['5-hour', 22, 3.1, { tokens: '31.0M', cost: '$18.40' }], ['Weekly', 38, 109, { tokens: '288.0M', cost: '$164.20', plan: '356%', full: 96 }]] },
+      ['5-hour', 22, 3.1, { tokens: '31.0M', cost: '$18.40', at: 58 }], ['Weekly', 38, 109, { tokens: '288.0M', cost: '$164.20', plan: '356%', full: 96 }]] },
     { p: 'Claude', t: 'research', e: 'research@example.com', s: 'Available', day: ['170.0M', '$96.30'], w: [
-      ['5-hour', 64, 1.3, { tokens: '104.0M', cost: '$61.10' }], ['Weekly', 81, 46, { tokens: '690.0M', cost: '$402.75', plan: '873%', full: 28 }]] },
+      ['5-hour', 64, 1.3, { tokens: '104.0M', cost: '$61.10', at: 86 }], ['Weekly', 81, 46, { tokens: '690.0M', cost: '$402.75', plan: '873%', full: 28 }]] },
     { p: 'Claude', t: 'side-project', e: 'side@example.com', s: 'At limit', day: ['150.0M', '$88.12'], w: [
       ['5-hour', 100, 0.5, { tokens: '121.0M', cost: '$74.90' }], ['Weekly', 100, 14, { tokens: '905.0M', cost: '$512.60', plan: '1,111%', usedUp: 34 }]] },
     { p: 'Claude', t: 'archive', e: 'archive@example.com', s: 'Reconnect', w: [], m: 'Sign in again in the provider app or proxy.' },
     { p: 'Codex', t: 'Pro Max', e: 'builder@example.com', s: 'Available', plan: 'Pro Max', day: ['17.0M', '$9.80'], w: [
       ['Weekly', 12, 149, { tokens: '41.0M', cost: '$22.15', full: 139 }]] },
     { p: 'Codex', t: 'Pro', e: 'reviewer@example.com', s: 'Available', plan: 'Pro', day: ['26.0M', '$14.60'], w: [
-      ['5-hour', 47, 2.4, { tokens: '12.0M', cost: '$6.30' }], ['Weekly', 73, 59, { tokens: '96.0M', cost: '$51.90', full: 40 }]] },
+      ['5-hour', 47, 2.4, { tokens: '12.0M', cost: '$6.30', at: 90 }], ['Weekly', 73, 59, { tokens: '96.0M', cost: '$51.90', full: 40 }]] },
     { p: 'Cursor', t: 'cursor', e: 'dev@example.com', s: 'Available', plan: 'Pro', w: [['Cursor Models', 28, 400], ['Other Models', 9, 400], ['Grok Bot', 3, 20]] },
   ];
   const TODAY = { Cursor: ['5.1M', '$3.25'] };
@@ -489,7 +489,7 @@ mako-capacity agents report "Run the tests" --done 2 --total 5</code></pre></div
   const signal = a => a.s === 'Reconnect' ? '#ff9f0a' : used(a) >= 100 ? '#ff453a' : used(a) >= 85 ? '#ff9f0a' : used(a) >= 70 ? '#ffd60a' : '#30d158';
   const span = h => { const m = Math.round(h * 60); return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
   // What the account used inside one window, as the app's card shows it under the bar.
-  const spent = x => !x ? '' : [x.full ? `At this pace, full in ${span(x.full)}` : '', x.usedUp ? `Used up in ${span(x.usedUp)}` : '',
+  const spent = x => !x ? '' : [x.full ? `At this pace, full in ${span(x.full)}` : x.at ? `At this pace, about ${x.at}% at the reset` : '', x.usedUp ? `Used up in ${span(x.usedUp)}` : '',
     `Used ${x.tokens} tokens · ${x.cost}${x.plan ? ` · ${x.plan} of the plan price` : ''}`].filter(Boolean).map(t => `<p class="reset">${t}</p>`).join('');
   const reset = h => { const m = Math.round(h * 60); return m < 60 ? `Resets in ${m}m` : m < 1440 ? `Resets in ${Math.floor(m / 60)}h ${m % 60}m` : `Resets in ${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`; };
   // Circular ring (the app's "Circle" icon shape) that starts at the top and runs clockwise.

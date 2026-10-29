@@ -188,6 +188,8 @@ def window_usage(accounts):
                 elapsed = now - (reset - length)
                 left = elapsed * (100 - window['used']) / window['used']
                 window['fullIn'] = left if left < reset - now else None
+                # A window that will not fill says where it ends up instead, so every card shows a pace.
+                window['atReset'] = None if window['fullIn'] else round(window['used'] * length / elapsed)
             if entry.get('source') != 'CLI proxy':
                 continue
             start = (reset - length) if reset and reset > now else now - length

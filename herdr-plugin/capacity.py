@@ -309,6 +309,8 @@ def render(snapshot, hidden, width, now, rings=False, height=None, names=True):
                     hours = window['fullIn'] / 3600
                     pace = f'{hours / 24:.0f}d {hours % 24:.0f}h' if hours >= 24 else f'{hours:.0f}h' if hours >= 1 else f"{window['fullIn'] / 60:.0f}m"
                     lines.append('  ' + dim(fit(f"{' ' * label_width} at this pace, full in {pace}", width - 2)))
+                elif extended and detail == 3 and window.get('atReset') is not None:
+                    lines.append('  ' + dim(fit(f"{' ' * label_width} at this pace, about {window['atReset']:.0f}% at the reset", width - 2)))
                 spent = window.get('spent')
                 if extended and detail == 3 and spent and spent.get('tokens'):
                     cost = '' if spent.get('costUsd') is None else f" · ${spent['costUsd']:.2f}"
