@@ -1,7 +1,7 @@
 {
   "generatedBy": "one typegen",
   "packageId": "Capacity",
-  "hash": "21ba3c6dd320ce1dc1d43f8931aa98283645ce819716841faa027183b8cbf77b",
+  "hash": "7da4d6c130b1e055cba48c099a01b6b727af4ed62379261bbd4c1a8f87e303f3",
   "files": {
     "CapacityRing.swift": [
       "CapacityRing"
@@ -18,7 +18,8 @@
   "views": {
     "CapacityRing": [
       "used",
-      "signal"
+      "signal",
+      "size"
     ]
   },
   "defaultViewFiles": []

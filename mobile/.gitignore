@@ -32,6 +32,7 @@ tsconfig.tsbuildinfo
 # generated code
 /ios
 /android
+/build-ios
 /targets/**/*.d.swift.ts
 
 # the repo root ignores *.png; the app's icons and screenshots are source

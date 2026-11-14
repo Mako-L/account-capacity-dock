@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 @MainActor public enum OneNativeSourceBody_Capacity {
-  public static let hash = "21ba3c6dd320ce1dc1d43f8931aa98283645ce819716841faa027183b8cbf77b"
+  public static let hash = "7da4d6c130b1e055cba48c099a01b6b727af4ed62379261bbd4c1a8f87e303f3"
 #if os(WASI)
   private struct Request: Decodable { let module: String; let method: String; let argsJson: String; let contractHash: String }
   private struct Reply: Encodable { let ok: Bool; let value: String?; let error: String?; let pending: Int32? }
@@ -147,30 +147,36 @@ import SwiftUI
     let base: Int?
     let p0: Optional<Double>
     let p1: Optional<String>
-    private enum CodingKeys: String, CodingKey { case seq = "$seq"; case base = "$base"; case lists = "$lists"; case p0 = "used"; case p1 = "signal" }
+    let p2: Optional<Double>
+    private enum CodingKeys: String, CodingKey { case seq = "$seq"; case base = "$base"; case lists = "$lists"; case p0 = "used"; case p1 = "signal"; case p2 = "size" }
     init(from decoder: Decoder) throws {
       let c = try decoder.container(keyedBy: CodingKeys.self)
       seq = try c.decodeIfPresent(Int.self, forKey: .seq) ?? 0
       base = try c.decodeIfPresent(Int.self, forKey: .base)
       p0 = try c.contains(.p0) ? Optional<Double>.some(c.decode(Double.self, forKey: .p0)) : Optional<Double>.none
       p1 = try c.contains(.p1) ? Optional<String>.some(c.decode(String.self, forKey: .p1)) : Optional<String>.none
+      p2 = try c.contains(.p2) ? Optional<Double>.some(c.decode(Double.self, forKey: .p2)) : Optional<Double>.none
     }
   }
   private final class Held_CapacityRing {
     var oneSeq: Int
     var `used`: Double
     var `signal`: String
+    var `size`: Double
     init(_ d: Doc_CapacityRing) throws {
       oneSeq = d.seq
       guard let p0 = d.p0 else { throw OneNativeSourceBody_Capacity.missing("used") }
       `used` = p0
       guard let p1 = d.p1 else { throw OneNativeSourceBody_Capacity.missing("signal") }
       `signal` = p1
+      guard let p2 = d.p2 else { throw OneNativeSourceBody_Capacity.missing("size") }
+      `size` = p2
     }
     func apply(_ d: Doc_CapacityRing) -> Bool {
       if d.base != oneSeq { return false }
       if let v = d.p0 { `used` = v }
       if let v = d.p1 { `signal` = v }
+      if let v = d.p2 { `size` = v }
       oneSeq = d.seq
       return true
     }
@@ -192,7 +198,8 @@ import SwiftUI
       guard let props = held as? Held_CapacityRing else { throw NSError(domain: "OneNativeSource", code: 1, userInfo: [NSLocalizedDescriptionKey: "props of another view for \(name)"]) }
       return AnyView(CapacityRing(
         used: props.`used`,
-        signal: props.`signal`
+        signal: props.`signal`,
+        size: props.`size`
       ))
     default: throw NSError(domain: "OneNativeSource", code: 1, userInfo: [NSLocalizedDescriptionKey: "swift view \(name) is not linked; rebuild the app"])
     }

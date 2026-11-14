@@ -17,7 +17,10 @@ export function savedUrl(): string {
 }
 
 export async function hasSavedKey(): Promise<boolean> {
-  return (await savedKey()) !== null
+  return savedKey().then(
+    (key) => key !== null,
+    () => false,
+  )
 }
 
 export function savedKey(): Promise<string | null> {

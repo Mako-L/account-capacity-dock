@@ -1,13 +1,13 @@
 import { router } from 'one'
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { palette } from '../components/palette'
 import { clearConfig, hasSavedKey, saveConfig, savedKey, savedUrl } from '../features/capacity/config'
 import { checkConnection, normaliseUrl } from '../features/capacity/proxy'
 import { refresh } from '../features/capacity/store'
 
 export default function Settings() {
-  const [url, setUrl] = useState(savedUrl() || 'http://127.0.0.1:8317')
+  const [url, setUrl] = useState(savedUrl() || (Platform.OS === 'ios' ? 'http://127.0.0.1:8317' : ''))
   const [key, setKey] = useState('')
   const [keySaved, setKeySaved] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -55,10 +55,12 @@ export default function Settings() {
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
-        placeholder="https://server:8317"
+        placeholder="http://100.x.y.z:8317"
         placeholderTextColor={palette.secondary}
       />
-      <Text style={styles.hint}>The CLIProxyAPI base; its panel is this address + /management.html.</Text>
+      <Text style={styles.hint}>
+        The CLIProxyAPI base, for example the Mac's LAN or Tailscale address. Its panel is this address + /management.html.
+      </Text>
       <Text style={styles.label}>Management key</Text>
       <TextInput
         style={styles.input}
@@ -67,10 +69,10 @@ export default function Settings() {
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder={keySaved ? 'Saved in the Keychain' : 'Management key'}
+        placeholder={keySaved ? 'Saved in secure storage' : 'Management key'}
         placeholderTextColor={palette.secondary}
       />
-      <Text style={styles.hint}>Stored only in the device Keychain.</Text>
+      <Text style={styles.hint}>Stored only in the device's secure storage (Keychain or Android Keystore).</Text>
       <Pressable style={[styles.button, busy && styles.disabled]} onPress={save} disabled={busy}>
         <Text style={styles.buttonText}>{busy ? 'Checking…' : 'Save and connect'}</Text>
       </Pressable>

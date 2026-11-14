@@ -3,4 +3,4 @@ import type { ReactElement } from 'react'
 
 import type { StyleProp, ViewStyle } from 'react-native'
 
-export declare function CapacityRing(props: { used: number; signal: string; style?: StyleProp<ViewStyle> }): ReactElement
+export declare function CapacityRing(props: { used: number; signal: string; size: number; style?: StyleProp<ViewStyle> }): ReactElement

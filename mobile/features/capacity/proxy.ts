@@ -31,7 +31,21 @@ const USAGE: Record<Provider, { url: string; headers: Record<string, string> }> 
 const PROVIDERS: Record<string, Provider> = { claude: 'Claude', codex: 'Codex' }
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
 
-// Same rule as scripts/capacity.py: http(s)://host[:port], plain http only on loopback.
+// A phone reaches the Mac over the LAN or Tailscale, so plain http is also allowed on private hosts.
+export function isPrivateHost(hostname: string): boolean {
+  if (LOOPBACK.has(hostname) || hostname.endsWith('.local') || hostname.endsWith('.ts.net')) return true
+  const parts = hostname.split('.').map(Number)
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false
+  const [first, second] = parts
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  )
+}
+
+// scripts/capacity.py's rule (http(s)://host[:port]), widened from loopback to private hosts for phones.
 export function normaliseUrl(input: string): string {
   const text = input.trim().replace(/\/+$/, '').replace(/\/management\.html$/, '')
   let parsed: URL
@@ -43,8 +57,8 @@ export function normaliseUrl(input: string): string {
   if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
     throw new Error('Proxy URL must look like https://host:8317')
   }
-  if (parsed.protocol === 'http:' && !LOOPBACK.has(parsed.hostname)) {
-    throw new Error('Use https for a remote proxy; plain http is only allowed on this device.')
+  if (parsed.protocol === 'http:' && !isPrivateHost(parsed.hostname)) {
+    throw new Error('Use https for a public host; plain http is only allowed on a LAN or Tailscale address.')
   }
   return `${parsed.protocol}//${parsed.host}`
 }
