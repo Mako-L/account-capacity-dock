@@ -31,7 +31,9 @@ tsconfig.tsbuildinfo
 
 # generated code
 /ios
+/ios.previous
 /android
+/android.previous
 /build-ios
 /targets/**/*.d.swift.ts
 

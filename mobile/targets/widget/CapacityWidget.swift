@@ -154,22 +154,25 @@ struct AccountLine: View {
       AccountRing(account: account, size: compact ? 26 : 30)
       VStack(alignment: .leading, spacing: 1) {
         Text(account.email).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-        HStack(spacing: 3) {
-          Text(account.window.isEmpty ? account.state : account.window)
-          if let resetAt = account.resetAt, resetAt > Date().timeIntervalSince1970 {
-            Text("·")
-            Text(Date(timeIntervalSince1970: resetAt), style: .relative)
-          }
-          if let tokens = account.tokens {
-            Text("· \(formatCount(tokens)) tok")
-          }
-        }
+        detail
         .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer(minLength: 4)
       Text(percentText(account.used)).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
         .foregroundStyle(signalColor(account.signal))
     }
+  }
+
+  // One concatenated Text: a relative date inside an HStack stretches to fill the row.
+  var detail: Text {
+    var line = Text(account.window.isEmpty ? account.state : account.window)
+    if let resetAt = account.resetAt, resetAt > Date().timeIntervalSince1970 {
+      line = line + Text(" · ") + Text(Date(timeIntervalSince1970: resetAt), style: .relative)
+    }
+    if let tokens = account.tokens {
+      line = line + Text(" · \(formatCount(tokens)) tok")
+    }
+    return line
   }
 }
 
@@ -224,7 +227,7 @@ struct AccountListView: View {
         VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 5) {
           HStack(spacing: 6) {
             Text(title).font(.system(size: 13, weight: .bold))
-            Text(withAgents ? "\(all.count) accounts · \(agents.count) agents" : "\(accounts.count) of \(all.count)").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            Text(withAgents ? "\(all.count) accounts · \(agents.count) agents" : "\(accounts.count) of \(all.count) with room").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 0)
             if pages > 1 {
               Text("\(page + 1)/\(pages)").font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
