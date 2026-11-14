@@ -5,7 +5,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const source = path.join(root, 'targets', 'android-widget')
+// One's prebuild skips folders named android; anywhere else it would compile this Kotlin a second time.
+const source = path.join(root, 'targets', 'android')
 const main = path.join(root, 'android', 'app', 'src', 'main')
 const manifestPath = path.join(main, 'AndroidManifest.xml')
 const gradlePath = path.join(root, 'android', 'app', 'build.gradle')

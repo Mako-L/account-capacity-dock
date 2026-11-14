@@ -1,43 +1,23 @@
 import SwiftUI
 import WatchConnectivity
-
-// The phone pushes the same snapshot it writes for the widget; see native/Capacity/SharedSnapshot.swift.
-struct CapacitySnapshot: Codable {
-  struct Account: Codable, Identifiable {
-    let id: String
-    let provider: String
-    let email: String
-    let used: Double?
-    let window: String
-    let resetAt: Double?
-    let state: String
-    let signal: String
-  }
-  let updatedAt: Double
-  let accounts: [Account]
-}
+import WidgetKit
 
 @MainActor final class SnapshotStore: NSObject, ObservableObject, WCSessionDelegate {
-  static let storageKey = "capacity.snapshot"
   @Published var snapshot: CapacitySnapshot?
 
   override init() {
     super.init()
-    snapshot = Self.decode(UserDefaults.standard.string(forKey: Self.storageKey))
+    snapshot = WatchShelf.load()
     guard WCSession.isSupported() else { return }
     WCSession.default.delegate = self
     WCSession.default.activate()
   }
 
-  static func decode(_ text: String?) -> CapacitySnapshot? {
-    guard let text else { return nil }
-    return try? JSONDecoder().decode(CapacitySnapshot.self, from: Data(text.utf8))
-  }
-
   private func receive(_ context: [String: Any]) {
-    guard let text = context["snapshot"] as? String, let decoded = Self.decode(text) else { return }
-    UserDefaults.standard.set(text, forKey: Self.storageKey)
+    guard let text = context["snapshot"] as? String, let decoded = CapacitySnapshot.decode(text) else { return }
+    WatchShelf.save(text)
     snapshot = decoded
+    WidgetCenter.shared.reloadAllTimelines()
   }
 
   nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
@@ -48,41 +28,6 @@ struct CapacitySnapshot: Codable {
   nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
     let context = applicationContext as? [String: String] ?? [:]
     Task { @MainActor in self.receive(context) }
-  }
-}
-
-func signalColor(_ name: String) -> Color {
-  switch name {
-  case "red": return .red
-  case "orange": return .orange
-  case "yellow": return .yellow
-  default: return .green
-  }
-}
-
-struct ProviderMark: View {
-  let provider: String
-  var body: some View {
-    Image(provider.lowercased()).resizable().renderingMode(.template).scaledToFit()
-  }
-}
-
-// Same geometry as the dock's AccountRing in dock style: rounded square, 0.30 corner, 4pt stroke.
-struct AccountRing: View {
-  let account: CapacitySnapshot.Account
-  let size: CGFloat
-  var body: some View {
-    let shape = RoundedRectangle(cornerRadius: size * 0.30, style: .continuous)
-    ZStack {
-      shape.stroke(.white.opacity(0.12), lineWidth: 4)
-      if let used = account.used {
-        shape.trim(from: 0, to: used / 100)
-          .stroke(signalColor(account.signal), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-          .rotationEffect(.degrees(-90))
-      }
-      ProviderMark(provider: account.provider).frame(width: size * 0.43, height: size * 0.43).foregroundStyle(.white)
-    }
-    .frame(width: size, height: size)
   }
 }
 
