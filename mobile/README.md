@@ -21,6 +21,23 @@ Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `on
 - **Android widget (small and medium):** the same accounts and percents.
 - **Watch app:** the same rings and percents, pushed from the iPhone.
 - **Watch complication:** the most constrained account as a ring (circular, corner), or the top accounts (rectangular, inline).
+- **Agents tab:** the Mac dock's agents mode. One row per coding agent with its circle ring, task, current step, step count, progress and state (working, needs you, finished, idle). Idle agents are hidden unless "Show idle" is on. Tap a row for every step.
+- **Agents widget (iOS medium and large, Android 4x2):** the agents that need you or are working first, with ring, task, step and progress.
+- **Watch agents page:** swipe down past the accounts for the same agents list.
+
+## Agents
+
+The agents come from the Mac's `agents.json`, which the dock writes (`agents.py`). The phone cannot read Mac files, so `agents_server.py` at the repo root serves it read-only:
+
+```bash
+python3 agents_server.py                  # this Mac only, port 8318
+python3 agents_server.py --host 0.0.0.0   # also the LAN and Tailscale addresses
+```
+
+- `GET /v0/agents` with `Authorization: Bearer <management key>`: the same key as the proxy, read from the same place as `collector.py`.
+- It drops prompts, transcripts, folders and replies: only title, task, current step, steps, progress, status and timestamps leave the Mac.
+- If the dock is not running, the server collects a fresh snapshot itself, at most every few seconds.
+- In Settings, "Agents address" defaults to the proxy host on port 8318.
 
 The rules match the dock (`collector.py`, `App.swift`): percent used is the highest window, the limiting window is the one with the highest use, the reset is that window's reset, and the ring colour follows the same green / yellow / orange / red thresholds.
 
