@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="capacity_widget_small_label">Capacity</string>
+    <string name="capacity_widget_medium_label">Capacity (wide)</string>
+    <string name="capacity_widget_description">The most constrained accounts and how much of each quota is used.</string>
+    <string name="capacity_widget_empty">Open Capacity to connect your proxy</string>
+</resources>

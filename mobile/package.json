@@ -12,6 +12,9 @@
     "dev:clean": "one dev --clean",
     "ios": "one run:ios",
     "prebuild:native": "one prebuild",
+    "prebuild:ios": "one prebuild --platform ios && ruby scripts/add-watch-target.rb",
+    "prebuild:android": "one prebuild --platform android && node scripts/add-android-widget.mjs",
+    "apk": "cd android && ./gradlew assembleRelease",
     "serve": "one serve",
     "typecheck": "tsc --noEmit"
   },
