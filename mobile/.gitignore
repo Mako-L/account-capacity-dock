@@ -1,0 +1,38 @@
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+.turbo
+
+tmp
+dist
+node_modules
+
+*.tsbuildinfo
+*.tmp.js
+
+yarn-error.log
+tsconfig.tsbuildinfo
+.DS_Store
+
+.tamagui
+
+.idea
+
+.env
+# local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# generated code
+/ios
+/android
+/targets/**/*.d.swift.ts
+
+# the repo root ignores *.png; the app's icons and screenshots are source
+!*.png
