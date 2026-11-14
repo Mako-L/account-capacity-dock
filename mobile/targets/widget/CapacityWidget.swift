@@ -82,7 +82,7 @@ struct CapacityEntry: TimelineEntry {
 struct CapacityProvider: TimelineProvider {
   func placeholder(in context: Context) -> CapacityEntry { CapacityEntry(date: .now, snapshot: .preview) }
   func getSnapshot(in context: Context, completion: @escaping (CapacityEntry) -> Void) {
-    completion(CapacityEntry(date: .now, snapshot: context.isPreview ? .preview : CapacitySnapshot.load() ?? .preview))
+    completion(CapacityEntry(date: .now, snapshot: context.isPreview ? .preview : CapacitySnapshot.load()))
   }
   func getTimeline(in context: Context, completion: @escaping (Timeline<CapacityEntry>) -> Void) {
     let entry = CapacityEntry(date: .now, snapshot: CapacitySnapshot.load())
