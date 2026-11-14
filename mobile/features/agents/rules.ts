@@ -1,4 +1,5 @@
-import type { Agent, AgentSignal, SharedAgent } from './types'
+import { ago } from '../capacity/format'
+import type { Agent, AgentSignal, SharedAgent, Subagent } from './types'
 
 // Ports of AgentItem in AgentDock.swift, so the phone reads agents the way the dock does.
 export function provider(agent: Agent): 'Claude' | 'Codex' {
@@ -61,11 +62,6 @@ export function progressLabel(agent: Agent): string {
   return agent.progress === null ? agentState(agent) : `${Math.floor(agent.progress)}%`
 }
 
-// The dock hides idle agents unless Settings shows them.
-export function visibleAgents(agents: Agent[], showIdle: boolean): Agent[] {
-  return showIdle ? agents : agents.filter((agent) => agent.status !== 'idle')
-}
-
 const ORDER: Record<string, number> = { blocked: 0, working: 1, done: 2, idle: 3 }
 
 // Needs you first, then working, finished, idle; newest activity first inside each.
@@ -76,8 +72,9 @@ export function byAttention(agents: Agent[]): Agent[] {
   )
 }
 
-export function toSharedAgents(agents: Agent[], limit = 8): SharedAgent[] {
-  return byAttention(agents.filter((agent) => agent.status !== 'idle'))
+// Every agent, idle and finished ones included, as the dock shows them; working ones sort first.
+export function toSharedAgents(agents: Agent[], limit = 60): SharedAgent[] {
+  return byAttention(agents)
     .slice(0, limit)
     .map((agent) => ({
       id: agent.id,
@@ -90,7 +87,26 @@ export function toSharedAgents(agents: Agent[], limit = 8): SharedAgent[] {
       status: agent.status,
       state: agentState(agent),
       signal: agentSignal(agent),
+      subagents: agent.subagents.length,
+      runningSubagents: agent.subagents.filter((sub) => sub.running).length,
     }))
+}
+
+export function subSignal(sub: Subagent): AgentSignal {
+  return sub.running ? 'yellow' : sub.idle ? 'gray' : 'green'
+}
+
+// The dock's SubagentList heading: a workflow by its name, a subagent by its description.
+export function subHeading(sub: Subagent): string {
+  return sub.kind === 'workflow' ? (sub.name ?? 'Workflow') : (sub.description ?? sub.name ?? 'Subagent')
+}
+
+export function subLine(sub: Subagent, now = Date.now() / 1000): string {
+  const done = sub.steps.filter((step) => step.status === 'done').length
+  const count = sub.kind === 'workflow' ? sub.summary : sub.steps.length ? `${done}/${sub.steps.length} steps` : null
+  const state = sub.running ? `▸ ${sub.step ?? 'Working'}` : sub.idle ? 'Idle' : 'Finished'
+  const kids = sub.kind === 'workflow' ? 0 : sub.children
+  return [state, count, ago(sub.updated, now), kids > 0 ? `${kids} inside` : null].filter(Boolean).join(' · ')
 }
 
 export function sinceText(timestamp: number | null, now = Date.now() / 1000): string {

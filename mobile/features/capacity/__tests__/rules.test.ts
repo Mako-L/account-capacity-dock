@@ -154,6 +154,9 @@ describe('the snapshot shared with the widget and watch', () => {
       resetAt: 500,
       state: 'Available',
       signal: 'orange',
+      available: true,
+      tokens: null,
+      costUsd: null,
     })
     expect(JSON.stringify(snapshot)).not.toContain('@')
     expect(snapshot.accounts[2]).toMatchObject({ id: 'unknown', used: null, window: '', resetAt: null })

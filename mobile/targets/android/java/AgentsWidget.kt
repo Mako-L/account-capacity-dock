@@ -18,6 +18,7 @@ import org.json.JSONObject
 import kotlin.math.min
 
 data class WidgetAgent(
+    val id: String,
     val provider: String,
     val heading: String,
     val step: String,
@@ -26,7 +27,19 @@ data class WidgetAgent(
     val ring: Double,
     val state: String,
     val signal: String,
-)
+    val subagents: Int,
+    val runningSubagents: Int,
+) {
+    val detail: String
+        get() {
+            val subs = when {
+                subagents == 0 -> ""
+                runningSubagents > 0 -> "$subagents subagents, $runningSubagents running"
+                else -> "$subagents subagents"
+            }
+            return listOf(step.ifEmpty { "$name · $state" }, subs).filter { it.isNotEmpty() }.joinToString(" · ")
+        }
+}
 
 object AgentSnapshotStore {
     fun load(context: Context): List<WidgetAgent> {
@@ -36,6 +49,7 @@ object AgentSnapshotStore {
             (0 until list.length()).map { index ->
                 val item = list.getJSONObject(index)
                 WidgetAgent(
+                    id = item.optString("id"),
                     provider = item.optString("provider"),
                     heading = item.optString("heading"),
                     step = item.optString("step"),
@@ -44,6 +58,8 @@ object AgentSnapshotStore {
                     ring = item.optDouble("ring", 0.0),
                     state = item.optString("state"),
                     signal = item.optString("signal", "gray"),
+                    subagents = item.optInt("subagents", 0),
+                    runningSubagents = item.optInt("runningSubagents", 0),
                 )
             }
         }.getOrDefault(emptyList())
@@ -122,7 +138,7 @@ class AgentsWidget : AppWidgetProvider() {
         val row = RemoteViews(context.packageName, R.layout.agents_widget_row)
         row.setImageViewBitmap(R.id.agent_ring, AgentRingPainter.draw(context, agent, 30))
         row.setTextViewText(R.id.agent_heading, agent.heading)
-        row.setTextViewText(R.id.agent_step, agent.step.ifEmpty { agent.name })
+        row.setTextViewText(R.id.agent_step, agent.detail)
         row.setTextViewText(R.id.agent_progress, agent.progress?.let { "${it.toInt()}%" } ?: agent.state)
         row.setTextColor(R.id.agent_progress, AgentRingPainter.colour(context, agent.signal))
         return row

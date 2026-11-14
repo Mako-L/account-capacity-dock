@@ -1,10 +1,10 @@
 import { Link } from 'one'
 import { useEffect } from 'react'
-import { FlatList, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from 'react-native'
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { AgentRow } from '../../components/AgentRow'
 import { palette } from '../../components/palette'
-import { byAttention, visibleAgents } from '../../features/agents/rules'
-import { refreshAgents, setShowIdle, useAgents } from '../../features/agents/store'
+import { byAttention } from '../../features/agents/rules'
+import { refreshAgents, useAgents } from '../../features/agents/store'
 
 // The dock reruns agents.py every 6 s; the phone polls the Mac's snapshot about as often while this tab is open.
 const POLL_MS = 10000
@@ -32,8 +32,8 @@ export default function Agents() {
     )
   }
 
-  const agents = byAttention(visibleAgents(state.agents, state.showIdle))
-  const hidden = state.agents.length - agents.length
+  const agents = byAttention(state.agents)
+  const working = agents.filter((agent) => agent.status === 'working' || agent.status === 'blocked').length
 
   return (
     <FlatList
@@ -50,17 +50,16 @@ export default function Agents() {
           <Text style={styles.meta}>
             {state.at ? `Mac snapshot ${new Date(state.at * 1000).toLocaleTimeString()}` : 'Loading…'}
           </Text>
-          <View style={styles.toggle}>
-            <Text style={styles.meta}>Show idle</Text>
-            <Switch value={state.showIdle} onValueChange={setShowIdle} />
-          </View>
+          <Text style={styles.meta}>
+            {agents.length} agents · {working} working
+          </Text>
         </View>
       }
       ListEmptyComponent={
         state.loading && !state.at ? undefined : (
           <View style={styles.padded}>
             <Text style={styles.body}>
-              {state.error ?? (hidden ? `No working agents. ${hidden} idle hidden.` : 'No agents are running on the Mac.')}
+              {state.error ?? 'No agents on the Mac.'}
             </Text>
           </View>
         )

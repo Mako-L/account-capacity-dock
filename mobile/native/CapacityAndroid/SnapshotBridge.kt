@@ -3,13 +3,14 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import dev.mako.capacity.widget.WearSync
 import dev.onejs.one.source.OneModule
 
-// Hands the latest capacity snapshot to the home-screen widgets; see targets/android-widget.
+// Hands the latest capacity snapshot to the home-screen widgets; see targets/android.
 object SnapshotBridge : OneModule {
     private val widgets = listOf(
-        "dev.mako.capacity.widget.CapacitySmallWidget",
-        "dev.mako.capacity.widget.CapacityMediumWidget",
+        "dev.mako.capacity.widget.AvailableAccountsWidget",
+        "dev.mako.capacity.widget.AllAccountsWidget",
         "dev.mako.capacity.widget.AgentsWidget",
     )
 
@@ -28,7 +29,8 @@ object SnapshotBridge : OneModule {
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
             context.sendBroadcast(intent)
         }
-        return mapOf("widget" to if (placed > 0) "written" else "no-widget", "watch" to "unsupported")
+        val watch = dev.mako.capacity.widget.WearSync.push(context, json)
+        return mapOf("widget" to if (placed > 0) "written" else "no-widget", "watch" to watch)
     }
 
     private fun application(): Application? = runCatching {

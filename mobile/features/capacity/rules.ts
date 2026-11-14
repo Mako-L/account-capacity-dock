@@ -126,6 +126,11 @@ export function resetText(resetAt: number | null, now = Date.now() / 1000): stri
   return `Resets in ${Math.max(1, Math.floor(seconds / 60))}m`
 }
 
+// The "Available" widget: a connected login with room left in its most constrained window.
+export function isAvailable(account: CapacityAccount): boolean {
+  return isConnected(account) && (usedPercent(account) ?? 100) < 100
+}
+
 export function percentLabel(used: number | null): string {
   return used === null ? '—' : `${Math.floor(used)}%`
 }
@@ -149,6 +154,9 @@ export function toSnapshot(accounts: CapacityAccount[], now = Date.now() / 1000)
         resetAt: limiting?.resetAt ?? null,
         state: stateLabel(account),
         signal: signal(account),
+        available: isAvailable(account),
+        tokens: account.localUsage?.tokens ?? null,
+        costUsd: account.localUsage?.costUsd ?? null,
       }
     }),
   }

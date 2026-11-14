@@ -47,6 +47,9 @@ struct AccountCell: View {
         } else {
           Text(account.window).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
         }
+        if let tokens = account.tokenText {
+          Text(tokens).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        }
       }
     }
   }
@@ -63,6 +66,9 @@ struct AgentCell: View {
           .foregroundStyle(signalColor(agent.signal))
         Text(agent.heading).font(.system(size: 11)).lineLimit(2)
         Text(agent.step.isEmpty ? agent.name : agent.step).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        if let subs = agent.subagentText {
+          Text(subs).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+        }
       }
     }
   }

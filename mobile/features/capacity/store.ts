@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { loadConfig } from './config'
+import { fetchDockAccounts } from './dock'
 import { fetchAccounts } from './proxy'
 import { toSnapshot } from './rules'
 import { publishShared } from './publish'
@@ -44,7 +45,7 @@ export async function refresh(): Promise<void> {
       update({ configured: false, loading: false, accounts: [], error: null })
       return
     }
-    const accounts = await fetchAccounts(config, state.accounts)
+    const accounts = (await fetchDockAccounts(config)) ?? (await fetchAccounts(config, state.accounts))
     update({ configured: true, loading: false, accounts, error: null, updatedAt: Date.now() / 1000 })
     await publishShared({ accounts: toSnapshot(accounts).accounts })
   } catch (error) {

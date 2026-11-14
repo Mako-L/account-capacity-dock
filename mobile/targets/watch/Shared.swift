@@ -11,6 +11,13 @@ struct CapacitySnapshot: Codable {
     let resetAt: Double?
     let state: String
     let signal: String
+    var tokens: Double?
+    var costUsd: Double?
+    var tokenText: String? {
+      guard let tokens else { return nil }
+      let count = tokens >= 1e9 ? String(format: "%.1fB", tokens / 1e9) : tokens >= 1e6 ? String(format: "%.1fM", tokens / 1e6) : tokens >= 1e3 ? String(format: "%.1fK", tokens / 1e3) : String(Int(tokens))
+      return costUsd.map { "\(count) tok · " + String(format: "$%.2f", $0) } ?? "\(count) tok"
+    }
   }
   struct Agent: Codable, Identifiable {
     let id: String
@@ -23,6 +30,13 @@ struct CapacitySnapshot: Codable {
     let status: String
     let state: String
     let signal: String
+    var subagents: Int?
+    var runningSubagents: Int?
+    var subagentText: String? {
+      guard let count = subagents, count > 0 else { return nil }
+      let running = runningSubagents ?? 0
+      return running > 0 ? "\(count) subagents, \(running) running" : "\(count) subagents"
+    }
   }
   let updatedAt: Double
   let accounts: [Account]

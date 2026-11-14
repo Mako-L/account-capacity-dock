@@ -85,12 +85,16 @@ function baseAccount(file: AuthFile, provider: Provider): CapacityAccount {
     id: `${provider.toLowerCase()}-${file.auth_index ?? file.email ?? 'unknown'}`,
     provider,
     email: file.email || file.label || 'Unknown account',
+    title: file.label || (file.email ?? '').split('@')[0] || provider,
     plan: planName(token.plan_type ?? token.chatgpt_plan_type),
+    source: 'CLI proxy',
     proxyStatus: file.disabled ? 'disabled' : (file.status ?? 'unknown'),
     status: 'unknown',
     message: '',
     windows: [],
     fetchedAt: null,
+    localUsage: null,
+    onDemandUsd: null,
   }
 }
 

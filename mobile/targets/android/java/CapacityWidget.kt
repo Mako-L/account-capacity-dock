@@ -3,7 +3,9 @@ package dev.mako.capacity.widget
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -13,13 +15,27 @@ import android.graphics.PathMeasure
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
+import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
+import android.widget.RemoteViewsService
 import dev.mako.capacity.R
 import org.json.JSONObject
 import kotlin.math.min
 
-data class WidgetAccount(val provider: String, val used: Double?, val window: String, val resetAt: Double?, val signal: String)
+data class WidgetAccount(
+    val id: String,
+    val provider: String,
+    val email: String,
+    val used: Double?,
+    val window: String,
+    val resetAt: Double?,
+    val state: String,
+    val signal: String,
+    val available: Boolean,
+    val tokens: Double?,
+    val costUsd: Double?,
+)
 
 // The app writes this snapshot through native/CapacityAndroid/SnapshotBridge.kt.
 object SnapshotStore {
@@ -29,12 +45,20 @@ object SnapshotStore {
             val list = JSONObject(text).getJSONArray("accounts")
             (0 until list.length()).map { index ->
                 val item = list.getJSONObject(index)
+                val used = if (item.isNull("used")) null else item.optDouble("used")
+                val state = item.optString("state")
                 WidgetAccount(
+                    id = item.optString("id"),
                     provider = item.optString("provider"),
-                    used = if (item.isNull("used")) null else item.optDouble("used"),
+                    email = item.optString("email"),
+                    used = used,
                     window = item.optString("window"),
                     resetAt = if (item.isNull("resetAt")) null else item.optDouble("resetAt"),
+                    state = state,
                     signal = item.optString("signal", "green"),
+                    available = if (item.has("available")) item.optBoolean("available") else (used ?: 100.0) < 100 && state == "Available",
+                    tokens = if (item.isNull("tokens")) null else item.optDouble("tokens"),
+                    costUsd = if (item.isNull("costUsd")) null else item.optDouble("costUsd"),
                 )
             }
         }.getOrDefault(emptyList())
@@ -100,7 +124,7 @@ object RingPainter {
         else -> null
     }
 
-    private fun signalColor(context: Context, signal: String): Int = context.getColor(
+    fun signalColor(context: Context, signal: String): Int = context.getColor(
         when (signal) {
             "red" -> R.color.capacity_signal_red
             "orange" -> R.color.capacity_signal_orange
@@ -112,7 +136,18 @@ object RingPainter {
 
 fun percentText(used: Double?): String = if (used == null) "—" else "${used.toInt()}%"
 
-// The dock's countdown, without the "Resets in" prefix to fit a widget cell.
+// The dock's formatCount(): 1.2B, 3.4M, 5.6K.
+fun formatCount(value: Double): String = when {
+    value >= 1e9 -> String.format(java.util.Locale.US, "%.1fB", value / 1e9)
+    value >= 1e6 -> String.format(java.util.Locale.US, "%.1fM", value / 1e6)
+    value >= 1e3 -> String.format(java.util.Locale.US, "%.1fK", value / 1e3)
+    else -> value.toInt().toString()
+}
+
+fun tokenText(tokens: Double?, costUsd: Double?): String =
+    if (tokens == null) "" else listOfNotNull("${formatCount(tokens)} tok", costUsd?.let { String.format(java.util.Locale.US, "$%.2f", it) }).joinToString(" · ")
+
+// The dock's countdown, without the "Resets in" prefix to fit a widget row.
 fun resetText(resetAt: Double?, now: Double = System.currentTimeMillis() / 1000.0): String {
     if (resetAt == null) return ""
     val seconds = (resetAt - now).toLong()
@@ -122,44 +157,124 @@ fun resetText(resetAt: Double?, now: Double = System.currentTimeMillis() / 1000.
     return "${maxOf(1, seconds / 60)}m"
 }
 
-abstract class CapacityWidget(private val medium: Boolean) : AppWidgetProvider() {
+fun launchIntent(context: Context): PendingIntent? {
+    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
+    return PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+}
+
+// A scrolling list of accounts, like the dock bar on the Mac. Only "available" and "all" differ.
+abstract class AccountsListWidget(private val filter: String, private val title: Int, private val empty: Int) : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        val views = render(context)
-        ids.forEach { manager.updateAppWidget(it, views) }
+        ids.forEach { manager.updateAppWidget(it, render(context, it)) }
+        manager.notifyAppWidgetViewDataChanged(ids, R.id.accounts_list)
     }
 
-    private fun render(context: Context): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.capacity_widget)
-        views.removeAllViews(R.id.capacity_row_top)
-        views.removeAllViews(R.id.capacity_row_bottom)
-        val accounts = SnapshotStore.load(context).take(4)
-        views.setViewVisibility(R.id.capacity_empty, if (accounts.isEmpty()) View.VISIBLE else View.GONE)
-        views.setViewVisibility(R.id.capacity_row_top, if (accounts.isEmpty()) View.GONE else View.VISIBLE)
-        views.setViewVisibility(R.id.capacity_row_bottom, if (accounts.isEmpty() || medium || accounts.size < 3) View.GONE else View.VISIBLE)
-        accounts.forEachIndexed { index, account ->
-            val row = if (medium || index < 2) R.id.capacity_row_top else R.id.capacity_row_bottom
-            views.addView(row, cell(context, account))
-        }
-        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        if (launch != null) {
-            val pending = PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            views.setOnClickPendingIntent(R.id.capacity_root, pending)
+    private fun render(context: Context, widgetId: Int): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.accounts_list_widget)
+        views.setTextViewText(R.id.accounts_title, context.getString(title))
+        views.setTextViewText(R.id.accounts_empty, context.getString(empty))
+        val accounts = SnapshotStore.load(context)
+        val shown = if (filter == "available") accounts.count { it.available } else accounts.size
+        views.setTextViewText(R.id.accounts_count, if (accounts.isEmpty()) "" else "$shown of ${accounts.size}")
+        val service = Intent(context, AccountsListService::class.java)
+            .putExtra(AccountsListService.FILTER, filter)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+        service.data = Uri.parse(service.toUri(Intent.URI_INTENT_SCHEME))
+        @Suppress("DEPRECATION")
+        views.setRemoteAdapter(R.id.accounts_list, service)
+        views.setEmptyView(R.id.accounts_list, R.id.accounts_empty)
+        launchIntent(context)?.let {
+            views.setOnClickPendingIntent(R.id.accounts_title, it)
+            views.setPendingIntentTemplate(R.id.accounts_list, it)
         }
         return views
     }
+}
 
-    private fun cell(context: Context, account: WidgetAccount): RemoteViews {
-        val cell = RemoteViews(context.packageName, R.layout.capacity_widget_cell)
-        cell.setImageViewBitmap(R.id.cell_ring, RingPainter.draw(context, account, if (medium) 46 else 40))
-        cell.setTextViewText(R.id.cell_percent, percentText(account.used))
-        cell.setViewVisibility(R.id.cell_window, if (medium) View.VISIBLE else View.GONE)
-        cell.setViewVisibility(R.id.cell_reset, if (medium) View.VISIBLE else View.GONE)
-        cell.setTextViewText(R.id.cell_window, account.window)
-        cell.setTextViewText(R.id.cell_reset, resetText(account.resetAt))
-        return cell
+class AvailableAccountsWidget : AccountsListWidget("available", R.string.available_widget_label, R.string.available_widget_empty)
+
+class AllAccountsWidget : AccountsListWidget("all", R.string.all_widget_label, R.string.capacity_widget_empty)
+
+class AccountsListService : RemoteViewsService() {
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
+        AccountsListFactory(applicationContext, intent.getStringExtra(FILTER) ?: "all")
+
+    companion object {
+        const val FILTER = "filter"
     }
 }
 
-class CapacitySmallWidget : CapacityWidget(medium = false)
+class AccountsListFactory(private val context: Context, private val filter: String) : RemoteViewsService.RemoteViewsFactory {
+    private var accounts: List<WidgetAccount> = emptyList()
+    private var agents: List<WidgetAgent> = emptyList()
 
-class CapacityMediumWidget : CapacityWidget(medium = true)
+    override fun onCreate() = onDataSetChanged()
+
+    override fun onDataSetChanged() {
+        val all = SnapshotStore.load(context)
+        accounts = if (filter == "available") all.filter { it.available }.sortedBy { it.used ?: 0.0 } else all
+        agents = if (filter == "all") AgentSnapshotStore.load(context) else emptyList()
+    }
+
+    override fun onDestroy() {
+        accounts = emptyList()
+        agents = emptyList()
+    }
+
+    override fun getCount() = accounts.size + agents.size
+
+    private fun agentRow(agent: WidgetAgent): RemoteViews {
+        val row = RemoteViews(context.packageName, R.layout.agents_widget_row)
+        row.setImageViewBitmap(R.id.agent_ring, AgentRingPainter.draw(context, agent, 30))
+        row.setTextViewText(R.id.agent_heading, agent.heading)
+        row.setTextViewText(R.id.agent_step, agent.detail)
+        row.setTextViewText(R.id.agent_progress, agent.progress?.let { "${it.toInt()}%" } ?: agent.state)
+        row.setTextColor(R.id.agent_progress, AgentRingPainter.colour(context, agent.signal))
+        return row
+    }
+
+    override fun getViewAt(position: Int): RemoteViews {
+        if (position >= accounts.size) {
+            val agent = agents.getOrNull(position - accounts.size) ?: return RemoteViews(context.packageName, R.layout.agents_widget_row)
+            return agentRow(agent)
+        }
+        val account = accounts.getOrNull(position) ?: return RemoteViews(context.packageName, R.layout.accounts_list_row)
+        val row = RemoteViews(context.packageName, R.layout.accounts_list_row)
+        row.setImageViewBitmap(R.id.row_ring, RingPainter.draw(context, account, 36))
+        row.setTextViewText(R.id.row_name, account.email.ifEmpty { account.provider })
+        val reset = resetText(account.resetAt)
+        val detail = listOf(account.provider, account.window, if (reset.isEmpty()) "" else "resets in $reset", tokenText(account.tokens, account.costUsd))
+            .filter { it.isNotEmpty() }
+            .joinToString(" · ")
+        row.setTextViewText(R.id.row_detail, if (account.state == "Available" || account.state.isEmpty()) detail else "${account.state} · $detail")
+        row.setTextViewText(R.id.row_percent, percentText(account.used))
+        row.setTextColor(R.id.row_percent, RingPainter.signalColor(context, account.signal))
+        row.setOnClickFillInIntent(R.id.row_root, Intent())
+        return row
+    }
+
+    override fun getLoadingView(): RemoteViews? = null
+
+    override fun getViewTypeCount() = 2
+
+    override fun getItemId(position: Int): Long =
+        (accounts.getOrNull(position)?.id ?: agents.getOrNull(position - accounts.size)?.id?.let { "agent-$it" })?.hashCode()?.toLong() ?: position.toLong()
+
+    override fun hasStableIds() = true
+}
+
+// Every widget the app refreshes when it writes a new snapshot.
+val WIDGET_PROVIDERS = listOf(AvailableAccountsWidget::class.java, AllAccountsWidget::class.java, AgentsWidget::class.java)
+
+fun refreshWidgets(context: Context): Int {
+    val manager = AppWidgetManager.getInstance(context)
+    var placed = 0
+    for (provider in WIDGET_PROVIDERS) {
+        val component = ComponentName(context, provider)
+        val ids = manager.getAppWidgetIds(component)
+        if (ids.isEmpty()) continue
+        placed += ids.size
+        context.sendBroadcast(Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).setComponent(component).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
+    }
+    return placed
+}

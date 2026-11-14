@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import UIKit
 import WidgetKit
@@ -13,6 +14,10 @@ struct CapacitySnapshot: Codable {
     let resetAt: Double?
     let state: String
     let signal: String
+    let available: Bool?
+    var tokens: Double?
+    var costUsd: Double?
+    var hasRoom: Bool { available ?? ((used ?? 100) < 100 && state == "Available") }
   }
   struct Agent: Codable, Identifiable {
     let id: String
@@ -25,6 +30,13 @@ struct CapacitySnapshot: Codable {
     let status: String
     let state: String
     let signal: String
+    var subagents: Int?
+    var runningSubagents: Int?
+    var subagentText: String? {
+      guard let count = subagents, count > 0 else { return nil }
+      let running = runningSubagents ?? 0
+      return running > 0 ? "\(count) sub, \(running) running" : "\(count) sub"
+    }
   }
   let updatedAt: Double
   let accounts: [Account]
@@ -36,8 +48,8 @@ struct CapacitySnapshot: Codable {
   }
 
   static let preview = CapacitySnapshot(updatedAt: Date().timeIntervalSince1970, accounts: [
-    Account(id: "a", provider: "Claude", email: "work", used: 92, window: "Weekly", resetAt: Date().timeIntervalSince1970 + 7200, state: "Available", signal: "red"),
-    Account(id: "b", provider: "Codex", email: "personal", used: 64, window: "5-hour", resetAt: Date().timeIntervalSince1970 + 3600, state: "Available", signal: "green"),
+    Account(id: "a", provider: "Claude", email: "work", used: 92, window: "Weekly", resetAt: Date().timeIntervalSince1970 + 7200, state: "Available", signal: "red", available: true),
+    Account(id: "b", provider: "Codex", email: "personal", used: 64, window: "5-hour", resetAt: Date().timeIntervalSince1970 + 3600, state: "Available", signal: "green", available: true),
   ])
 }
 
@@ -88,6 +100,14 @@ struct AccountRing: View {
 
 func percentText(_ used: Double?) -> String { used.map { "\(Int($0.rounded()))%" } ?? "—" }
 
+// The dock's formatCount(): 1.2B, 3.4M, 5.6K.
+func formatCount(_ value: Double) -> String {
+  if value >= 1_000_000_000 { return String(format: "%.1fB", value / 1_000_000_000) }
+  if value >= 1_000_000 { return String(format: "%.1fM", value / 1_000_000) }
+  if value >= 1_000 { return String(format: "%.1fK", value / 1_000) }
+  return String(Int(value))
+}
+
 struct CapacityEntry: TimelineEntry {
   let date: Date
   let snapshot: CapacitySnapshot?
@@ -104,52 +124,127 @@ struct CapacityProvider: TimelineProvider {
   }
 }
 
-struct SmallView: View {
-  let accounts: [CapacitySnapshot.Account]
-  var body: some View {
-    let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-    LazyVGrid(columns: columns, spacing: 8) {
-      ForEach(accounts.prefix(4)) { account in
-        VStack(spacing: 3) {
-          AccountRing(account: account, size: 40)
-          Text(percentText(account.used)).font(.system(size: 12, weight: .semibold)).monospacedDigit()
-        }
-      }
-    }
+// iOS widgets cannot scroll, so the account lists page: the arrows run this intent, which stores the page per widget.
+enum WidgetPages {
+  static func page(_ kind: String) -> Int { UserDefaults(suiteName: "__APP_GROUP__")?.integer(forKey: "widget.page.\(kind)") ?? 0 }
+  static func set(_ kind: String, _ page: Int) { UserDefaults(suiteName: "__APP_GROUP__")?.set(page, forKey: "widget.page.\(kind)") }
+}
+
+struct TurnPageIntent: AppIntent {
+  static let title: LocalizedStringResource = "Turn the widget page"
+  static let isDiscoverable = false
+  @Parameter(title: "Widget") var kind: String
+  @Parameter(title: "Page") var page: Int
+  init() {}
+  init(kind: String, page: Int) {
+    self.kind = kind
+    self.page = page
+  }
+  func perform() async throws -> some IntentResult {
+    WidgetPages.set(kind, max(0, page))
+    return .result()
   }
 }
 
-struct MediumView: View {
-  let accounts: [CapacitySnapshot.Account]
+struct AccountLine: View {
+  let account: CapacitySnapshot.Account
+  let compact: Bool
   var body: some View {
-    HStack(alignment: .top, spacing: 10) {
-      ForEach(accounts.prefix(4)) { account in
-        VStack(spacing: 4) {
-          AccountRing(account: account, size: 46)
-          Text(percentText(account.used)).font(.system(size: 15, weight: .semibold)).monospacedDigit()
-          Text(account.window).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+    HStack(spacing: 9) {
+      AccountRing(account: account, size: compact ? 26 : 30)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(account.email).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+        HStack(spacing: 3) {
+          Text(account.window.isEmpty ? account.state : account.window)
           if let resetAt = account.resetAt, resetAt > Date().timeIntervalSince1970 {
+            Text("·")
             Text(Date(timeIntervalSince1970: resetAt), style: .relative)
-              .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+          }
+          if let tokens = account.tokens {
+            Text("· \(formatCount(tokens)) tok")
           }
         }
-        .frame(maxWidth: .infinity)
+        .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
       }
+      Spacer(minLength: 4)
+      Text(percentText(account.used)).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+        .foregroundStyle(signalColor(account.signal))
     }
   }
 }
 
-struct CapacityWidgetView: View {
-  @Environment(\.widgetFamily) private var family
-  let entry: CapacityEntry
+struct PageArrow: View {
+  let kind: String
+  let target: Int
+  let symbol: String
+  let enabled: Bool
   var body: some View {
+    Button(intent: TurnPageIntent(kind: kind, page: target)) {
+      Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).frame(width: 30, height: 24)
+        .background(.white.opacity(enabled ? 0.14 : 0.05), in: Capsule())
+    }
+    .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35)
+  }
+}
+
+enum WidgetRow: Identifiable {
+  case account(CapacitySnapshot.Account)
+  case agent(CapacitySnapshot.Agent)
+  var id: String {
+    switch self {
+    case .account(let account): return "account-" + account.id
+    case .agent(let agent): return "agent-" + agent.id
+    }
+  }
+}
+
+struct AccountListView: View {
+  @Environment(\.widgetFamily) private var family
+  let kind: String
+  let title: String
+  let empty: String
+  let entry: CapacityEntry
+  var withAgents = false
+  let filter: (CapacitySnapshot.Account) -> Bool
+  var body: some View {
+    let all = entry.snapshot?.accounts ?? []
+    let accounts = all.filter(filter)
+    let agents = withAgents ? (entry.snapshot?.agents ?? []) : []
+    let rows: [WidgetRow] = accounts.map { .account($0) } + agents.map { .agent($0) }
+    let perPage = family == .systemLarge ? 7 : 3
+    let pages = max(1, (rows.count + perPage - 1) / perPage)
+    let page = min(WidgetPages.page(kind), pages - 1)
     Group {
-      if let accounts = entry.snapshot?.accounts, !accounts.isEmpty {
-        if family == .systemMedium { MediumView(accounts: accounts) } else { SmallView(accounts: accounts) }
-      } else {
+      if entry.snapshot == nil {
         VStack(spacing: 6) {
           Image(systemName: "gauge.with.dots.needle.33percent").font(.title2)
           Text("Open Capacity to connect your proxy").font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 5) {
+          HStack(spacing: 6) {
+            Text(title).font(.system(size: 13, weight: .bold))
+            Text(withAgents ? "\(all.count) accounts · \(agents.count) agents" : "\(accounts.count) of \(all.count)").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: 0)
+            if pages > 1 {
+              Text("\(page + 1)/\(pages)").font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
+              PageArrow(kind: kind, target: page - 1, symbol: "chevron.up", enabled: page > 0)
+              PageArrow(kind: kind, target: page + 1, symbol: "chevron.down", enabled: page < pages - 1)
+            }
+          }
+          if rows.isEmpty {
+            Spacer(minLength: 0)
+            Text(empty).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
+          } else {
+            ForEach(Array(rows.dropFirst(page * perPage).prefix(perPage))) { row in
+              switch row {
+              case .account(let account): AccountLine(account: account, compact: family != .systemLarge)
+              case .agent(let agent): AgentLine(agent: agent)
+              }
+            }
+            Spacer(minLength: 0)
+          }
         }
       }
     }
@@ -159,14 +254,25 @@ struct CapacityWidgetView: View {
   }
 }
 
-struct CapacityWidget: Widget {
+struct AvailableWidget: Widget {
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: "MakoCapacity", provider: CapacityProvider()) { entry in
-      CapacityWidgetView(entry: entry)
+    StaticConfiguration(kind: "MakoAvailable", provider: CapacityProvider()) { entry in
+      AccountListView(kind: "MakoAvailable", title: "Available", empty: "Every account is at its limit", entry: entry) { $0.hasRoom }
     }
-    .configurationDisplayName("Capacity")
-    .description("The most constrained accounts and how much of each quota is used.")
-    .supportedFamilies([.systemSmall, .systemMedium])
+    .configurationDisplayName("Available")
+    .description("Accounts that still have usage left. Tap the arrows to page.")
+    .supportedFamilies([.systemMedium, .systemLarge])
+  }
+}
+
+struct AllAccountsWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "MakoAll", provider: CapacityProvider()) { entry in
+      AccountListView(kind: "MakoAll", title: "All", empty: "No accounts on the proxy", entry: entry, withAgents: true) { _ in true }
+    }
+    .configurationDisplayName("All accounts")
+    .description("Every account, most constrained first, then every agent. Tap the arrows to page.")
+    .supportedFamilies([.systemMedium, .systemLarge])
   }
 }
 
@@ -193,7 +299,7 @@ struct AgentLine: View {
       AgentRingMark(agent: agent, size: 30)
       VStack(alignment: .leading, spacing: 1) {
         Text(agent.heading).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-        Text(agent.step.isEmpty ? "\(agent.name) · \(agent.state)" : agent.step)
+        Text([agent.step.isEmpty ? "\(agent.name) · \(agent.state)" : agent.step, agent.subagentText].compactMap { $0 }.joined(separator: " · "))
           .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
       }
       Spacer(minLength: 4)
@@ -213,7 +319,7 @@ struct AgentsWidgetView: View {
       if agents.isEmpty {
         VStack(spacing: 6) {
           Image(systemName: "sparkles").font(.title2)
-          Text(entry.snapshot?.agents == nil ? "Open Capacity, then the Agents tab" : "No agents working")
+          Text(entry.snapshot?.agents == nil ? "Open Capacity, then the Agents tab" : "No agents on the Mac")
             .font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
         }
       } else {
@@ -244,7 +350,8 @@ struct AgentsWidget: Widget {
 @main
 struct CapacityWidgetBundle: WidgetBundle {
   var body: some Widget {
-    CapacityWidget()
+    AvailableWidget()
+    AllAccountsWidget()
     AgentsWidget()
   }
 }

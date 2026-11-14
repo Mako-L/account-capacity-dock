@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { byAttention, currentStep, heading, progressLabel, ring, sinceText, stepText, toSharedAgents, visibleAgents } from '../rules'
+import { byAttention, currentStep, heading, progressLabel, ring, sinceText, stepText, toSharedAgents } from '../rules'
 import type { Agent } from '../types'
 
 const agent = (overrides: Partial<Agent> = {}): Agent => ({
@@ -17,7 +17,10 @@ const agent = (overrides: Partial<Agent> = {}): Agent => ({
   updated: null,
   started: null,
   steps: [],
-  subagents: { running: 0, total: 0 },
+  subagents: [],
+  activity: [],
+  usage: null,
+  totalUsage: null,
   ...overrides,
 })
 
@@ -77,13 +80,7 @@ test('byAttention puts blocked first, then working, finished and idle, newest fi
   expect(order).toEqual(['blocked', 'new-work', 'old-work', 'done', 'idle'])
 })
 
-test('visibleAgents hides idle agents unless asked', () => {
-  const list = [agent({ id: 'w' }), agent({ id: 'i', status: 'idle' })]
-  expect(visibleAgents(list, false).map((item) => item.id)).toEqual(['w'])
-  expect(visibleAgents(list, true)).toHaveLength(2)
-})
-
-test('toSharedAgents drops idle agents, caps the list and carries what the widget draws', () => {
+test('toSharedAgents keeps every agent, working first, and carries what the widget draws', () => {
   const list = [
     agent({ id: 'i', status: 'idle' }),
     agent({ id: 'w', task: 'Fix PR', progress: 40, agent: 'codex', now: 'Testing' }),
@@ -102,9 +99,20 @@ test('toSharedAgents drops idle agents, caps the list and carries what the widge
       status: 'working',
       state: 'Working',
       signal: 'yellow',
+      subagents: 0,
+      runningSubagents: 0,
     },
   ])
-  expect(toSharedAgents(list).map((item) => item.id)).toEqual(['w', 'd'])
+  expect(toSharedAgents(list).map((item) => item.id)).toEqual(['w', 'd', 'i'])
+})
+
+test('toSharedAgents counts subagents and the running ones', () => {
+  const sub = (running: boolean) => ({
+    id: running ? 'r' : 'f', name: null, description: 'Build', model: null, running, idle: !running, step: null,
+    updated: null, kind: null, progress: null, phase: null, summary: null, steps: [], children: 0,
+  })
+  const [shared] = toSharedAgents([agent({ subagents: [sub(true), sub(false), sub(false)] })])
+  expect(shared).toMatchObject({ subagents: 3, runningSubagents: 1 })
 })
 
 test('sinceText picks the largest whole unit', () => {

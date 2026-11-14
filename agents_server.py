@@ -17,12 +17,18 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import agents
-from collector import proxy_path, setting
+from collector import CACHE, proxy_path, read_json, setting
 
 STALE = 20
 STEP_LIMIT = 30
+ACTIVITY_LIMIT = 4
+TEXT_LIMIT = 160
 FIELDS = ('id', 'agent', 'name', 'tabName', 'project', 'status', 'title', 'task', 'now', 'progress', 'stepCount',
-          'updated', 'started')
+          'updated', 'started', 'usage', 'totalUsage')
+SUB_FIELDS = ('id', 'name', 'description', 'model', 'running', 'step', 'updated', 'kind', 'progress', 'phase',
+              'summary', 'idle')
+ACCOUNT_FIELDS = ('id', 'provider', 'email', 'title', 'plan', 'source', 'status', 'message', 'windows', 'fetchedAt',
+                  'localUsage', 'onDemandUsd')
 LOCK = threading.Lock()
 
 
@@ -36,14 +42,40 @@ def management_key():
     return found.group(1).strip() if found else ''
 
 
-def public(agent):
-    """The parts of an agent the phone shows; everything that can carry code or private text stays on the Mac."""
-    item = {key: agent.get(key) for key in FIELDS}
-    item['steps'] = [{'title': step.get('title'), 'status': step.get('status')}
-                     for step in (agent.get('steps') or [])[:STEP_LIMIT]]
-    subagents = agent.get('subagents') or []
-    item['subagents'] = {'running': sum(1 for sub in subagents if sub.get('running')), 'total': len(subagents)}
+def steps(raw):
+    return [{key: step.get(key) for key in ('title', 'status', 'took', 'since')} for step in (raw or [])[:STEP_LIMIT]]
+
+
+def clip(text):
+    text = ' '.join(str(text or '').split())
+    return text if len(text) <= TEXT_LIMIT else text[:TEXT_LIMIT - 1] + '…'
+
+
+def subagent(sub):
+    item = {key: sub.get(key) for key in SUB_FIELDS}
+    item['steps'] = steps(sub.get('steps'))
+    item['children'] = len(sub.get('children') or [])
     return item
+
+
+def public(agent):
+    """What the dock's agent card shows; prompts, transcripts and folders stay on the Mac."""
+    item = {key: agent.get(key) for key in FIELDS}
+    item['steps'] = steps(agent.get('steps'))
+    item['subagents'] = [subagent(sub) for sub in agent.get('subagents') or []]
+    # The card's "Recent activity": the last four events, one line each.
+    item['activity'] = [{'at': event.get('at'), 'text': clip(event.get('text')), 'kind': event.get('kind')}
+                        for event in (agent.get('activity') or [])[-ACTIVITY_LIMIT:]]
+    return item
+
+
+def capacity():
+    """The dock's own account snapshot (collector.py), so the phone shows exactly what the dock shows."""
+    data = read_json(CACHE) or {}
+    return {'updatedAt': data.get('updatedAt'), 'warning': data.get('warning'),
+            'accounts': [dict({key: account.get(key) for key in ACCOUNT_FIELDS},
+                              windows=[{k: v for k, v in window.items() if k != 'history'} for window in account.get('windows') or []])
+                         for account in data.get('accounts') or []]}
 
 
 def snapshot(now=None):
@@ -68,14 +100,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):  # noqa: N802 (http.server names)
-        if self.path.split('?')[0] != '/v0/agents':
+        route = {'/v0/agents': snapshot, '/v0/capacity': capacity}.get(self.path.split('?')[0])
+        if not route:
             return self.reply(404, {'error': 'not found'})
         key = management_key()
         sent = self.headers.get('Authorization', '').removeprefix('Bearer ').strip()
         if not key or not hmac.compare_digest(sent.encode(), key.encode()):
             return self.reply(401, {'error': 'missing or wrong management key'})
         try:
-            return self.reply(200, snapshot())
+            return self.reply(200, route())
         except Exception as error:  # a broken snapshot must not take the server down
             return self.reply(500, {'error': type(error).__name__})
 
@@ -92,7 +125,7 @@ def main():
     if not management_key():
         raise SystemExit('Proxy management key not found; set it in Mako settings.')
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f'Serving agents on http://{args.host}:{args.port}/v0/agents', flush=True)
+    print(f'Serving /v0/agents and /v0/capacity on http://{args.host}:{args.port}', flush=True)
     server.serve_forever()
 
 

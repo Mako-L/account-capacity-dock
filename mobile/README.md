@@ -1,8 +1,8 @@
-# Capacity for phones, widgets and Apple Watch
+# Capacity for phones, widgets, Apple Watch and Wear OS
 
 The phone version of the Mako Capacity dock. It reads the same CLIProxyAPI management API the desktop collector reads and shows each account's quota ring, percent used and reset countdown.
 
-Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `one prebuild` generates the iOS and Android projects and the iOS WidgetKit extension, so no Expo is involved. One has no watchOS or Android widget targets, so two post-prebuild scripts add them: `scripts/add-watch-target.rb` and `scripts/add-android-widget.mjs`.
+Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `one prebuild` generates the iOS and Android projects and the iOS WidgetKit extension, so no Expo is involved. One has no watchOS, Wear OS or Android widget targets, so two post-prebuild scripts add them: `scripts/add-watch-target.rb` (watchOS app and complication) and `scripts/add-android-widget.mjs` (Android widgets and the `:wear` module).
 
 | List | Detail | Settings |
 | --- | --- | --- |
@@ -15,13 +15,15 @@ Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `on
 ## What it shows
 
 - **Accounts list:** one row per proxy login, with the dock's rounded-square quota ring, the provider icon, percent used of the most constrained window, the reset countdown and a connected / reconnect state. Pull to refresh.
-- **Account detail:** every quota window with its own ring, percent and reset time.
-- **Settings:** the proxy address and management key.
-- **iOS widget (small and medium):** the four most constrained accounts' rings and percent; the medium size adds the window and reset time.
-- **Android widget (small and medium):** the same accounts and percents.
-- **Watch app:** the same rings and percents, pushed from the iPhone.
+- **Account detail:** the dock's account card: every quota window with its ring, percent, reset, spend detail, "at this pace" projection and tokens spent inside the window, plus the last 24 h (or today's local) tokens and cost, on-demand spend, plan, source and proxy login state.
+- **Settings:** the proxy address and management key. The agents server is always the same host on port 8318, so it needs no setting.
+- **Widgets, "Available" and "All":** "Available" lists only the accounts that still have usage left, "All" lists every account, most constrained first, with ring, name, window, reset and percent.
+  - Android: resizable collection widgets that scroll top to bottom like the dock bar.
+  - iOS: WidgetKit cannot scroll, so the medium and large sizes page through the list with up and down buttons (App Intents). The medium size shows 3 rows a page, the large 7.
+- **Apple Watch app:** the same rings and percents, pushed from the iPhone over WatchConnectivity.
+- **Wear OS app:** one scrolling list, accounts then agents, pushed from the Android phone over the Wearable Data Layer. It has the phone app's id and signing key, which the Data Layer requires.
 - **Watch complication:** the most constrained account as a ring (circular, corner), or the top accounts (rectangular, inline).
-- **Agents tab:** the Mac dock's agents mode. One row per coding agent with its circle ring, task, current step, step count, progress and state (working, needs you, finished, idle). Idle agents are hidden unless "Show idle" is on. Tap a row for every step.
+- **Agents tab:** the Mac dock's agents mode. One row per coding agent with its circle ring, task, current step, step count, progress and state (working, needs you, finished, idle). Idle agents are hidden unless "Show idle" is on. Tap a row for the dock's agent card: every step with its time, the subagents and workflows with their own progress, recent activity, model, tokens and run time.
 - **Agents widget (iOS medium and large, Android 4x2):** the agents that need you or are working first, with ring, task, step and progress.
 - **Watch agents page:** swipe down past the accounts for the same agents list.
 
@@ -35,9 +37,21 @@ python3 agents_server.py --host 0.0.0.0   # also the LAN and Tailscale addresses
 ```
 
 - `GET /v0/agents` with `Authorization: Bearer <management key>`: the same key as the proxy, read from the same place as `collector.py`.
+- `GET /v0/capacity`, same key: the dock's own `snapshot.json` (without usage history), so the phone shows exactly the dock's accounts, including CodeBurn spend. If the Mac is unreachable, the phone falls back to reading the proxy directly.
 - It drops prompts, transcripts, folders and replies: only title, task, current step, steps, progress, status and timestamps leave the Mac.
 - If the dock is not running, the server collects a fresh snapshot itself, at most every few seconds.
-- In Settings, "Agents address" defaults to the proxy host on port 8318.
+- The phone always uses the proxy host on port 8318.
+
+To run it on the Mac for good and reach it over Tailscale:
+
+```bash
+cp docs/com.mako.capacity-agents.plist ~/Library/LaunchAgents/   # edit the path to agents_server.py first
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mako.capacity-agents.plist
+tailscale serve --bg --tcp 8317 tcp://127.0.0.1:8317
+tailscale serve --bg --tcp 8318 tcp://127.0.0.1:8318
+```
+
+Then set the proxy address on the phone to the Mac's Tailscale IP, for example `http://100.x.y.z:8317`.
 
 The rules match the dock (`collector.py`, `App.swift`): percent used is the highest window, the limiting window is the one with the highest use, the reset is that window's reset, and the ring colour follows the same green / yellow / orange / red thresholds.
 

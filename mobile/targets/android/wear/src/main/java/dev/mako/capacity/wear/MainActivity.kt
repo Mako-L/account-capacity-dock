@@ -100,14 +100,22 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
         row.findViewById<TextView>(R.id.name).text = account.optString("email").ifEmpty { account.optString("provider") }
         val reset = resetText(if (account.isNull("resetAt")) null else account.optDouble("resetAt"))
         val state = account.optString("state")
-        row.findViewById<TextView>(R.id.detail).text = listOf(if (state == "Available") "" else state, account.optString("window"), reset)
+        val tokens = if (account.isNull("tokens") || !account.has("tokens")) "" else tokenCount(account.optDouble("tokens")) + " tok"
+        row.findViewById<TextView>(R.id.detail).text = listOf(if (state == "Available") "" else state, account.optString("window"), reset, tokens)
             .filter { it.isNotEmpty() }
             .joinToString(" · ")
         row.findViewById<TextView>(R.id.percent).apply {
-            text = used?.let { "${it.toInt()}%" } ?: "—"
+            this.text = used?.let { "${it.toInt()}%" } ?: "—"
             setTextColor(Rings.colour(this@MainActivity, signal))
         }
         return row
+    }
+
+    private fun tokenCount(value: Double): String = when {
+        value >= 1e9 -> String.format(java.util.Locale.US, "%.1fB", value / 1e9)
+        value >= 1e6 -> String.format(java.util.Locale.US, "%.1fM", value / 1e6)
+        value >= 1e3 -> String.format(java.util.Locale.US, "%.1fK", value / 1e3)
+        else -> value.toInt().toString()
     }
 
     private fun agentRow(agent: JSONObject): View {
@@ -116,18 +124,21 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
         val row = LayoutInflater.from(this).inflate(R.layout.row, content, false)
         row.findViewById<ImageView>(R.id.ring).setImageBitmap(Rings.circle(this, agent.optDouble("ring", 0.0), signal, agent.optString("provider"), 32))
         row.findViewById<TextView>(R.id.name).text = agent.optString("name").ifEmpty { agent.optString("heading") }
-        row.findViewById<TextView>(R.id.detail).text = listOf(agent.optString("step").ifEmpty { agent.optString("heading") }, agent.optString("state"))
+        val subagents = agent.optInt("subagents", 0)
+        val running = agent.optInt("runningSubagents", 0)
+        val subs = if (subagents == 0) "" else if (running > 0) "$subagents sub, $running running" else "$subagents sub"
+        row.findViewById<TextView>(R.id.detail).text = listOf(agent.optString("step").ifEmpty { agent.optString("heading") }, agent.optString("state"), subs)
             .filter { it.isNotEmpty() }
             .joinToString(" · ")
         row.findViewById<TextView>(R.id.percent).apply {
-            text = progress?.let { "${it.toInt()}%" } ?: ""
+            this.text = progress?.let { "${it.toInt()}%" } ?: ""
             setTextColor(Rings.colour(this@MainActivity, signal))
         }
         return row
     }
 
     private fun text(value: String, colour: Int, size: Float) = TextView(this).apply {
-        text = value
+        this.text = value
         textSize = size
         setTextColor(getColor(colour))
         setPadding(0, dp(2), 0, dp(4))

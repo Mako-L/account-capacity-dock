@@ -6,12 +6,11 @@ import { clearConfig, hasSavedKey, saveConfig, savedKey, savedUrl } from '../fea
 import { checkConnection, normaliseUrl } from '../features/capacity/proxy'
 import { refresh } from '../features/capacity/store'
 import { AGENTS_PORT } from '../features/agents/client'
-import { refreshAgents, saveAgentsUrl, savedAgentsUrl } from '../features/agents/store'
+import { refreshAgents } from '../features/agents/store'
 
 export default function Settings() {
   const [url, setUrl] = useState(savedUrl() || (Platform.OS === 'ios' ? 'http://127.0.0.1:8317' : ''))
   const [key, setKey] = useState('')
-  const [agentsUrl, setAgentsUrl] = useState(savedAgentsUrl())
   const [keySaved, setKeySaved] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -27,10 +26,8 @@ export default function Settings() {
       const base = normaliseUrl(url)
       const secret = key || (await savedKey())
       if (!secret) throw new Error('Enter the management key.')
-      const agentsBase = agentsUrl.trim() ? normaliseUrl(agentsUrl) : ''
       const count = await checkConnection({ baseUrl: base, key: secret })
       await saveConfig(base, key || null)
-      saveAgentsUrl(agentsBase)
       setKey('')
       setKeySaved(true)
       setStatus(`Connected: ${count} logins found.`)
@@ -78,19 +75,8 @@ export default function Settings() {
         placeholderTextColor={palette.secondary}
       />
       <Text style={styles.hint}>Stored only in the device's secure storage (Keychain or Android Keystore).</Text>
-      <Text style={styles.label}>Agents address</Text>
-      <TextInput
-        style={styles.input}
-        value={agentsUrl}
-        onChangeText={setAgentsUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        placeholder={`Proxy host, port ${AGENTS_PORT}`}
-        placeholderTextColor={palette.secondary}
-      />
       <Text style={styles.hint}>
-        Where agents_server.py runs on the Mac. Leave empty for the proxy host on port {AGENTS_PORT}. It checks the same key.
+        Agents come from agents_server.py on the same host, port {AGENTS_PORT}, with the same key.
       </Text>
       <Pressable style={[styles.button, busy && styles.disabled]} onPress={save} disabled={busy}>
         <Text style={styles.buttonText}>{busy ? 'Checking…' : 'Save and connect'}</Text>
