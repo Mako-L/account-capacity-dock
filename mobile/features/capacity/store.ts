@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { loadConfig } from './config'
 import { fetchAccounts } from './proxy'
 import { toSnapshot } from './rules'
-import { publishSnapshot } from './share'
+import { publishShared } from './publish'
 import type { CapacityAccount } from './types'
 
 type State = {
@@ -46,7 +46,7 @@ export async function refresh(): Promise<void> {
     }
     const accounts = await fetchAccounts(config, state.accounts)
     update({ configured: true, loading: false, accounts, error: null, updatedAt: Date.now() / 1000 })
-    await publishSnapshot(toSnapshot(accounts)).catch(() => undefined)
+    await publishShared({ accounts: toSnapshot(accounts).accounts })
   } catch (error) {
     update({ configured: true, loading: false, error: error instanceof Error ? error.message : 'Refresh failed.' })
   }

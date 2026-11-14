@@ -1,10 +1,10 @@
 import { Link } from 'one'
 import { useEffect } from 'react'
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
-import { AccountRow } from '../components/AccountRow'
-import { palette } from '../components/palette'
-import { byConstraint } from '../features/capacity/rules'
-import { refresh, useCapacity } from '../features/capacity/store'
+import { AccountRow } from '../../components/AccountRow'
+import { palette } from '../../components/palette'
+import { byConstraint } from '../../features/capacity/rules'
+import { refresh, useCapacity } from '../../features/capacity/store'
 
 export default function Accounts() {
   const capacity = useCapacity()

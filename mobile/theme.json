@@ -6,7 +6,7 @@
   "secondary": "#8E8E93",
   "track": "#2C2C2E",
   "accent": { "Claude": "#FF9F0A", "Codex": "#66D4CF", "Cursor": "#BF5AF2" },
-  "signal": { "green": "#30D158", "yellow": "#FFD60A", "orange": "#FF9F0A", "red": "#FF453A" },
+  "signal": { "green": "#30D158", "yellow": "#FFD60A", "orange": "#FF9F0A", "red": "#FF453A", "gray": "#8E8E93" },
   "danger": "#FF453A",
   "link": "#0A84FF"
 }

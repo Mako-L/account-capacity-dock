@@ -34,8 +34,9 @@ export default function Layout() {
         contentStyle: { backgroundColor: palette.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Capacity' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Back' }} />
       <Stack.Screen name="account/[id]" options={{ title: 'Account' }} />
+      <Stack.Screen name="agent/[id]" options={{ title: 'Agent' }} />
       <Stack.Screen name="settings" options={{ title: 'Proxy', presentation: 'modal' }} />
     </Stack>
   )

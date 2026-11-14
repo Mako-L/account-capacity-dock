@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 @MainActor public enum OneNativeSourceBody_Capacity {
-  public static let hash = "7da4d6c130b1e055cba48c099a01b6b727af4ed62379261bbd4c1a8f87e303f3"
+  public static let hash = "6aaf8ba52464d62c953de0feeaa64383b48537a1ad027eaefabe6584c25d349b"
 #if os(WASI)
   private struct Request: Decodable { let module: String; let method: String; let argsJson: String; let contractHash: String }
   private struct Reply: Encodable { let ok: Bool; let value: String?; let error: String?; let pending: Int32? }
@@ -142,6 +142,51 @@ import SwiftUI
   private nonisolated static func missing(_ prop: String) -> Error {
     NSError(domain: "OneNativeSource", code: 1, userInfo: [NSLocalizedDescriptionKey: "missing prop \(prop)"])
   }
+  private struct Doc_AgentRing: Decodable {
+    let seq: Int
+    let base: Int?
+    let p0: Optional<Double>
+    let p1: Optional<String>
+    let p2: Optional<Bool>
+    let p3: Optional<Double>
+    private enum CodingKeys: String, CodingKey { case seq = "$seq"; case base = "$base"; case lists = "$lists"; case p0 = "ring"; case p1 = "signal"; case p2 = "working"; case p3 = "size" }
+    init(from decoder: Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      seq = try c.decodeIfPresent(Int.self, forKey: .seq) ?? 0
+      base = try c.decodeIfPresent(Int.self, forKey: .base)
+      p0 = try c.contains(.p0) ? Optional<Double>.some(c.decode(Double.self, forKey: .p0)) : Optional<Double>.none
+      p1 = try c.contains(.p1) ? Optional<String>.some(c.decode(String.self, forKey: .p1)) : Optional<String>.none
+      p2 = try c.contains(.p2) ? Optional<Bool>.some(c.decode(Bool.self, forKey: .p2)) : Optional<Bool>.none
+      p3 = try c.contains(.p3) ? Optional<Double>.some(c.decode(Double.self, forKey: .p3)) : Optional<Double>.none
+    }
+  }
+  private final class Held_AgentRing {
+    var oneSeq: Int
+    var `ring`: Double
+    var `signal`: String
+    var `working`: Bool
+    var `size`: Double
+    init(_ d: Doc_AgentRing) throws {
+      oneSeq = d.seq
+      guard let p0 = d.p0 else { throw OneNativeSourceBody_Capacity.missing("ring") }
+      `ring` = p0
+      guard let p1 = d.p1 else { throw OneNativeSourceBody_Capacity.missing("signal") }
+      `signal` = p1
+      guard let p2 = d.p2 else { throw OneNativeSourceBody_Capacity.missing("working") }
+      `working` = p2
+      guard let p3 = d.p3 else { throw OneNativeSourceBody_Capacity.missing("size") }
+      `size` = p3
+    }
+    func apply(_ d: Doc_AgentRing) -> Bool {
+      if d.base != oneSeq { return false }
+      if let v = d.p0 { `ring` = v }
+      if let v = d.p1 { `signal` = v }
+      if let v = d.p2 { `working` = v }
+      if let v = d.p3 { `size` = v }
+      oneSeq = d.seq
+      return true
+    }
+  }
   private struct Doc_CapacityRing: Decodable {
     let seq: Int
     let base: Int?
@@ -184,6 +229,11 @@ import SwiftUI
   static func update(_ held: AnyObject?, _ name: String, _ text: String) throws -> AnyObject? {
     let data = Data(text.utf8)
     switch name {
+    case "AgentRing":
+      let doc = try decode(Doc_AgentRing.self, from: data)
+      if doc.base == nil { return try Held_AgentRing(doc) }
+      guard let h = held as? Held_AgentRing, h.apply(doc) else { return nil }
+      return h
     case "CapacityRing":
       let doc = try decode(Doc_CapacityRing.self, from: data)
       if doc.base == nil { return try Held_CapacityRing(doc) }
@@ -194,6 +244,14 @@ import SwiftUI
   }
   static func build(_ held: AnyObject, _ name: String, _ emit: @escaping (String, String) -> Void) throws -> AnyView {
     switch name {
+    case "AgentRing":
+      guard let props = held as? Held_AgentRing else { throw NSError(domain: "OneNativeSource", code: 1, userInfo: [NSLocalizedDescriptionKey: "props of another view for \(name)"]) }
+      return AnyView(AgentRing(
+        ring: props.`ring`,
+        signal: props.`signal`,
+        working: props.`working`,
+        size: props.`size`
+      ))
     case "CapacityRing":
       guard let props = held as? Held_CapacityRing else { throw NSError(domain: "OneNativeSource", code: 1, userInfo: [NSLocalizedDescriptionKey: "props of another view for \(name)"]) }
       return AnyView(CapacityRing(

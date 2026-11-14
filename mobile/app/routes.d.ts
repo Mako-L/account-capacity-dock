@@ -8,13 +8,22 @@ declare module 'one' {
     export interface __routes<T extends string = string> extends Record<string, unknown> {
       StaticRoutes:
         | `/`
+        | `/(tabs)`
+        | `/(tabs)/`
+        | `/(tabs)/agents`
         | `/_sitemap`
+        | `/agents`
         | `/settings`
-      DynamicRoutes: `/account/${OneRouter.SingleRoutePart<T>}`
-      DynamicRouteTemplate: `/account/[id]`
+      DynamicRoutes:
+        | `/account/${OneRouter.SingleRoutePart<T>}`
+        | `/agent/${OneRouter.SingleRoutePart<T>}`
+      DynamicRouteTemplate:
+        | `/account/[id]`
+        | `/agent/[id]`
       IsTyped: true
       RouteTypes: {
         '/account/[id]': RouteInfo<{ id: string }, '/account/[id]'>
+        '/agent/[id]': RouteInfo<{ id: string }, '/agent/[id]'>
       }
     }
   }

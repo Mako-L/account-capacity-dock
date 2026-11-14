@@ -1,3 +1,5 @@
+import type { SharedAgent } from '../agents/types'
+
 export type Provider = 'Claude' | 'Codex'
 
 export type Status = 'live' | 'loginRequired' | 'rateLimited' | 'stale' | 'unavailable' | 'disabled' | 'unknown'
@@ -22,6 +24,7 @@ export type ProxyConfig = { baseUrl: string; key: string }
 /** What the widget and the watch read; no emails beyond the display name, never a key. */
 export type SharedSnapshot = {
   updatedAt: number
+  agents?: SharedAgent[]
   accounts: Array<{
     id: string
     provider: Provider

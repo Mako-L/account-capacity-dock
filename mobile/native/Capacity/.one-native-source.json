@@ -1,8 +1,11 @@
 {
   "generatedBy": "one typegen",
   "packageId": "Capacity",
-  "hash": "7da4d6c130b1e055cba48c099a01b6b727af4ed62379261bbd4c1a8f87e303f3",
+  "hash": "6aaf8ba52464d62c953de0feeaa64383b48537a1ad027eaefabe6584c25d349b",
   "files": {
+    "AgentRing.swift": [
+      "AgentRing"
+    ],
     "CapacityRing.swift": [
       "CapacityRing"
     ],
@@ -16,6 +19,12 @@
     ]
   },
   "views": {
+    "AgentRing": [
+      "ring",
+      "signal",
+      "working",
+      "size"
+    ],
     "CapacityRing": [
       "used",
       "signal",
