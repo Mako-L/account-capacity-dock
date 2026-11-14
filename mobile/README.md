@@ -1,16 +1,26 @@
-# Capacity for iPhone, widgets and Apple Watch
+# Capacity for phones, widgets and Apple Watch
 
 The phone version of the Mako Capacity dock. It reads the same CLIProxyAPI management API the desktop collector reads and shows each account's quota ring, percent used and reset countdown.
 
-Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `one prebuild` generates the iOS project and the WidgetKit extension, so no Expo is involved; One has no watchOS targets, so `scripts/add-watch-target.rb` adds the watch app to the generated project after prebuild.
+Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `one prebuild` generates the iOS and Android projects and the iOS WidgetKit extension, so no Expo is involved. One has no watchOS or Android widget targets, so two post-prebuild scripts add them: `scripts/add-watch-target.rb` and `scripts/add-android-widget.mjs`.
+
+| List | Detail | Settings |
+| --- | --- | --- |
+| ![List](docs/screenshots/ios-list.png) | ![Detail](docs/screenshots/ios-detail.png) | ![Settings](docs/screenshots/ios-settings.png) |
+
+| Widgets | Watch | Watch, scrolled |
+| --- | --- | --- |
+| ![Widgets](docs/screenshots/ios-widgets.png) | ![Watch](docs/screenshots/watch-list.png) | ![Watch scrolled](docs/screenshots/watch-scrolled.png) |
 
 ## What it shows
 
 - **Accounts list:** one row per proxy login, with the dock's rounded-square quota ring, the provider icon, percent used of the most constrained window, the reset countdown and a connected / reconnect state. Pull to refresh.
-- **Account detail:** every quota window with its own ring, percent, reset time and plan.
+- **Account detail:** every quota window with its own ring, percent and reset time.
 - **Settings:** the proxy address and management key.
-- **Widget (small and medium):** the most constrained accounts' rings and percent.
-- **Watch app:** the same rings and percents, pushed from the phone.
+- **iOS widget (small and medium):** the four most constrained accounts' rings and percent; the medium size adds the window and reset time.
+- **Android widget (small and medium):** the same accounts and percents.
+- **Watch app:** the same rings and percents, pushed from the iPhone.
+- **Watch complication:** the most constrained account as a ring (circular, corner), or the top accounts (rectangular, inline).
 
 The rules match the dock (`collector.py`, `App.swift`): percent used is the highest window, the limiting window is the one with the highest use, the reset is that window's reset, and the ring colour follows the same green / yellow / orange / red thresholds.
 
@@ -24,59 +34,85 @@ These come from the desktop collector, not from the proxy, so the phone leaves t
 
 ## Data source and secrets
 
-The settings screen takes the proxy address, for example `http://127.0.0.1:8317` or `https://server:8317` (the panel is at `<address>/management.html`), and the management key.
+The settings screen takes the proxy address and the management key. The panel is at `<address>/management.html`.
 
-- The key is stored only in the iOS Keychain through `One.SecureStore`, never in plain storage, logs or the snapshot shared with the widget and watch.
-- Plain `http` is accepted only for a loopback address, the same rule as `scripts/capacity.py`.
+- On a phone, use the Mac's LAN or Tailscale address, for example `http://192.168.1.20:8317` or `http://100.x.y.z:8317`. `127.0.0.1` only works in the simulator.
+- The proxy must listen on that interface. A proxy bound to `127.0.0.1:8317` only (the default Docker publish) cannot be reached from a phone.
+- Plain `http` is accepted for loopback, private LAN ranges (10/8, 172.16/12, 192.168/16), Tailscale (100.64/10) and `.local` / `.ts.net` names. Any other host needs `https`.
+- Android allows cleartext traffic app-wide through `res/xml/network_security_config.xml`, because that file cannot express IP ranges. The URL rule above is what keeps plain http to private hosts.
+- iOS keeps the React Native template's `NSAllowsLocalNetworking`, which allows http to IP addresses and `.local` names but not to a `.ts.net` name: on iPhone, use the Tailscale IP.
+- The key is stored only in the iOS Keychain or Android Keystore, through `One.SecureStore`. It never goes to plain storage, logs or the snapshot shared with the widgets and watch.
 - The app calls `GET /v0/management/auth-files` for the logins and `POST /v0/management/api-call` to read each provider's usage endpoint with the proxy's stored token, like `collector.py`. Provider tokens never reach the phone.
-- The widget and watch receive a snapshot with provider, label, percent, window, reset time and state only.
+- The widgets and watch receive a snapshot with provider, label, percent, window, reset time and state only.
 
 ## Setup
 
-Requirements: macOS with Xcode 27 (iOS 17+ simulator; a watchOS simulator runtime for the watch app), Bun 1.3+, Node 24, CocoaPods and the `xcodeproj` Ruby gem (installed with CocoaPods).
+Requirements: Bun 1.3+ and Node 24. For iOS: macOS with Xcode 27, CocoaPods and the `xcodeproj` Ruby gem (installed with CocoaPods), plus a watchOS simulator runtime for the watch app. For Android: the Android SDK (platform 36, build-tools 36) and Java 17.
 
 ```bash
 cd mobile
 bun install
-bun run prebuild:ios      # one prebuild --platform ios, then adds the watch target
+bun run prebuild:ios       # one prebuild --platform ios, then the watch app and complication
+bun run prebuild:android   # one prebuild --platform android, then the widgets and network config
 ```
 
-`ios/` is generated. Change `vite.config.ts`, `native/` or `targets/` and run `bun run prebuild:ios` again.
+`ios/` and `android/` are generated. After changing `vite.config.ts`, `native/` or `targets/`, run the prebuild again.
 
-## Run
+## Android APK
 
 ```bash
-bun run dev               # One dev server (JS bundle for Debug builds)
-bun run ios               # build and launch on the default iPhone simulator
+cd mobile/android
+JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=~/Library/Android/sdk \
+  ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+# android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Or with Xcode tools directly:
+One ABI keeps the build under 4 GiB of disk; all four ABIs needed over 10 GiB. The release build bundles the JavaScript, so it runs without a dev server. It is signed with the debug key, which is enough to sideload. Install it with `adb install app-release.apk`, or copy it to the phone and open it.
+
+## iOS simulator
 
 ```bash
+bun run dev -- --port 8131   # One dev server for Debug builds; pick a free port
 cd ios
 xcodebuild -workspace MakoCapacity.xcworkspace -scheme MakoCapacity -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -derivedDataPath build/dd build
-xcrun simctl install booted build/dd/Build/Products/Debug-iphonesimulator/MakoCapacity.app
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro Max' -derivedDataPath ../build-ios/dd \
+  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= build
+xcrun simctl install booted ../build-ios/dd/Build/Products/Debug-iphonesimulator/MakoCapacity.app
+xcrun simctl spawn booted defaults write dev.mako.capacity RCT_jsLocation -string localhost:8131
 xcrun simctl launch booted dev.mako.capacity
 ```
 
-Watch app: pair a watch simulator with the iPhone simulator (`xcrun simctl pair <watch> <phone>`), build the `CapacityWatch` scheme for `platform=watchOS Simulator`, install it on the watch, then refresh on the phone. The phone sends each refresh over WatchConnectivity.
+- Do not pass `-sdk iphonesimulator`: it forces the watch target onto the iOS SDK and the build fails.
+- Sign ad hoc (`CODE_SIGN_IDENTITY=-`). With `CODE_SIGNING_ALLOWED=NO` the app has no entitlements, so the Keychain fails with `-34018` and the App Group is unavailable.
 
-Widget: long-press the home screen, tap Edit, Add Widget, then pick Capacity.
+Watch app: pair a watch simulator with the iPhone simulator (`xcrun simctl pair <watch> <phone>`), boot it, and install `Debug-watchsimulator/CapacityWatch.app` from the same build. Open the phone app: each refresh is sent over WatchConnectivity.
+
+Widgets: long-press the home screen, tap Edit, then Add Widget, then pick Capacity.
+
+## Tests
+
+```bash
+bun run test        # dock rules: windows, percent, colours, reset text, widget snapshot
+bun run typecheck
+```
+
+## Not verified
+
+- **Android on a device or emulator.** The APK builds and its manifest holds both widget receivers and the network config, but no emulator image is installed, so it has not run.
+- **Watch complication on a face.** It builds, watchOS registers it with all four families and launches its extension, but the simulator's complication picker does not list it. Check on a real watch.
 
 ## Layout
 
 ```
-app/                  screens (list, account/[id], settings)
-components/           Ring (native SwiftUI on iOS, react-native-svg elsewhere), rows, icons
-features/capacity/    proxy client, dock rules, store, Keychain config, widget/watch publishing
-native/Capacity/      Swift: App Group + WatchConnectivity bridge, the SwiftUI ring
-targets/widget/       SwiftUI WidgetKit extension (replaces One's generated widget body)
-targets/watch/        SwiftUI watchOS app
-scripts/              add-watch-target.rb
+app/                    screens (list, account/[id], settings)
+components/             Ring (native SwiftUI on iOS, react-native-svg elsewhere), rows, icons
+features/capacity/      proxy client, dock rules, store, secure config, widget and watch publishing
+lib/request.ts          the one network call
+native/Capacity/        Swift: App Group + WatchConnectivity bridge, the SwiftUI ring
+native/CapacityAndroid/ Kotlin: writes the snapshot for the Android widget and refreshes it
+targets/widget/         SwiftUI WidgetKit extension (replaces One's generated widget body)
+targets/watch/          SwiftUI watchOS app
+targets/watch-complication/ watchOS WidgetKit complication
+targets/android/        Android AppWidgetProvider, layouts and network security config
+scripts/                post-prebuild scripts, app icon generator
 ```
-
-## Not done
-
-- Android widget: not built. The Android app builds from the same code; the widget would need a Glance target that One's prebuild does not generate yet.
-- Watch complication: not built.
