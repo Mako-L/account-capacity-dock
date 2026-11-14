@@ -37,3 +37,4 @@ tsconfig.tsbuildinfo
 
 # the repo root ignores *.png; the app's icons and screenshots are source
 !*.png
+!/docs/screenshots/
