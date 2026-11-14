@@ -52,24 +52,60 @@ struct AccountCell: View {
   }
 }
 
+struct AgentCell: View {
+  let agent: CapacitySnapshot.Agent
+  var body: some View {
+    HStack(spacing: 10) {
+      AgentRing(agent: agent, size: 36)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(agent.progress.map { "\(Int($0))%" } ?? agent.state)
+          .font(.system(size: 16, weight: .semibold, design: .rounded)).monospacedDigit()
+          .foregroundStyle(signalColor(agent.signal))
+        Text(agent.heading).font(.system(size: 11)).lineLimit(2)
+        Text(agent.step.isEmpty ? agent.name : agent.step).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+      }
+    }
+  }
+}
+
+struct EmptyHint: View {
+  let text: String
+  var body: some View {
+    VStack(spacing: 8) {
+      Image(systemName: "iphone.and.arrow.forward").font(.title2)
+      Text(text).font(.footnote).multilineTextAlignment(.center).foregroundStyle(.secondary)
+    }
+    .padding()
+  }
+}
+
+// Swipe sideways between the accounts and the agents, like the dock's two modes.
 struct ContentView: View {
   @EnvironmentObject private var store: SnapshotStore
   var body: some View {
-    NavigationStack {
-      Group {
-        if let accounts = store.snapshot?.accounts, !accounts.isEmpty {
-          List(accounts) { account in AccountCell(account: account) }
-        } else {
-          VStack(spacing: 8) {
-            Image(systemName: "iphone.and.arrow.forward").font(.title2)
-            Text("Open Capacity on your iPhone to send your accounts here.")
-              .font(.footnote).multilineTextAlignment(.center).foregroundStyle(.secondary)
+    TabView {
+      NavigationStack {
+        Group {
+          if let accounts = store.snapshot?.accounts, !accounts.isEmpty {
+            List(accounts) { account in AccountCell(account: account) }
+          } else {
+            EmptyHint(text: "Open Capacity on your iPhone to send your accounts here.")
           }
-          .padding()
         }
+        .navigationTitle("Capacity")
       }
-      .navigationTitle("Capacity")
+      NavigationStack {
+        Group {
+          if let agents = store.snapshot?.agents, !agents.isEmpty {
+            List(agents) { agent in AgentCell(agent: agent) }
+          } else {
+            EmptyHint(text: "Open the Agents tab on your iPhone to send your agents here.")
+          }
+        }
+        .navigationTitle("Agents")
+      }
     }
+    .tabViewStyle(.verticalPage)
   }
 }
 

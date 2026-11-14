@@ -10,6 +10,7 @@ object SnapshotBridge : OneModule {
     private val widgets = listOf(
         "dev.mako.capacity.widget.CapacitySmallWidget",
         "dev.mako.capacity.widget.CapacityMediumWidget",
+        "dev.mako.capacity.widget.AgentsWidget",
     )
 
     fun publish(json: String): Map<String, String> {

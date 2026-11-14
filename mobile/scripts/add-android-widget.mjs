@@ -18,7 +18,7 @@ if (!readFileSync(gradlePath, 'utf8').includes('namespace "dev.mako.capacity"'))
 
 const javaDir = path.join(main, 'java', 'dev', 'mako', 'capacity', 'widget')
 mkdirSync(javaDir, { recursive: true })
-copyFileSync(path.join(source, 'java', 'CapacityWidget.kt'), path.join(javaDir, 'CapacityWidget.kt'))
+for (const file of ['CapacityWidget.kt', 'AgentsWidget.kt']) copyFileSync(path.join(source, 'java', file), path.join(javaDir, file))
 cpSync(path.join(source, 'res'), path.join(main, 'res'), { recursive: true })
 
 const drawables = path.join(main, 'res', 'drawable-nodpi')
@@ -55,8 +55,15 @@ const receiver = (name, info) => `
       </intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/${info}" />
     </receiver>`
-if (!manifest.includes('.widget.CapacitySmallWidget')) {
-  const receivers = receiver('CapacitySmallWidget', 'capacity_widget_small') + receiver('CapacityMediumWidget', 'capacity_widget_medium')
+const receivers = [
+  ['CapacitySmallWidget', 'capacity_widget_small'],
+  ['CapacityMediumWidget', 'capacity_widget_medium'],
+  ['AgentsWidget', 'agents_widget'],
+]
+  .filter(([name]) => !manifest.includes(`.widget.${name}"`))
+  .map(([name, info]) => receiver(name, info))
+  .join('')
+if (receivers) {
   const closing = manifest.lastIndexOf('</application>')
   if (closing < 0) throw new Error('AndroidManifest.xml has no </application>')
   manifest = `${manifest.slice(0, closing)}${receivers.trimStart()}\n    ${manifest.slice(closing)}`

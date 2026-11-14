@@ -12,8 +12,21 @@ struct CapacitySnapshot: Codable {
     let state: String
     let signal: String
   }
+  struct Agent: Codable, Identifiable {
+    let id: String
+    let provider: String
+    let name: String
+    let heading: String
+    let step: String
+    let progress: Double?
+    let ring: Double
+    let status: String
+    let state: String
+    let signal: String
+  }
   let updatedAt: Double
   let accounts: [Account]
+  var agents: [Agent]?
 
   static func decode(_ text: String?) -> CapacitySnapshot? {
     guard let text else { return nil }
@@ -34,6 +47,7 @@ func signalColor(_ name: String) -> Color {
   case "red": return .red
   case "orange": return .orange
   case "yellow": return .yellow
+  case "gray": return .gray
   default: return .green
   }
 }
@@ -42,6 +56,22 @@ struct ProviderMark: View {
   let provider: String
   var body: some View {
     Image(provider.lowercased()).resizable().renderingMode(.template).scaledToFit()
+  }
+}
+
+// The agents dock's ring: a circle filled to the progress, in the status colour.
+struct AgentRing: View {
+  let agent: CapacitySnapshot.Agent
+  let size: CGFloat
+  var body: some View {
+    ZStack {
+      Circle().stroke(.white.opacity(0.12), lineWidth: 3.5)
+      Circle().trim(from: 0, to: min(agent.ring, 100) / 100)
+        .stroke(signalColor(agent.signal), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+        .rotationEffect(.degrees(-90))
+      ProviderMark(provider: agent.provider).frame(width: size * 0.43, height: size * 0.43).foregroundStyle(.white)
+    }
+    .frame(width: size, height: size)
   }
 }
 

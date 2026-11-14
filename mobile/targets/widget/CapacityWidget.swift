@@ -14,8 +14,21 @@ struct CapacitySnapshot: Codable {
     let state: String
     let signal: String
   }
+  struct Agent: Codable, Identifiable {
+    let id: String
+    let provider: String
+    let name: String
+    let heading: String
+    let step: String
+    let progress: Double?
+    let ring: Double
+    let status: String
+    let state: String
+    let signal: String
+  }
   let updatedAt: Double
   let accounts: [Account]
+  var agents: [Agent]?
 
   static func load() -> CapacitySnapshot? {
     guard let text = UserDefaults(suiteName: "__APP_GROUP__")?.string(forKey: "capacity.snapshot") else { return nil }
@@ -33,6 +46,7 @@ func signalColor(_ name: String) -> Color {
   case "red": return .red
   case "orange": return .orange
   case "yellow": return .yellow
+  case "gray": return .gray
   default: return .green
   }
 }
@@ -156,7 +170,81 @@ struct CapacityWidget: Widget {
   }
 }
 
+// The agents dock's ring: a circle filled to the progress, in the status colour.
+struct AgentRingMark: View {
+  let agent: CapacitySnapshot.Agent
+  let size: CGFloat
+  var body: some View {
+    ZStack {
+      Circle().stroke(.white.opacity(0.12), lineWidth: 3.5)
+      Circle().trim(from: 0, to: min(agent.ring, 100) / 100)
+        .stroke(signalColor(agent.signal), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+        .rotationEffect(.degrees(-90))
+      ProviderMark(provider: agent.provider).frame(width: size * 0.43, height: size * 0.43).foregroundStyle(.white)
+    }
+    .frame(width: size, height: size)
+  }
+}
+
+struct AgentLine: View {
+  let agent: CapacitySnapshot.Agent
+  var body: some View {
+    HStack(spacing: 10) {
+      AgentRingMark(agent: agent, size: 30)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(agent.heading).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+        Text(agent.step.isEmpty ? "\(agent.name) · \(agent.state)" : agent.step)
+          .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+      }
+      Spacer(minLength: 4)
+      Text(agent.progress.map { "\(Int($0))%" } ?? agent.state)
+        .font(.system(size: agent.progress == nil ? 11 : 15, weight: .semibold)).monospacedDigit()
+        .foregroundStyle(signalColor(agent.signal)).lineLimit(1)
+    }
+  }
+}
+
+struct AgentsWidgetView: View {
+  @Environment(\.widgetFamily) private var family
+  let entry: CapacityEntry
+  var body: some View {
+    let agents = entry.snapshot?.agents ?? []
+    Group {
+      if agents.isEmpty {
+        VStack(spacing: 6) {
+          Image(systemName: "sparkles").font(.title2)
+          Text(entry.snapshot?.agents == nil ? "Open Capacity, then the Agents tab" : "No agents working")
+            .font(.caption2).multilineTextAlignment(.center).foregroundStyle(.secondary)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: family == .systemLarge ? 10 : 7) {
+          Text("Agents").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+          ForEach(agents.prefix(family == .systemLarge ? 7 : 3)) { AgentLine(agent: $0) }
+          Spacer(minLength: 0)
+        }
+      }
+    }
+    .foregroundStyle(.white)
+    .containerBackground(.black, for: .widget)
+    .widgetURL(URL(string: "makocapacity:///agents"))
+  }
+}
+
+struct AgentsWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "MakoAgents", provider: CapacityProvider()) { entry in
+      AgentsWidgetView(entry: entry)
+    }
+    .configurationDisplayName("Agents")
+    .description("The coding agents on your Mac: what each works on and how far along it is.")
+    .supportedFamilies([.systemMedium, .systemLarge])
+  }
+}
+
 @main
 struct CapacityWidgetBundle: WidgetBundle {
-  var body: some Widget { CapacityWidget() }
+  var body: some Widget {
+    CapacityWidget()
+    AgentsWidget()
+  }
 }
