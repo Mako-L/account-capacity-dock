@@ -1,0 +1,25 @@
+{
+  "generatedBy": "one typegen",
+  "packageId": "Capacity",
+  "hash": "21ba3c6dd320ce1dc1d43f8931aa98283645ce819716841faa027183b8cbf77b",
+  "files": {
+    "CapacityRing.swift": [
+      "CapacityRing"
+    ],
+    "SharedSnapshot.swift": [
+      "SharedSnapshot"
+    ]
+  },
+  "modules": {
+    "SharedSnapshot": [
+      "publish"
+    ]
+  },
+  "views": {
+    "CapacityRing": [
+      "used",
+      "signal"
+    ]
+  },
+  "defaultViewFiles": []
+}
