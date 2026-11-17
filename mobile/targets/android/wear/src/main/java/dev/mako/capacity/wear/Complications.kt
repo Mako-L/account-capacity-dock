@@ -8,6 +8,7 @@ import android.graphics.drawable.Icon
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.MonochromaticImage
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
@@ -20,6 +21,7 @@ import org.json.JSONObject
 object Complications {
     private val sources = listOf(
         AgentsComplicationService::class.java,
+        TopAgentComplicationService::class.java,
         TopAccount1ComplicationService::class.java,
         TopAccount2ComplicationService::class.java,
         TopAccount3ComplicationService::class.java,
@@ -33,6 +35,7 @@ object Complications {
 // Every source answers from the stored snapshot and opens the app on tap.
 abstract class CapacityComplicationService : SuspendingComplicationDataSourceService() {
     protected abstract val icon: Int
+    protected open val opensAgents = false
 
     protected abstract fun build(type: ComplicationType, snapshot: JSONObject?): ComplicationData?
 
@@ -49,14 +52,20 @@ abstract class CapacityComplicationService : SuspendingComplicationDataSourceSer
 
     protected fun openApp(): PendingIntent = PendingIntent.getActivity(
         this,
-        0,
-        Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        if (opensAgents) 1 else 0,
+        Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(EXTRA_SHOW_AGENTS, opensAgents),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
     protected fun shortText(value: String, title: String, description: String) =
         ShortTextComplicationData.Builder(text(value), text(description))
             .setTitle(text(title))
+            .setMonochromaticImage(image())
+            .setTapAction(openApp())
+            .build()
+
+    protected fun longText(value: String, description: String) =
+        LongTextComplicationData.Builder(text(value), text(description))
             .setMonochromaticImage(image())
             .setTapAction(openApp())
             .build()
@@ -72,6 +81,7 @@ abstract class CapacityComplicationService : SuspendingComplicationDataSourceSer
 
 class AgentsComplicationService : CapacityComplicationService() {
     override val icon = R.drawable.ic_complication_agents
+    override val opensAgents = true
 
     override fun build(type: ComplicationType, snapshot: JSONObject?): ComplicationData? {
         val running = WatchSummary.runningAgents(snapshot)
@@ -89,6 +99,34 @@ class AgentsComplicationService : CapacityComplicationService() {
     }
 
     override fun previewSnapshot() = JSONObject("""{"agents":[{"status":"working"},{"status":"working"},{"status":"blocked"},{"status":"idle"}]}""")
+}
+
+// The top running agent: its name and how far it is, e.g. "checkout-api" and "5/11"; a tap lists every agent.
+class TopAgentComplicationService : CapacityComplicationService() {
+    override val icon = R.drawable.ic_complication_agents
+    override val opensAgents = true
+
+    override fun build(type: ComplicationType, snapshot: JSONObject?): ComplicationData? {
+        val top = WatchSummary.topAgent(snapshot)
+        val title = top?.let { if (it.others > 0) "${it.label} +${it.others}" else it.label } ?: getString(R.string.no_agent_running)
+        val progress = top?.progressText ?: "--"
+        val description = top?.let { getString(R.string.top_agent_description, it.label, it.progressText, it.others) } ?: title
+        return when (type) {
+            ComplicationType.RANGED_VALUE -> {
+                val total = top?.total
+                val done = top?.done
+                if (total != null && done != null) ranged(done.toFloat(), total.toFloat(), progress, title, description)
+                else ranged((top?.percent ?: 0).toFloat(), 100f, progress, title, description)
+            }
+            ComplicationType.SHORT_TEXT -> shortText(progress, title, description)
+            ComplicationType.LONG_TEXT -> longText(top?.let { "${it.label} · ${it.progressText}" } ?: title, description)
+            else -> null
+        }
+    }
+
+    override fun previewSnapshot() = JSONObject(
+        """{"agents":[{"status":"working","label":"checkout-api","stepCount":[5,11],"progress":45,"state":"Working"},{"status":"working","label":"design-system"}]}""",
+    )
 }
 
 // One source per rank, so a face can show the top three side by side.

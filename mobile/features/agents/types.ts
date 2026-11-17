@@ -64,8 +64,10 @@ export type SharedAgent = {
   provider: 'Claude' | 'Codex'
   name: string
   heading: string
+  label: string
   step: string
   progress: number | null
+  stepCount: [number, number] | null
   ring: number
   status: string
   state: string

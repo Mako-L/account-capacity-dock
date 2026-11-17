@@ -41,15 +41,15 @@
     </BitmapFont>
   </BitmapFonts>
   <Scene backgroundColor="#000000">
-    <Group name="status" x="95" y="52" width="260" height="34" alpha="255">
+    <Group name="status" x="81" y="52" width="288" height="34" alpha="255">
       <Variant mode="AMBIENT" target="alpha" value="0"/>
-      <PartDraw x="40" y="9" width="30" height="16">
+      <PartDraw x="0" y="9" width="30" height="16">
         <RoundRectangle x="0" y="0" width="26" height="16" cornerRadiusX="4" cornerRadiusY="4"><Stroke thickness="2" color="#8E8E93"/></RoundRectangle>
         <Rectangle x="27" y="5" width="3" height="6"><Fill color="#8E8E93"/></Rectangle>
         <Rectangle x="3" y="3" width="20" height="10"><Fill color="#30D158"/><Transform target="width" value="20 * [BATTERY_PERCENT] / 100"/></Rectangle>
       </PartDraw>
-      <PartText x="74" y="0" width="66" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s%%]]><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
-      <Group name="weather" x="146" y="0" width="100" height="34">
+      <PartText x="34" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s%%]]><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
+      <Group name="weather" x="100" y="0" width="92" height="34">
         <Condition>
           <Expressions>
             <Expression name="weather"><![CDATA[[WEATHER.IS_AVAILABLE] && [WEATHER.IS_ERROR] == false]]></Expression>
@@ -61,9 +61,9 @@
               <Compare expression="isDay"><PartText x="0" y="2" width="30" height="30"><Text><BitmapFont family="weather_day" size="30"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Compare>
               <Default><PartText x="0" y="2" width="30" height="30"><Text><BitmapFont family="weather_night" size="30"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Default>
             </Condition>
-            <PartText x="34" y="0" width="66" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s°]]><Parameter expression="[WEATHER.TEMPERATURE]"/></Template></Font></Text></PartText>
+            <PartText x="34" y="0" width="58" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s°]]><Parameter expression="[WEATHER.TEMPERATURE]"/></Template></Font></Text></PartText>
           </Compare>
-          <Default><PartText x="0" y="0" width="100" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#8E8E93"><Template><![CDATA[%s°]]><Parameter expression="&quot;--&quot;"/></Template></Font></Text></PartText></Default>
+          <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#8E8E93"><Template><![CDATA[%s°]]><Parameter expression="&quot;--&quot;"/></Template></Font></Text></PartText></Default>
         </Condition>
       </Group>
     </Group>
@@ -147,30 +147,47 @@
         <Variant mode="AMBIENT" target="alpha" value="0"/>
       </ComplicationSlot>
 
-      <ComplicationSlot slotId="4" name="agents" displayName="agents_label" x="93" y="356" width="128" height="42" supportedTypes="SHORT_TEXT RANGED_VALUE EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.AgentsComplicationService" primaryProviderType="SHORT_TEXT"/>
-        <BoundingRoundBox x="0" y="0" width="128" height="42" cornerRadius="21"/>
-        <Complication type="SHORT_TEXT"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw><PartText x="8" y="6" width="112" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
-        <Complication type="RANGED_VALUE"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw><PartText x="8" y="6" width="112" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
+      <ComplicationSlot slotId="4" name="agents" displayName="agents_label" x="93" y="356" width="264" height="44" supportedTypes="RANGED_VALUE LONG_TEXT SHORT_TEXT EMPTY" isCustomizable="TRUE">
+        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAgentComplicationService" primaryProviderType="RANGED_VALUE"/>
+        <BoundingRoundBox x="0" y="0" width="264" height="44" cornerRadius="22"/>
+        <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
+          <PartText x="20" y="3" width="168" height="30"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+          <PartText x="188" y="3" width="56" height="30"><Text align="END" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#30D158"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartDraw x="20" y="34" width="224" height="4"><RoundRectangle x="0" y="0" width="224" height="4" cornerRadiusX="2" cornerRadiusY="2"><Fill color="#2C2C2E"/></RoundRectangle></PartDraw>
+          <PartDraw x="20" y="34" width="224" height="4"><RoundRectangle x="0" y="0" width="224" height="4" cornerRadiusX="2" cornerRadiusY="2"><Fill color="#30D158"/><Transform target="width" value="224 * (clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])"/></RoundRectangle></PartDraw>
+        </Complication>
+        <Complication type="LONG_TEXT">
+          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
+          <PartText x="20" y="7" width="224" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+        </Complication>
+        <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
+          <PartText x="20" y="7" width="168" height="30"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+          <PartText x="188" y="7" width="56" height="30"><Text align="END" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#30D158"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+        </Complication>
         <Variant mode="AMBIENT" target="alpha" value="0"/>
       </ComplicationSlot>
 
-      <ComplicationSlot slotId="5" name="health" displayName="health_label" x="229" y="356" width="128" height="42" supportedTypes="SHORT_TEXT RANGED_VALUE SMALL_IMAGE MONOCHROMATIC_IMAGE EMPTY" isCustomizable="TRUE">
+      <ComplicationSlot slotId="5" name="health" displayName="health_label" x="277" y="52" width="92" height="34" supportedTypes="SHORT_TEXT RANGED_VALUE SMALL_IMAGE MONOCHROMATIC_IMAGE EMPTY" isCustomizable="TRUE">
         <DefaultProviderPolicy defaultSystemProvider="HEART_RATE" defaultSystemProviderType="SHORT_TEXT" primaryProvider="com.samsung.android.wear.shealth/com.samsung.android.wear.shealth.complications.stress.StressComplicationProviderService" primaryProviderType="SMALL_IMAGE"/>
-        <BoundingRoundBox x="0" y="0" width="128" height="42" cornerRadius="21"/>
-        <Complication type="SHORT_TEXT"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw>
+        <BoundingBox x="0" y="0" width="92" height="34"/>
+        <Complication type="SHORT_TEXT">
           <Condition>
             <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
-            <Compare expression="icon">
-              <PartImage x="16" y="8" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage>
-              <PartText x="46" y="6" width="70" height="30"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-            </Compare>
-            <Default><PartText x="8" y="6" width="112" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
+            <Compare expression="icon"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="30" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
+            <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
           </Condition>
         </Complication>
-        <Complication type="RANGED_VALUE"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw><PartText x="8" y="6" width="112" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Complication>
-        <Complication type="SMALL_IMAGE"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw><PartImage x="48" y="5" width="32" height="32"><Image resource="[COMPLICATION.SMALL_IMAGE]"/></PartImage></Complication>
-        <Complication type="MONOCHROMATIC_IMAGE"><PartDraw x="0" y="0" width="128" height="42"><RoundRectangle x="0" y="0" width="128" height="42" cornerRadiusX="21" cornerRadiusY="21"><Fill color="#111214"/></RoundRectangle></PartDraw><PartImage x="51" y="8" width="26" height="26" tintColor="#FFFFFF"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage></Complication>
+        <Complication type="RANGED_VALUE">
+          <Condition>
+            <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
+            <Compare expression="icon"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="30" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
+            <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
+          </Condition>
+        </Complication>
+        <Complication type="SMALL_IMAGE"><PartImage x="0" y="2" width="30" height="30"><Image resource="[COMPLICATION.SMALL_IMAGE]"/></PartImage></Complication>
+        <Complication type="MONOCHROMATIC_IMAGE"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage></Complication>
         <Variant mode="AMBIENT" target="alpha" value="0"/>
       </ComplicationSlot>
   </Scene>

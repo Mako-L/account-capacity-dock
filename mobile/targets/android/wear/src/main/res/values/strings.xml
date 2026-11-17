@@ -12,6 +12,9 @@
     <string name="complication_account_1">Most capacity left</string>
     <string name="complication_account_2">2nd most capacity left</string>
     <string name="complication_account_3">3rd most capacity left</string>
+    <string name="complication_top_agent">Top agent and its progress</string>
+    <string name="no_agent_running">No agents</string>
+    <string name="top_agent_description">%1$s, %2$s, %3$d more running</string>
     <string name="agent_one">agent</string>
     <string name="agent_many">agents</string>
     <string name="agents_running_description">%1$s agents running</string>

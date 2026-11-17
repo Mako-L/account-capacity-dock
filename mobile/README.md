@@ -103,13 +103,13 @@ One ABI keeps the build under 4 GiB of disk; all four ABIs needed over 10 GiB. T
 
 ## Wear OS watch face
 
-| Face | Ambient | Picker: accounts | Picker: agents |
-| --- | --- | --- | --- |
-| ![Face](docs/screenshots/wear-face.png) | ![Ambient](docs/screenshots/wear-face-ambient.png) | ![Picker](docs/screenshots/wear-picker-accounts.png) | ![Picker](docs/screenshots/wear-picker-agents.png) |
+| Face | Ambient | Tap on the agent pill | Picker: top agent | Picker: accounts |
+| --- | --- | --- | --- | --- |
+| ![Face](docs/screenshots/wear-face.png) | ![Ambient](docs/screenshots/wear-face-ambient.png) | ![Agents](docs/screenshots/wear-agents-tap.png) | ![Picker](docs/screenshots/wear-picker-top-agent.png) | ![Picker](docs/screenshots/wear-picker-accounts.png) |
 
 Two packages, built together:
 
-- `wear` (`dev.mako.capacity`): the Wear app. It now also exposes four complication data sources, listed under "Capacity" in any face's picker: **Agents running**, **Most capacity left**, **2nd most capacity left**, **3rd most capacity left**. Each supports `RANGED_VALUE` and `SHORT_TEXT`. They read the snapshot the phone pushes over the Data Layer, and refresh when a new one arrives.
+- `wear` (`dev.mako.capacity`): the Wear app. It also exposes five complication data sources, listed under "Capacity" in any face's picker: **Top agent and its progress** (`RANGED_VALUE`, `SHORT_TEXT`, `LONG_TEXT`), **Agents running**, **Most capacity left**, **2nd most capacity left**, **3rd most capacity left** (each `RANGED_VALUE` and `SHORT_TEXT`). The picker shows the app's sources in two places: a group at the top, and the full alphabetical list further down, where the ones missing from the group sit. They read the snapshot the phone pushes over the Data Layer, and refresh when a new one arrives.
 - `watchface` (`dev.mako.capacity.watchface`): a Watch Face Format v2 face, resource only (`hasCode="false"`, minSdk 34).
 
 | Slot | Shows | Data |
@@ -118,7 +118,7 @@ Two packages, built together:
 | Battery | percent | WFF `[BATTERY_PERCENT]` |
 | Weather | temperature and condition icon | WFF `[WEATHER.*]`, "--°" when the watch has no weather |
 | 3 rings | percent left and account name, green 50%+, yellow 20%+, red below | the app's three "capacity left" sources, user changeable |
-| Agents | "3 agents" | the app's "Agents running" source (working or needs you), user changeable |
+| Agents | the top running agent and how far it is, e.g. "DEMO-42 +2 · 5/11" with a bar: the ticket id for a ticket-flow run (else the agent's name), "+2" for the other running agents, and the stage count (else a percent) | the app's "Top agent and its progress" source, user changeable. A tap opens the app at its agent list |
 | Health | stress, else heart rate | default Samsung Health stress complication, falling back to the system heart rate provider, user changeable |
 
 Samsung Health's stress complication (`com.samsung.android.wear.shealth/.complications.stress.StressComplicationProviderService`) only offers `SMALL_IMAGE` and `ICON`, so it draws as an image with no number. If Samsung Health is missing or refuses the face, the slot falls back to heart rate.
