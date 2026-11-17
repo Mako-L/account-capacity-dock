@@ -1,6 +1,7 @@
 package dev.mako.capacity.wear
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -16,6 +17,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
@@ -27,16 +29,33 @@ import org.json.JSONObject
 import kotlin.math.min
 
 // The phone writes the widget snapshot to this Data Layer path; see targets/android/java/WearSync.kt.
-private const val SNAPSHOT_PATH = "/capacity/snapshot"
+const val SNAPSHOT_PATH = "/capacity/snapshot"
+
+// An agent complication sets this so a tap opens the list at the agents.
+const val EXTRA_SHOW_AGENTS = "dev.mako.capacity.wear.SHOW_AGENTS"
 
 class MainActivity : Activity(), DataClient.OnDataChangedListener {
     private lateinit var content: LinearLayout
+    private var agentsHeader: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.main)
         content = findViewById(R.id.content)
-        render(getPreferences(MODE_PRIVATE).getString("snapshot", null))
+        render(SnapshotStore.read(this))
+        if (intent.getBooleanExtra(EXTRA_SHOW_AGENTS, false)) showAgents()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_SHOW_AGENTS, false)) showAgents()
+    }
+
+    private fun showAgents() {
+        val scroll = findViewById<ScrollView>(R.id.scroll)
+        // 30dp short of the header keeps it clear of the round screen's edge, like the top of the list.
+        scroll.post { agentsHeader?.let { scroll.scrollTo(0, (it.top - dp(30)).coerceAtLeast(0)) } }
     }
 
     override fun onResume() {
@@ -65,13 +84,14 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
     }
 
     private fun update(json: String) {
-        getPreferences(MODE_PRIVATE).edit().putString("snapshot", json).apply()
+        SnapshotStore.write(this, json)
         render(json)
     }
 
     private fun render(json: String?) {
         content.removeAllViews()
         val snapshot = json?.let { runCatching { JSONObject(it) }.getOrNull() }
+        agentsHeader = null
         if (snapshot == null) {
             content.addView(text(getString(R.string.empty), R.color.capacity_secondary, 13f))
             return
@@ -82,7 +102,9 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
         for (index in 0 until accounts.length()) content.addView(accountRow(accounts.getJSONObject(index)))
 
         val agents = snapshot.optJSONArray("agents")
-        content.addView(text(getString(R.string.agents), R.color.capacity_text, 15f).apply { setPadding(0, dp(14), 0, dp(4)) })
+        val header = text(getString(R.string.agents), R.color.capacity_text, 15f).apply { setPadding(0, dp(14), 0, dp(4)) }
+        agentsHeader = header
+        content.addView(header)
         if (agents == null || agents.length() == 0) {
             content.addView(text(getString(if (agents == null) R.string.open_agents else R.string.no_agents), R.color.capacity_secondary, 12f))
         } else {
@@ -123,7 +145,7 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
         val progress = if (agent.isNull("progress")) null else agent.optDouble("progress")
         val row = LayoutInflater.from(this).inflate(R.layout.row, content, false)
         row.findViewById<ImageView>(R.id.ring).setImageBitmap(Rings.circle(this, agent.optDouble("ring", 0.0), signal, agent.optString("provider"), 32))
-        row.findViewById<TextView>(R.id.name).text = agent.optString("name").ifEmpty { agent.optString("heading") }
+        row.findViewById<TextView>(R.id.name).text = agent.optString("label").ifEmpty { agent.optString("name") }.ifEmpty { agent.optString("heading") }
         val subagents = agent.optInt("subagents", 0)
         val running = agent.optInt("runningSubagents", 0)
         val subs = if (subagents == 0) "" else if (running > 0) "$subagents sub, $running running" else "$subagents sub"
@@ -131,7 +153,8 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
             .filter { it.isNotEmpty() }
             .joinToString(" · ")
         row.findViewById<TextView>(R.id.percent).apply {
-            this.text = progress?.let { "${it.toInt()}%" } ?: ""
+            val count = agent.optJSONArray("stepCount")?.takeIf { it.length() == 2 && it.optInt(1) > 0 }
+            this.text = count?.let { "${it.optInt(0)}/${it.optInt(1)}" } ?: progress?.let { "${it.toInt()}%" } ?: ""
             setTextColor(Rings.colour(this@MainActivity, signal))
         }
         return row

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="watch_face_name">Mako Capacity</string>
+    <string name="account_1_label">Account 1</string>
+    <string name="account_2_label">Account 2</string>
+    <string name="account_3_label">Account 3</string>
+    <string name="agent_1_label">Agent 1</string>
+    <string name="agent_2_label">Agent 2</string>
+    <string name="agent_3_label">Agent 3</string>
+    <string name="agent_4_label">Agent 4</string>
+    <string name="health_label">Stress</string>
+</resources>

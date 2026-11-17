@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { byAttention, currentStep, heading, progressLabel, ring, sinceText, stepText, toSharedAgents } from '../rules'
+import { byAttention, currentStep, heading, progressLabel, ring, shortLabel, sinceText, stepText, toSharedAgents } from '../rules'
 import type { Agent } from '../types'
 
 const agent = (overrides: Partial<Agent> = {}): Agent => ({
@@ -93,8 +93,10 @@ test('toSharedAgents keeps every agent, working first, and carries what the widg
       provider: 'Codex',
       name: 'MASH-1',
       heading: 'Fix PR',
+      label: 'MASH-1',
       step: 'Testing',
       progress: 40,
+      stepCount: null,
       ring: 40,
       status: 'working',
       state: 'Working',
@@ -104,6 +106,38 @@ test('toSharedAgents keeps every agent, working first, and carries what the widg
     },
   ])
   expect(toSharedAgents(list).map((item) => item.id)).toEqual(['w', 'd', 'i'])
+})
+
+describe('shortLabel', () => {
+  test('uses the ticket id when the task is one', () => {
+    // Catches: the watch showing the long agent name for a ticket-flow run.
+    expect(shortLabel(agent({ name: 'checkout-api', task: 'DEMO-42' }))).toBe('DEMO-42')
+  })
+
+  test('keeps the agent name when the task is a sentence', () => {
+    // Catches: an unanchored ticket match picking "DEMO-42" out of free text.
+    expect(shortLabel(agent({ name: 'checkout-api', task: 'Fix DEMO-42 later' }))).toBe('checkout-api')
+  })
+
+  test('ignores spaces around a ticket id', () => {
+    // Catches: dropping the trim, so a padded id falls back to the name.
+    expect(shortLabel(agent({ name: 'checkout-api', task: ' DEMO-42 ' }))).toBe('DEMO-42')
+  })
+})
+
+test('toSharedAgents sends the counted stage pair the watch shows as 5/11', () => {
+  // Catches: sending only the percentage, so the face falls back to "45%".
+  const [shared] = toSharedAgents([agent({ task: 'DEMO-42', progress: 45, stepCount: [5, 11] })])
+
+  expect(shared).toMatchObject({ label: 'DEMO-42', stepCount: [5, 11] })
+})
+
+test('toSharedAgents counts done steps when the agent has no stage pair', () => {
+  // Catches: forwarding agent.stepCount alone, which is null for a plain task list.
+  const steps = [{ title: 'Read', status: 'done' }, { title: 'Fix', status: 'active' }, { title: 'Test', status: 'pending' }] as Agent['steps']
+  const [shared] = toSharedAgents([agent({ steps })])
+
+  expect(shared.stepCount).toEqual([1, 3])
 })
 
 test('toSharedAgents counts subagents and the running ones', () => {

@@ -14,6 +14,14 @@ export function displayName(agent: Agent): string {
   return agent.name || agent.tabName || agent.project || provider(agent)
 }
 
+const TICKET_ID = /^[A-Z][A-Z0-9]*-\d+$/
+
+// A watch-sized name: the ticket id when the task is one (a ticket-flow run), else the agent's name.
+export function shortLabel(agent: Agent): string {
+  const task = agent.task?.trim() ?? ''
+  return TICKET_ID.test(task) ? task : displayName(agent)
+}
+
 export function isLive(agent: Agent): boolean {
   return agent.status === 'working' || agent.status === 'blocked'
 }
@@ -81,8 +89,10 @@ export function toSharedAgents(agents: Agent[], limit = 60): SharedAgent[] {
       provider: provider(agent),
       name: displayName(agent),
       heading: heading(agent),
+      label: shortLabel(agent),
       step: currentStep(agent),
       progress: agent.progress,
+      stepCount: stepCount(agent),
       ring: ring(agent),
       status: agent.status,
       state: agentState(agent),

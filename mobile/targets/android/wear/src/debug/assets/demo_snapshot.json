@@ -1,0 +1,171 @@
+{
+ "updatedAt": 0,
+ "accounts": [
+  {
+   "id": "demo-3",
+   "provider": "Claude",
+   "email": "side",
+   "used": 100,
+   "window": "Weekly",
+   "resetInHours": 14,
+   "state": "At limit",
+   "signal": "red",
+   "available": false,
+   "tokens": 150000000,
+   "costUsd": 88.12
+  },
+  {
+   "id": "demo-2",
+   "provider": "Claude",
+   "email": "lab",
+   "used": 81,
+   "window": "Weekly",
+   "resetInHours": 46,
+   "state": "Available",
+   "signal": "yellow",
+   "available": true,
+   "tokens": 170000000,
+   "costUsd": 96.3
+  },
+  {
+   "id": "demo-6",
+   "provider": "Codex",
+   "email": "reviewer",
+   "used": 73,
+   "window": "Weekly",
+   "resetInHours": 59,
+   "state": "Available",
+   "signal": "yellow",
+   "available": true,
+   "tokens": 26000000,
+   "costUsd": 14.6
+  },
+  {
+   "id": "demo-1",
+   "provider": "Claude",
+   "email": "studio",
+   "used": 38,
+   "window": "Weekly",
+   "resetInHours": 109,
+   "state": "Available",
+   "signal": "green",
+   "available": true,
+   "tokens": 48200000,
+   "costUsd": 41.87
+  },
+  {
+   "id": "demo-5",
+   "provider": "Codex",
+   "email": "build",
+   "used": 12,
+   "window": "Weekly",
+   "resetInHours": 149,
+   "state": "Available",
+   "signal": "green",
+   "available": true,
+   "tokens": 17000000,
+   "costUsd": 9.8
+  },
+  {
+   "id": "demo-4",
+   "provider": "Claude",
+   "email": "vault",
+   "used": null,
+   "window": "",
+   "resetInHours": null,
+   "state": "Reconnect",
+   "signal": "orange",
+   "available": false,
+   "tokens": null,
+   "costUsd": null
+  }
+ ],
+ "agents": [
+  {
+   "id": "w3:p1",
+   "provider": "Claude",
+   "name": "mobile-app",
+   "heading": "Fix the login crash on Android",
+   "label": "mobile-app",
+   "step": "Waiting for your answer",
+   "progress": 67,
+   "stepCount": [
+    2,
+    3
+   ],
+   "ring": 67,
+   "status": "blocked",
+   "state": "Needs you",
+   "signal": "red",
+   "subagents": 0,
+   "runningSubagents": 0
+  },
+  {
+   "id": "w1:p1",
+   "provider": "Claude",
+   "name": "checkout-api",
+   "heading": "Add webhook handling for failed payments",
+   "label": "DEMO-42",
+   "step": "Code review",
+   "progress": 45,
+   "stepCount": [
+    5,
+    11
+   ],
+   "ring": 45,
+   "status": "working",
+   "state": "Working",
+   "signal": "yellow",
+   "subagents": 4,
+   "runningSubagents": 2
+  },
+  {
+   "id": "w2:p1",
+   "provider": "Codex",
+   "name": "design-system",
+   "heading": "Define dark mode colour tokens",
+   "label": "design-system",
+   "step": "Edit tokens.css",
+   "progress": 25,
+   "stepCount": null,
+   "ring": 25,
+   "status": "working",
+   "state": "Working",
+   "signal": "yellow",
+   "subagents": 0,
+   "runningSubagents": 0
+  },
+  {
+   "id": "w4:p1",
+   "provider": "Claude",
+   "name": "docs-site",
+   "heading": "Rewrite the install guide",
+   "label": "DEMO-57",
+   "step": "Plan review",
+   "progress": 33,
+   "stepCount": [3, 9],
+   "ring": 33,
+   "status": "working",
+   "state": "Working",
+   "signal": "green",
+   "subagents": 0,
+   "runningSubagents": 0
+  },
+  {
+   "id": "w5:p1",
+   "provider": "Claude",
+   "name": "infra",
+   "heading": "Bump the Node version",
+   "label": "infra",
+   "step": "",
+   "progress": null,
+   "stepCount": null,
+   "ring": 0,
+   "status": "idle",
+   "state": "Idle",
+   "signal": "gray",
+   "subagents": 0,
+   "runningSubagents": 0
+  }
+ ]
+}

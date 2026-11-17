@@ -64,6 +64,10 @@ for (const density of ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
 const settingsPath = path.join(root, 'android', 'settings.gradle')
 const settings = readFileSync(settingsPath, 'utf8')
 if (!settings.includes("include ':wear'")) writeFileSync(settingsPath, settings.replace("include ':app'", "include ':app'\ninclude ':wear'"))
+// The Watch Face Format face: a resource-only package that reads the Wear app's complications.
+cpSync(path.join(source, 'watchface'), path.join(root, 'android', 'watchface'), { recursive: true })
+const withWear = readFileSync(settingsPath, 'utf8')
+if (!withWear.includes("include ':watchface'")) writeFileSync(settingsPath, withWear.replace("include ':wear'", "include ':wear'\ninclude ':watchface'"))
 const gradle = readFileSync(gradlePath, 'utf8')
 const wearable = 'implementation "com.google.android.gms:play-services-wearable:19.0.0"'
 if (!gradle.includes(wearable)) writeFileSync(gradlePath, `${gradle}\ndependencies {\n    ${wearable}\n}\n`)
