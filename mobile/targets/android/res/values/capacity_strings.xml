@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="available_widget_label">Available</string>
+    <string name="available_widget_description">Accounts that still have usage left, scrollable.</string>
+    <string name="available_widget_empty">Every account is at its limit</string>
+    <string name="all_widget_label">All accounts</string>
+    <string name="all_widget_description">Every account and how much of its quota is used, scrollable.</string>
+    <string name="capacity_widget_empty">Open Capacity to connect your proxy</string>
+    <string name="agents_widget_label">Agents</string>
+    <string name="agents_widget_description">The coding agents on your Mac and how far along each is.</string>
+    <string name="agents_widget_empty">Open the Agents tab to load your agents</string>
+</resources>

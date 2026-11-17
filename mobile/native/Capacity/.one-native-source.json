@@ -1,0 +1,35 @@
+{
+  "generatedBy": "one typegen",
+  "packageId": "Capacity",
+  "hash": "6aaf8ba52464d62c953de0feeaa64383b48537a1ad027eaefabe6584c25d349b",
+  "files": {
+    "AgentRing.swift": [
+      "AgentRing"
+    ],
+    "CapacityRing.swift": [
+      "CapacityRing"
+    ],
+    "SharedSnapshot.swift": [
+      "SharedSnapshot"
+    ]
+  },
+  "modules": {
+    "SharedSnapshot": [
+      "publish"
+    ]
+  },
+  "views": {
+    "AgentRing": [
+      "ring",
+      "signal",
+      "working",
+      "size"
+    ],
+    "CapacityRing": [
+      "used",
+      "signal",
+      "size"
+    ]
+  },
+  "defaultViewFiles": []
+}

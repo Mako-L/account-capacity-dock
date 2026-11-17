@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Capacity</string>
+    <string name="accounts">Accounts</string>
+    <string name="agents">Agents</string>
+    <string name="empty">Open Capacity on your phone to send your accounts here.</string>
+    <string name="no_accounts">No accounts on the proxy.</string>
+    <string name="no_agents">No agents working.</string>
+    <string name="open_agents">Open the Agents tab on your phone.</string>
+    <string name="updated">Updated %1$s</string>
+</resources>
