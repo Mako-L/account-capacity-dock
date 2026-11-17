@@ -54,6 +54,63 @@
         </service>
 
         <service
+            android:name=".Agent2ComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_complication_agents"
+            android:label="@string/complication_agent_2"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,LONG_TEXT,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="900" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="dev.mako.capacity.watchface" />
+        </service>
+        <service
+            android:name=".Agent4ComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_complication_agents"
+            android:label="@string/complication_agent_4"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,LONG_TEXT,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="900" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="dev.mako.capacity.watchface" />
+        </service>
+        <service
+            android:name=".Agent3ComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_complication_agents"
+            android:label="@string/complication_agent_3"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,LONG_TEXT,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="900" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="dev.mako.capacity.watchface" />
+        </service>
+        <service
             android:name=".AgentsComplicationService"
             android:exported="true"
             android:icon="@drawable/ic_complication_agents"
@@ -113,6 +170,25 @@
                 android:value="dev.mako.capacity.watchface" />
         </service>
 
+        <service
+            android:name=".TopAccount4ComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_complication_account"
+            android:label="@string/complication_account_4"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="RANGED_VALUE,SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="900" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="dev.mako.capacity.watchface" />
+        </service>
         <service
             android:name=".TopAccount3ComplicationService"
             android:exported="true"

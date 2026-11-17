@@ -41,154 +41,197 @@
     </BitmapFont>
   </BitmapFonts>
   <Scene backgroundColor="#000000">
-    <Group name="status" x="81" y="52" width="288" height="34" alpha="255">
+    <DigitalClock x="110" y="122" width="230" height="96">
+      <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="230" height="96">
+        <Font family="SYNC_TO_DEVICE" size="84" color="#FFFFFF" weight="MEDIUM"/>
+      </TimeText>
+    </DigitalClock>
+    <PartText x="120" y="220" width="210" height="32"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#8E8E93"><Template><![CDATA[%s %s %s]]><Parameter expression="[DAY_OF_WEEK_S]"/><Parameter expression="[DAY]"/><Parameter expression="[MONTH_S]"/></Template></Font></Text></PartText>
+    <ComplicationSlot slotId="1" name="account_1" displayName="account_1_label" x="119" y="19" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount1ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <Condition>
+            <Expressions>
+              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
+              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
+            </Expressions>
+            <Compare expression="plenty"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Compare expression="some"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Default><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
+          </Condition>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="2" name="account_2" displayName="account_2_label" x="19" y="119" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount2ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <Condition>
+            <Expressions>
+              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
+              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
+            </Expressions>
+            <Compare expression="plenty"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Compare expression="some"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Default><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
+          </Condition>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="3" name="account_3" displayName="account_3_label" x="23" y="263" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount3ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <Condition>
+            <Expressions>
+              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
+              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
+            </Expressions>
+            <Compare expression="plenty"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Compare expression="some"><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
+            <Default><PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
+          </Condition>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="4" name="agent_1" displayName="agent_1_label" x="255" y="19" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAgentComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#64D2FF" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="6" name="agent_2" displayName="agent_2_label" x="339" y="88" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.Agent2ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#64D2FF" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="7" name="agent_3" displayName="agent_3_label" x="368" y="193" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.Agent3ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#64D2FF" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="9" name="agent_4" displayName="agent_4_label" x="332" y="296" width="76" height="76" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.Agent4ComplicationService" primaryProviderType="RANGED_VALUE"/>
+      <BoundingOval x="0" y="0" width="76" height="76"/>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#64D2FF" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="76" height="76"><Arc centerX="38" centerY="38" width="68" height="68" startAngle="0" endAngle="360"><Stroke thickness="7" color="#2C2C2E"/></Arc></PartDraw>
+          <PartText x="8" y="16" width="60" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="21" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
+          <PartText x="10" y="42" width="56" height="18"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="12" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
+      </Complication>
+      <Variant mode="AMBIENT" target="alpha" value="150"/>
+    </ComplicationSlot>
+    <ComplicationSlot slotId="5" name="health" displayName="health_label" x="116" y="344" width="68" height="68" supportedTypes="SMALL_IMAGE MONOCHROMATIC_IMAGE SHORT_TEXT RANGED_VALUE EMPTY" isCustomizable="TRUE">
+      <DefaultProviderPolicy defaultSystemProvider="HEART_RATE" defaultSystemProviderType="SHORT_TEXT" primaryProvider="com.samsung.android.wear.shealth/com.samsung.android.wear.shealth.complications.stress.StressComplicationProviderService" primaryProviderType="SMALL_IMAGE"/>
+      <BoundingOval x="0" y="0" width="68" height="68"/>
+      <Complication type="SMALL_IMAGE"><PartImage x="2" y="2" width="64" height="64"><Image resource="[COMPLICATION.SMALL_IMAGE]"/></PartImage></Complication>
+      <Complication type="MONOCHROMATIC_IMAGE"><PartImage x="14" y="14" width="40" height="40" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage></Complication>
+      <Complication type="SHORT_TEXT">
+          <PartDraw x="0" y="0" width="68" height="68"><Arc centerX="34" centerY="34" width="61" height="61" startAngle="0" endAngle="360"><Stroke thickness="6" color="#2C2C2E"/></Arc></PartDraw>
+          
+          <Condition>
+            <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
+            <Compare expression="icon"><PartImage x="24" y="9" width="20" height="20" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="8" y="29" width="52" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
+            <Default><PartText x="8" y="14" width="52" height="26"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="10" y="38" width="48" height="16"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="11" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
+          </Condition>
+      </Complication>
+      <Complication type="RANGED_VALUE">
+          <PartDraw x="0" y="0" width="68" height="68"><Arc centerX="34" centerY="34" width="61" height="61" startAngle="0" endAngle="360"><Stroke thickness="6" color="#2C2C2E"/></Arc></PartDraw>
+          <PartDraw x="0" y="0" width="68" height="68"><Arc centerX="34" centerY="34" width="61" height="61" startAngle="0" endAngle="360"><Stroke thickness="6" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw>
+          <Condition>
+            <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
+            <Compare expression="icon"><PartImage x="24" y="9" width="20" height="20" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="8" y="29" width="52" height="28"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
+            <Default><PartText x="8" y="14" width="52" height="26"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText><PartText x="10" y="38" width="48" height="16"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="11" color="#AEAEB2"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
+          </Condition>
+      </Complication>
       <Variant mode="AMBIENT" target="alpha" value="0"/>
-      <PartDraw x="0" y="9" width="30" height="16">
-        <RoundRectangle x="0" y="0" width="26" height="16" cornerRadiusX="4" cornerRadiusY="4"><Stroke thickness="2" color="#8E8E93"/></RoundRectangle>
-        <Rectangle x="27" y="5" width="3" height="6"><Fill color="#8E8E93"/></Rectangle>
-        <Rectangle x="3" y="3" width="20" height="10"><Fill color="#30D158"/><Transform target="width" value="20 * [BATTERY_PERCENT] / 100"/></Rectangle>
+    </ComplicationSlot>
+    <Group name="status" x="188" y="361" width="150" height="34" alpha="255">
+      <Variant mode="AMBIENT" target="alpha" value="0"/>
+      <PartDraw x="0" y="10" width="28" height="15">
+        <RoundRectangle x="0" y="0" width="24" height="15" cornerRadiusX="4" cornerRadiusY="4"><Stroke thickness="2" color="#8E8E93"/></RoundRectangle>
+        <Rectangle x="25" y="5" width="3" height="5"><Fill color="#8E8E93"/></Rectangle>
+        <Rectangle x="3" y="3" width="18" height="9"><Fill color="#30D158"/><Transform target="width" value="18 * [BATTERY_PERCENT] / 100"/></Rectangle>
       </PartDraw>
-      <PartText x="34" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s%%]]><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
-      <Group name="weather" x="100" y="0" width="92" height="34">
+      <PartText x="31" y="0" width="54" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s%%]]><Parameter expression="[BATTERY_PERCENT]"/></Template></Font></Text></PartText>
+      <Group name="weather" x="86" y="0" width="64" height="34">
         <Condition>
           <Expressions>
             <Expression name="weather"><![CDATA[[WEATHER.IS_AVAILABLE] && [WEATHER.IS_ERROR] == false]]></Expression>
-            <Expression name="day"><![CDATA[[WEATHER.IS_DAY]]]></Expression>
           </Expressions>
           <Compare expression="weather">
             <Condition>
               <Expressions><Expression name="isDay"><![CDATA[[WEATHER.IS_DAY]]]></Expression></Expressions>
-              <Compare expression="isDay"><PartText x="0" y="2" width="30" height="30"><Text><BitmapFont family="weather_day" size="30"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Compare>
-              <Default><PartText x="0" y="2" width="30" height="30"><Text><BitmapFont family="weather_night" size="30"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Default>
+              <Compare expression="isDay"><PartText x="0" y="4" width="26" height="26"><Text><BitmapFont family="weather_day" size="26"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Compare>
+              <Default><PartText x="0" y="4" width="26" height="26"><Text><BitmapFont family="weather_night" size="26"><Template><![CDATA[%s]]><Parameter expression="[WEATHER.CONDITION] &lt;= 15 ? [WEATHER.CONDITION] : 0"/></Template></BitmapFont></Text></PartText></Default>
             </Condition>
-            <PartText x="34" y="0" width="58" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s°]]><Parameter expression="[WEATHER.TEMPERATURE]"/></Template></Font></Text></PartText>
+            <PartText x="28" y="0" width="36" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#FFFFFF"><Template><![CDATA[%s°]]><Parameter expression="[WEATHER.TEMPERATURE]"/></Template></Font></Text></PartText>
           </Compare>
-          <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#8E8E93"><Template><![CDATA[%s°]]><Parameter expression="&quot;--&quot;"/></Template></Font></Text></PartText></Default>
+          <Default><PartText x="0" y="0" width="64" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="20" color="#8E8E93"><Template><![CDATA[%s°]]><Parameter expression="&quot;--&quot;"/></Template></Font></Text></PartText></Default>
         </Condition>
       </Group>
     </Group>
-    <DigitalClock x="25" y="96" width="400" height="116">
-      <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="400" height="116">
-        <Font family="SYNC_TO_DEVICE" size="104" color="#FFFFFF" weight="MEDIUM"/>
-      </TimeText>
-    </DigitalClock>
-    <PartText x="75" y="212" width="300" height="34"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="26" color="#8E8E93"><Template><![CDATA[%s %s %s]]><Parameter expression="[DAY_OF_WEEK_S]"/><Parameter expression="[DAY]"/><Parameter expression="[MONTH_S]"/></Template></Font></Text></PartText>
-
-      <ComplicationSlot slotId="1" name="account_1" displayName="account_1_label" x="75" y="256" width="92" height="92" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount1ComplicationService" primaryProviderType="RANGED_VALUE"/>
-        <BoundingOval x="0" y="0" width="92" height="92"/>
-        <Complication type="RANGED_VALUE">
-          <PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#2C2C2E"/></Arc></PartDraw>
-          <Condition>
-            <Expressions>
-              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
-              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
-            </Expressions>
-            <Compare expression="plenty"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Compare expression="some"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Default><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
-          </Condition>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Complication type="SHORT_TEXT">
-          <PartDraw x="0" y="0" width="92" height="92"><Ellipse x="4" y="4" width="84" height="84"><Stroke thickness="8" color="#2C2C2E"/></Ellipse></PartDraw>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Variant mode="AMBIENT" target="alpha" value="0"/>
-      </ComplicationSlot>
-      <ComplicationSlot slotId="2" name="account_2" displayName="account_2_label" x="179" y="256" width="92" height="92" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount2ComplicationService" primaryProviderType="RANGED_VALUE"/>
-        <BoundingOval x="0" y="0" width="92" height="92"/>
-        <Complication type="RANGED_VALUE">
-          <PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#2C2C2E"/></Arc></PartDraw>
-          <Condition>
-            <Expressions>
-              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
-              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
-            </Expressions>
-            <Compare expression="plenty"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Compare expression="some"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Default><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
-          </Condition>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Complication type="SHORT_TEXT">
-          <PartDraw x="0" y="0" width="92" height="92"><Ellipse x="4" y="4" width="84" height="84"><Stroke thickness="8" color="#2C2C2E"/></Ellipse></PartDraw>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Variant mode="AMBIENT" target="alpha" value="0"/>
-      </ComplicationSlot>
-      <ComplicationSlot slotId="3" name="account_3" displayName="account_3_label" x="283" y="256" width="92" height="92" supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAccount3ComplicationService" primaryProviderType="RANGED_VALUE"/>
-        <BoundingOval x="0" y="0" width="92" height="92"/>
-        <Complication type="RANGED_VALUE">
-          <PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#2C2C2E"/></Arc></PartDraw>
-          <Condition>
-            <Expressions>
-              <Expression name="plenty"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.5]]></Expression>
-              <Expression name="some"><![CDATA[(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) >= 0.2]]></Expression>
-            </Expressions>
-            <Compare expression="plenty"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#30D158" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Compare expression="some"><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FFD60A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Compare>
-            <Default><PartDraw x="0" y="0" width="92" height="92"><Arc centerX="46" centerY="46" width="84" height="84" startAngle="0" endAngle="360"><Stroke thickness="8" color="#FF453A" cap="ROUND"/><Transform target="endAngle" value="(clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]) * 360"/></Arc></PartDraw></Default>
-          </Condition>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Complication type="SHORT_TEXT">
-          <PartDraw x="0" y="0" width="92" height="92"><Ellipse x="4" y="4" width="84" height="84"><Stroke thickness="8" color="#2C2C2E"/></Ellipse></PartDraw>
-          <PartText x="10" y="22" width="72" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartText x="9" y="50" width="74" height="20"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="14" color="#8E8E93"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Variant mode="AMBIENT" target="alpha" value="0"/>
-      </ComplicationSlot>
-
-      <ComplicationSlot slotId="4" name="agents" displayName="agents_label" x="93" y="356" width="264" height="44" supportedTypes="RANGED_VALUE LONG_TEXT SHORT_TEXT EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" primaryProvider="dev.mako.capacity/dev.mako.capacity.wear.TopAgentComplicationService" primaryProviderType="RANGED_VALUE"/>
-        <BoundingRoundBox x="0" y="0" width="264" height="44" cornerRadius="22"/>
-        <Complication type="RANGED_VALUE">
-          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
-          <PartText x="20" y="3" width="168" height="30"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-          <PartText x="188" y="3" width="56" height="30"><Text align="END" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#30D158"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-          <PartDraw x="20" y="34" width="224" height="4"><RoundRectangle x="0" y="0" width="224" height="4" cornerRadiusX="2" cornerRadiusY="2"><Fill color="#2C2C2E"/></RoundRectangle></PartDraw>
-          <PartDraw x="20" y="34" width="224" height="4"><RoundRectangle x="0" y="0" width="224" height="4" cornerRadiusX="2" cornerRadiusY="2"><Fill color="#30D158"/><Transform target="width" value="224 * (clamp([COMPLICATION.RANGED_VALUE_VALUE], [COMPLICATION.RANGED_VALUE_MIN], [COMPLICATION.RANGED_VALUE_MAX]) - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN])"/></RoundRectangle></PartDraw>
-        </Complication>
-        <Complication type="LONG_TEXT">
-          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
-          <PartText x="20" y="7" width="224" height="30"><Text align="CENTER" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Complication type="SHORT_TEXT">
-          <PartDraw x="0" y="0" width="264" height="44"><RoundRectangle x="0" y="0" width="264" height="44" cornerRadiusX="22" cornerRadiusY="22"><Fill color="#111214"/></RoundRectangle></PartDraw>
-          <PartText x="20" y="7" width="168" height="30"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText>
-          <PartText x="188" y="7" width="56" height="30"><Text align="END" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#30D158"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText>
-        </Complication>
-        <Variant mode="AMBIENT" target="alpha" value="0"/>
-      </ComplicationSlot>
-
-      <ComplicationSlot slotId="5" name="health" displayName="health_label" x="277" y="52" width="92" height="34" supportedTypes="SHORT_TEXT RANGED_VALUE SMALL_IMAGE MONOCHROMATIC_IMAGE EMPTY" isCustomizable="TRUE">
-        <DefaultProviderPolicy defaultSystemProvider="HEART_RATE" defaultSystemProviderType="SHORT_TEXT" primaryProvider="com.samsung.android.wear.shealth/com.samsung.android.wear.shealth.complications.stress.StressComplicationProviderService" primaryProviderType="SMALL_IMAGE"/>
-        <BoundingBox x="0" y="0" width="92" height="34"/>
-        <Complication type="SHORT_TEXT">
-          <Condition>
-            <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
-            <Compare expression="icon"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="30" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
-            <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
-          </Condition>
-        </Complication>
-        <Complication type="RANGED_VALUE">
-          <Condition>
-            <Expressions><Expression name="icon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression></Expressions>
-            <Compare expression="icon"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage><PartText x="30" y="0" width="62" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="24" color="#FFFFFF"><Template><![CDATA[%s]]><Parameter expression="[COMPLICATION.TEXT]"/></Template></Font></Text></PartText></Compare>
-            <Default><PartText x="0" y="0" width="92" height="34"><Text align="START" ellipsis="TRUE"><Font family="SYNC_TO_DEVICE" size="22" color="#FFFFFF"><Template><![CDATA[%s %s]]><Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template></Font></Text></PartText></Default>
-          </Condition>
-        </Complication>
-        <Complication type="SMALL_IMAGE"><PartImage x="0" y="2" width="30" height="30"><Image resource="[COMPLICATION.SMALL_IMAGE]"/></PartImage></Complication>
-        <Complication type="MONOCHROMATIC_IMAGE"><PartImage x="0" y="4" width="26" height="26" tintColor="#FF453A"><Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]"/></PartImage></Complication>
-        <Variant mode="AMBIENT" target="alpha" value="0"/>
-      </ComplicationSlot>
   </Scene>
 </WatchFace>

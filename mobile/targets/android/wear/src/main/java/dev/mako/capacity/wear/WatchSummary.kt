@@ -28,23 +28,25 @@ object WatchSummary {
 
     fun totalAgents(snapshot: JSONObject?): Int = snapshot?.optJSONArray("agents")?.length() ?: 0
 
-    // The first running agent in the phone's order (working before waiting on you), plus how many others run.
-    fun topAgent(snapshot: JSONObject?): AgentProgress? {
-        val agents = snapshot?.optJSONArray("agents") ?: return null
+    // Running agents, working ones before those waiting on you, each keeping the phone's order; others counts the rest.
+    fun liveAgents(snapshot: JSONObject?): List<AgentProgress> {
+        val agents = snapshot?.optJSONArray("agents") ?: return emptyList()
         val live = (0 until agents.length()).map { agents.getJSONObject(it) }.filter { it.optString("status") in setOf("working", "blocked") }
-        val top = live.firstOrNull { it.optString("status") == "working" } ?: live.firstOrNull() ?: return null
-        val count = top.optJSONArray("stepCount")?.takeIf { it.length() == 2 }
-        val total = count?.optInt(1)?.takeIf { it > 0 }
-        val label = top.optString("label").ifEmpty { top.optString("name") }.take(AGENT_LABEL_LENGTH)
-        return AgentProgress(
-            label = label,
-            others = live.size - 1,
-            done = total?.let { count?.optInt(0)?.coerceIn(0, it) },
-            total = total,
-            percent = if (top.isNull("progress") || !top.has("progress")) null else top.optDouble("progress").coerceIn(0.0, 100.0).toInt(),
-            state = top.optString("state"),
-        )
+        return live.sortedBy { if (it.optString("status") == "working") 0 else 1 }.map { agent ->
+            val count = agent.optJSONArray("stepCount")?.takeIf { it.length() == 2 }
+            val total = count?.optInt(1)?.takeIf { it > 0 }
+            AgentProgress(
+                label = agent.optString("label").ifEmpty { agent.optString("name") }.take(AGENT_LABEL_LENGTH),
+                others = live.size - 1,
+                done = total?.let { count?.optInt(0)?.coerceIn(0, it) },
+                total = total,
+                percent = if (agent.isNull("progress") || !agent.has("progress")) null else agent.optDouble("progress").coerceIn(0.0, 100.0).toInt(),
+                state = agent.optString("state"),
+            )
+        }
     }
+
+    fun topAgent(snapshot: JSONObject?): AgentProgress? = liveAgents(snapshot).firstOrNull()
 
     // Most capacity left first; accounts that can take work now rank above ones that cannot.
     fun topAccounts(snapshot: JSONObject?, count: Int = 3): List<AccountLeft> {

@@ -10,6 +10,7 @@ import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.MonochromaticImage
+import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
@@ -22,9 +23,13 @@ object Complications {
     private val sources = listOf(
         AgentsComplicationService::class.java,
         TopAgentComplicationService::class.java,
+        Agent2ComplicationService::class.java,
+        Agent3ComplicationService::class.java,
+        Agent4ComplicationService::class.java,
         TopAccount1ComplicationService::class.java,
         TopAccount2ComplicationService::class.java,
         TopAccount3ComplicationService::class.java,
+        TopAccount4ComplicationService::class.java,
     )
 
     fun refreshAll(context: Context) {
@@ -101,40 +106,55 @@ class AgentsComplicationService : CapacityComplicationService() {
     override fun previewSnapshot() = JSONObject("""{"agents":[{"status":"working"},{"status":"working"},{"status":"blocked"},{"status":"idle"}]}""")
 }
 
-// The top running agent: its name and how far it is, e.g. "checkout-api" and "5/11"; a tap lists every agent.
-class TopAgentComplicationService : CapacityComplicationService() {
+// One running agent per rank: its name and how far it is, e.g. "checkout-api" and "5/11"; a tap lists every agent.
+abstract class AgentRankComplicationService(private val rank: Int) : CapacityComplicationService() {
     override val icon = R.drawable.ic_complication_agents
     override val opensAgents = true
 
     override fun build(type: ComplicationType, snapshot: JSONObject?): ComplicationData? {
-        val top = WatchSummary.topAgent(snapshot)
-        val title = top?.let { if (it.others > 0) "${it.label} +${it.others}" else it.label } ?: getString(R.string.no_agent_running)
-        val progress = top?.progressText ?: "--"
-        val description = top?.let { getString(R.string.top_agent_description, it.label, it.progressText, it.others) } ?: title
+        val agent = WatchSummary.liveAgents(snapshot).getOrNull(rank) ?: return idle(type)
+        val progress = agent.progressText
+        val description = getString(R.string.top_agent_description, agent.label, progress, agent.others)
         return when (type) {
             ComplicationType.RANGED_VALUE -> {
-                val total = top?.total
-                val done = top?.done
-                if (total != null && done != null) ranged(done.toFloat(), total.toFloat(), progress, title, description)
-                else ranged((top?.percent ?: 0).toFloat(), 100f, progress, title, description)
+                val total = agent.total
+                val done = agent.done
+                if (total != null && done != null) ranged(done.toFloat(), total.toFloat(), progress, agent.label, description)
+                else ranged((agent.percent ?: 0).toFloat(), 100f, progress, agent.label, description)
             }
-            ComplicationType.SHORT_TEXT -> shortText(progress, title, description)
-            ComplicationType.LONG_TEXT -> longText(top?.let { "${it.label} · ${it.progressText}" } ?: title, description)
+            ComplicationType.SHORT_TEXT -> shortText(progress, agent.label, description)
+            ComplicationType.LONG_TEXT -> longText("${agent.label} · $progress", description)
+            else -> null
+        }
+    }
+
+    // An empty ring keeps the face's circle whole when fewer agents run than there are slots.
+    private fun idle(type: ComplicationType): ComplicationData? {
+        val title = getString(R.string.no_agent_running)
+        return when (type) {
+            ComplicationType.RANGED_VALUE -> ranged(0f, 100f, "–", title, title)
+            ComplicationType.SHORT_TEXT -> shortText("–", title, title)
+            ComplicationType.LONG_TEXT -> longText(title, title)
             else -> null
         }
     }
 
     override fun previewSnapshot() = JSONObject(
-        """{"agents":[{"status":"working","label":"checkout-api","stepCount":[5,11],"progress":45,"state":"Working"},{"status":"working","label":"design-system"}]}""",
+        """{"agents":[{"status":"working","label":"checkout-api","stepCount":[5,11],"state":"Working"},{"status":"working","label":"design-sys","progress":40},{"status":"blocked","label":"docs-site","stepCount":[2,3]}]}""",
     )
 }
 
-// One source per rank, so a face can show the top three side by side.
+class TopAgentComplicationService : AgentRankComplicationService(0)
+class Agent2ComplicationService : AgentRankComplicationService(1)
+class Agent3ComplicationService : AgentRankComplicationService(2)
+class Agent4ComplicationService : AgentRankComplicationService(3)
+
+// One source per rank, so a face can show the top four around the dial.
 abstract class TopAccountComplicationService(private val rank: Int) : CapacityComplicationService() {
     override val icon = R.drawable.ic_complication_account
 
     override fun build(type: ComplicationType, snapshot: JSONObject?): ComplicationData? {
-        val account = WatchSummary.topAccounts(snapshot).getOrNull(rank)
+        val account = WatchSummary.topAccounts(snapshot, rank + 1).getOrNull(rank)
         val label = account?.let { "${it.left}%" } ?: "--"
         val title = account?.label ?: getString(R.string.account_rank, rank + 1)
         val description = getString(R.string.account_left_description, title, label)
@@ -153,3 +173,4 @@ abstract class TopAccountComplicationService(private val rank: Int) : CapacityCo
 class TopAccount1ComplicationService : TopAccountComplicationService(0)
 class TopAccount2ComplicationService : TopAccountComplicationService(1)
 class TopAccount3ComplicationService : TopAccountComplicationService(2)
+class TopAccount4ComplicationService : TopAccountComplicationService(3)
