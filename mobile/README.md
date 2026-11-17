@@ -23,6 +23,7 @@ Built with [One](https://onestack.dev/) 2.17 (React Native + web). One's own `on
 - **Apple Watch app:** the same rings and percents, pushed from the iPhone over WatchConnectivity.
 - **Wear OS app:** one scrolling list, accounts then agents, pushed from the Android phone over the Wearable Data Layer. It has the phone app's id and signing key, which the Data Layer requires.
 - **Watch complication:** the most constrained account as a ring (circular, corner), or the top accounts (rectangular, inline).
+- **Wear OS watch face and complications:** see [Wear OS watch face](#wear-os-watch-face).
 - **Agents tab:** the Mac dock's agents mode. One row per coding agent with its circle ring, task, current step, step count, progress and state (working, needs you, finished, idle). Idle agents are hidden unless "Show idle" is on. Tap a row for the dock's agent card: every step with its time, the subagents and workflows with their own progress, recent activity, model, tokens and run time.
 - **Agents widget (iOS medium and large, Android 4x2):** the agents that need you or are working first, with ring, task, step and progress.
 - **Watch agents page:** swipe down past the accounts for the same agents list.
@@ -100,6 +101,34 @@ JAVA_HOME=$(/usr/libexec/java_home -v 17) ANDROID_HOME=~/Library/Android/sdk \
 
 One ABI keeps the build under 4 GiB of disk; all four ABIs needed over 10 GiB. The release build bundles the JavaScript, so it runs without a dev server. It is signed with the debug key, which is enough to sideload. Install it with `adb install app-release.apk`, or copy it to the phone and open it.
 
+## Wear OS watch face
+
+| Face | Ambient | Picker: accounts | Picker: agents |
+| --- | --- | --- | --- |
+| ![Face](docs/screenshots/wear-face.png) | ![Ambient](docs/screenshots/wear-face-ambient.png) | ![Picker](docs/screenshots/wear-picker-accounts.png) | ![Picker](docs/screenshots/wear-picker-agents.png) |
+
+Two packages, built together:
+
+- `wear` (`dev.mako.capacity`): the Wear app. It now also exposes four complication data sources, listed under "Capacity" in any face's picker: **Agents running**, **Most capacity left**, **2nd most capacity left**, **3rd most capacity left**. Each supports `RANGED_VALUE` and `SHORT_TEXT`. They read the snapshot the phone pushes over the Data Layer, and refresh when a new one arrives.
+- `watchface` (`dev.mako.capacity.watchface`): a Watch Face Format v2 face, resource only (`hasCode="false"`, minSdk 34).
+
+| Slot | Shows | Data |
+| --- | --- | --- |
+| Time, date | 24/12 h per the watch setting | WFF clock |
+| Battery | percent | WFF `[BATTERY_PERCENT]` |
+| Weather | temperature and condition icon | WFF `[WEATHER.*]`, "--°" when the watch has no weather |
+| 3 rings | percent left and account name, green 50%+, yellow 20%+, red below | the app's three "capacity left" sources, user changeable |
+| Agents | "3 agents" | the app's "Agents running" source (working or needs you), user changeable |
+| Health | stress, else heart rate | default Samsung Health stress complication, falling back to the system heart rate provider, user changeable |
+
+Samsung Health's stress complication (`com.samsung.android.wear.shealth/.complications.stress.StressComplicationProviderService`) only offers `SMALL_IMAGE` and `ICON`, so it draws as an image with no number. If Samsung Health is missing or refuses the face, the slot falls back to heart rate.
+
+Build: `./gradlew :wear:assembleRelease :watchface:assembleRelease`. The face's XML passes Google's `wff-validator` for format version 2.
+
+Install on a watch: install the Wear app APK first, then the face APK, then pick "Mako Capacity" from the watch's face list (long press the current face). Without the Wear app the face still loads, but the rings and agents slots stay empty.
+
+Demo data (debug builds only): `src/debug` adds a receiver that loads `demo_snapshot.json`, made from `scripts/demo_data.py`. On an emulator, open the app once, then run `adb shell am broadcast -a dev.mako.capacity.wear.DEMO_DATA -n dev.mako.capacity/.wear.DemoDataReceiver`. Release builds do not contain it.
+
 ## iOS simulator
 
 ```bash
@@ -130,6 +159,7 @@ bun run typecheck
 ## Not verified
 
 - **Android on a device or emulator.** The APK builds and its manifest holds both widget receivers and the network config, but no emulator image is installed, so it has not run.
+- **Wear OS face on a real watch.** Verified on the Wear OS 5 emulator (API 34) only: face, picker, demo data, release APKs. Not checked: a Samsung watch, Samsung Health's stress provider in a third-party face, live weather, and the phone push reaching the complications.
 - **Watch complication on a face.** It builds, watchOS registers it with all four families and launches its extension, but the simulator's complication picker does not list it. Check on a real watch.
 
 ## Layout
@@ -145,5 +175,7 @@ targets/widget/         SwiftUI WidgetKit extension (replaces One's generated wi
 targets/watch/          SwiftUI watchOS app
 targets/watch-complication/ watchOS WidgetKit complication
 targets/android/        Android AppWidgetProvider, layouts and network security config
+targets/android/wear/   Wear OS app and its complication data sources
+targets/android/watchface/ Wear OS Watch Face Format face (resource only)
 scripts/                post-prebuild scripts, app icon generator
 ```

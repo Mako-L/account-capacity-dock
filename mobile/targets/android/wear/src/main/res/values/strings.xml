@@ -8,4 +8,13 @@
     <string name="no_agents">No agents working.</string>
     <string name="open_agents">Open the Agents tab on your phone.</string>
     <string name="updated">Updated %1$s</string>
+    <string name="complication_agents">Agents running</string>
+    <string name="complication_account_1">Most capacity left</string>
+    <string name="complication_account_2">2nd most capacity left</string>
+    <string name="complication_account_3">3rd most capacity left</string>
+    <string name="agent_one">agent</string>
+    <string name="agent_many">agents</string>
+    <string name="agents_running_description">%1$s agents running</string>
+    <string name="account_rank">Account %1$d</string>
+    <string name="account_left_description">%1$s, %2$s left</string>
 </resources>

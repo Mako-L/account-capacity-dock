@@ -27,7 +27,7 @@ import org.json.JSONObject
 import kotlin.math.min
 
 // The phone writes the widget snapshot to this Data Layer path; see targets/android/java/WearSync.kt.
-private const val SNAPSHOT_PATH = "/capacity/snapshot"
+const val SNAPSHOT_PATH = "/capacity/snapshot"
 
 class MainActivity : Activity(), DataClient.OnDataChangedListener {
     private lateinit var content: LinearLayout
@@ -36,7 +36,7 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.main)
         content = findViewById(R.id.content)
-        render(getPreferences(MODE_PRIVATE).getString("snapshot", null))
+        render(SnapshotStore.read(this))
     }
 
     override fun onResume() {
@@ -65,7 +65,7 @@ class MainActivity : Activity(), DataClient.OnDataChangedListener {
     }
 
     private fun update(json: String) {
-        getPreferences(MODE_PRIVATE).edit().putString("snapshot", json).apply()
+        SnapshotStore.write(this, json)
         render(json)
     }
 
