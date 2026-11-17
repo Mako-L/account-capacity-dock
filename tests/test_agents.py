@@ -236,6 +236,128 @@ class ClaudeSessionTests(unittest.TestCase):
         self.assertEqual(found[0]['root'], folder)
 
 
+FLOW_STAGES = {'research': 'passed', 'plan': 'skipped', 'implementation': 'passed', 'code_review': 'passed',
+               'runtime_verification': 'running', 'tests': 'pending', 'gates': 'pending', 'pr': 'pending',
+               'finalize': 'pending'}
+
+
+class FlowRunTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / 'checkout'
+        self.now = 2_000_000_000
+
+    def write_run(self, name, worktree=None, status='running', stages=None, age=60, **extra):
+        path = self.root / 'docs' / 'ticket-runs' / name / 'state.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        state = {'ticket': name, 'worktree': str(worktree or self.root), 'status': status,
+                 'current_stage': 'runtime_verification', 'stages': stages or FLOW_STAGES, **extra}
+        path.write_text(json.dumps(state))
+        os.utime(path, (self.now - age, self.now - age))
+        return path
+
+    def test_progress_counts_passed_and_skipped_stages_of_the_whole_flow(self):
+        # Catches: a share of the passed stages only, or a model's guess in place of the count.
+        self.write_run('DEMO-12')
+
+        run = agents.flow_run(str(self.root), self.now)
+
+        self.assertEqual((run['stepCount'], run['progress']), ([4, 9], 44))
+
+    def test_steps_are_the_real_stage_names_with_the_running_one_active(self):
+        # Catches: stage order lost, or the running stage shown as pending.
+        self.write_run('DEMO-12')
+
+        run = agents.flow_run(str(self.root), self.now)
+
+        self.assertEqual([(s['title'], s['status']) for s in run['steps']][3:6],
+                         [('Code review', 'done'), ('Runtime verification', 'active'), ('Tests', 'pending')])
+
+    def test_the_ticket_and_the_running_stage_become_the_task_and_now(self):
+        # Catches: the observer's task text kept in place of the ticket.
+        self.write_run('DEMO-12')
+
+        run = agents.flow_run(str(self.root), self.now)
+
+        self.assertEqual((run['ticket'], run['now']), ('DEMO-12', 'Runtime verification'))
+
+    def test_an_agent_in_a_subfolder_of_the_worktree_finds_the_run(self):
+        # Catches: only the exact cwd searched, so an agent in apps/web shows no flow.
+        self.write_run('DEMO-12')
+
+        run = agents.flow_run(str(self.root / 'apps' / 'web'), self.now)
+
+        self.assertEqual(run['ticket'], 'DEMO-12')
+
+    def test_a_committed_run_of_another_worktree_is_not_this_agents_flow(self):
+        # Catches: every checkout showing the last flow merged into it.
+        self.write_run('DEMO-12', worktree=Path(self.tmp.name) / 'checkout-demo-12')
+
+        self.assertIsNone(agents.flow_run(str(self.root), self.now))
+
+    def test_a_finished_run_is_not_shown_as_live(self):
+        # Catches: FLOW_ENDED check removed, so a done flow pins 100% on the next job in that folder.
+        self.write_run('DEMO-12', status='done')
+
+        self.assertIsNone(agents.flow_run(str(self.root), self.now))
+
+    def test_a_run_untouched_for_a_day_is_stale(self):
+        # Catches: the staleness check flipped or removed.
+        self.write_run('DEMO-12', age=agents.FLOW_STALE + 1)
+
+        self.assertIsNone(agents.flow_run(str(self.root), self.now))
+
+    def test_a_run_written_just_inside_a_day_still_counts(self):
+        # Catches: off-by-one window that drops a run paused overnight.
+        self.write_run('DEMO-12', age=agents.FLOW_STALE - 1)
+
+        self.assertEqual(agents.flow_run(str(self.root), self.now)['ticket'], 'DEMO-12')
+
+    def test_the_newest_live_run_wins_over_an_older_one(self):
+        # Catches: glob order deciding which flow the agent shows.
+        self.write_run('DEMO-11', age=3600)
+        self.write_run('DEMO-12', age=60)
+
+        self.assertEqual(agents.flow_run(str(self.root), self.now)['ticket'], 'DEMO-12')
+
+    def test_a_state_file_without_a_stage_map_is_not_a_flow(self):
+        # Catches: text guessing on any JSON that happens to sit in a run folder.
+        self.write_run('DEMO-12', stages=['research', 'plan'])
+
+        self.assertIsNone(agents.flow_run(str(self.root), self.now))
+
+
+class ObserverProgressTests(unittest.TestCase):
+    def test_a_record_from_the_old_observer_drops_its_guessed_progress(self):
+        # Catches: a cached 90% from the old prompt still showing after the upgrade.
+        record = {'result': {'task': 'Fix login', 'progress': 90, 'steps': []}}
+
+        self.assertIsNone(agents.observed_result(record)['progress'])
+
+    def test_a_record_from_the_current_observer_keeps_its_counted_progress(self):
+        # Catches: version check inverted, so a real count is thrown away too.
+        record = {'version': agents.OBSERVER_VERSION, 'result': {'task': 'Fix login', 'progress': 40, 'steps': []}}
+
+        self.assertEqual(agents.observed_result(record)['progress'], 40)
+
+    def test_a_subagent_with_guessed_steps_shows_no_share_of_them(self):
+        # Catches: observer or tool-call steps turned into a made-up percent.
+        steps = [{'title': 'Read', 'status': 'done'}, {'title': 'Fix', 'status': 'active'}]
+
+        item = agents.with_progress({'running': True}, steps, None, counted=False)
+
+        self.assertIsNone(item['progress'])
+
+    def test_a_subagent_with_a_real_task_list_shows_its_share(self):
+        # Catches: counted flag ignored, hiding real task-list progress.
+        steps = [{'title': 'Read', 'status': 'done'}, {'title': 'Fix', 'status': 'active'}]
+
+        item = agents.with_progress({'running': True}, steps)
+
+        self.assertEqual(item['progress'], 50)
+
+
 class ObserverInputTests(unittest.TestCase):
     def test_sends_only_events_after_the_last_report(self):
         found = {'prompt': 'Fix login', 'activity': [
