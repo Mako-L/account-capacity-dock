@@ -382,13 +382,19 @@ mako-capacity agents                # a plain list in the terminal
 
 The steps come from the first source that has them:
 
-1. **The agent's own task list:** Claude Code's TodoWrite and task tools, or the Codex plan.
-2. **A report from the agent.** Tell an agent to run this at each step:
+1. **A ticket-flow run.** If the agent's folder holds a running flow
+   (`docs/ticket-runs/<ticket>/state.json` whose `worktree` is that folder), the dock
+   reads it: the task is the ticket, the steps are the flow's real stages, and the
+   progress is passed stages out of all stages, for example "5 of 11".
+2. **The agent's own task list:** Claude Code's TodoWrite and task tools, or the Codex plan.
+3. **A report from the agent.** Tell an agent to run this at each step:
    `mako-capacity agents report "Run the tests" --task "Fix login" --done 2 --total 5`
    (`mako-capacity agents clear` removes it).
-3. **The observer** (a small model that reads the latest events of a busy agent).
-   It names the task and the steps through your proxy, with `claude-haiku-5-5`, in
-   plain Simplified Technical English. It runs at most once a minute per agent, and
+4. **The observer** (a model that reads the latest events of a busy agent).
+   It names the task and the steps through your proxy, with `claude-sonnet-5-5`, in
+   plain Simplified Technical English. It gives a percentage only when the events
+   count real items (files done out of a known total). Otherwise the card shows the
+   current step, not a guessed number. It runs at most once a minute per agent, and
    only after new events. Each call sends only the last report and the events after
    it, so a busy agent costs a few hundred tokens a minute. Turn it off in
    Settings, or set `AGENT_OBSERVER=0`. `AGENT_OBSERVER_MODEL` picks another model.

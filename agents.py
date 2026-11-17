@@ -405,8 +405,11 @@ def as_steps(todos):
     return steps
 
 
-def with_progress(item, steps, guess=None):
-    """Steps and progress for a subagent. A finished one has every step done and shows 100%."""
+def with_progress(item, steps, guess=None, counted=True):
+    """Steps and progress for a subagent. A finished one has every step done and shows 100%.
+
+    Only a real task list (counted) gives a share; observer or tool-call steps are a guess, so they keep the observer's
+    counted number or none."""
     if not item['running']:
         steps = [dict(step, status='done') for step in steps]
     elif steps and not any(step['status'] in ('active', 'pending') for step in steps):
@@ -415,7 +418,7 @@ def with_progress(item, steps, guess=None):
     item['steps'] = steps
     if not item['running']:
         item['progress'] = 100
-    elif steps:
+    elif steps and counted:
         item['progress'] = round(100 * sum(step['status'] == 'done' for step in steps) / len(steps))
     else:
         item['progress'] = guess
@@ -497,7 +500,7 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
         steps = as_steps(found.get('todos'))
         if steps:
             return with_progress(item, steps)
-        report = read_json(observed / f'sub-{path.stem}.json').get('result') if observed else None
+        report = observed_result(read_json(observed / f'sub-{path.stem}.json')) if observed else None
         if running and watch is not None:
             watch.append((item, str(path), found))
         steps = (report or {}).get('steps') or []
@@ -506,8 +509,8 @@ def subagent_tree(transcript, now, parse, workflows=None, observed=None, watch=N
             calls = [e['text'] for e in activity if e.get('kind') == 'tool' and e['text'] != 'StructuredOutput']
             calls = [text for i, text in enumerate(calls) if i == 0 or text != calls[i - 1]][-5:]
             steps = [{'title': clip(text, 60), 'status': 'active' if running and i == len(calls) - 1 else 'done'} for i, text in enumerate(calls)]
-            return with_progress(item, steps, (report or {}).get('progress'))
-        return with_progress(item, steps, (report or {}).get('progress'))
+            return with_progress(item, steps, (report or {}).get('progress'), counted=False)
+        return with_progress(item, steps, (report or {}).get('progress'), counted=False)
 
     for path in root.glob('agent-*.jsonl'):
         item = node(path)
@@ -662,6 +665,63 @@ def read_codex(events):
     return found
 
 
+# ---- Ticket-flow runs --------------------------------------------------------
+
+FLOW_STAGE_STATUS = {'passed': 'done', 'skipped': 'done', 'running': 'active', 'failed': 'active'}
+FLOW_ENDED = ('done', 'failed', 'aborted', 'cancelled')
+FLOW_STALE = 24 * 3600
+FLOW_TITLES = {'pr': 'PR'}
+
+
+def flow_title(stage):
+    return FLOW_TITLES.get(stage) or stage.replace('_', ' ').capitalize()
+
+
+def flow_state(path):
+    """A ticket-flow state.json as the dock needs it, or None when its shape is not a flow run."""
+    state = read_json(path)
+    stages = state.get('stages')
+    if not isinstance(stages, dict) or not stages or not all(isinstance(v, str) for v in stages.values()):
+        return None
+    if not isinstance(state.get('ticket'), str) or not isinstance(state.get('worktree'), str):
+        return None
+    current = state.get('current_stage') if isinstance(state.get('current_stage'), str) else None
+    steps = [{'title': flow_title(name),
+              'status': FLOW_STAGE_STATUS.get(status, 'active' if name == current else 'pending')}
+             for name, status in stages.items()]
+    passed = sum(1 for status in stages.values() if FLOW_STAGE_STATUS.get(status) == 'done')
+    return {'ticket': state['ticket'], 'worktree': state['worktree'], 'status': state.get('status'), 'steps': steps,
+            'stepCount': [passed, len(stages)], 'progress': round(100 * passed / len(stages)),
+            'now': flow_title(current) if current else None}
+
+
+def flow_run(cwd, now):
+    """The live ticket-flow run whose state.json names this folder (or a parent) as its worktree.
+
+    A checkout also holds the committed run folders of older flows; their worktree field names another folder."""
+    if not cwd:
+        return None
+    folder = Path(cwd)
+    for root in [folder, *folder.parents][:4]:
+        runs = root / 'docs' / 'ticket-runs'
+        if not runs.is_dir():
+            continue
+        fresh = []
+        for path in runs.glob('*/state.json'):
+            try:
+                changed = path.stat().st_mtime
+            except OSError:
+                continue
+            if now - changed < FLOW_STALE:
+                fresh.append((changed, path))
+        for _, path in sorted(fresh, reverse=True):
+            run = flow_state(path)
+            if run and run['status'] not in FLOW_ENDED and os.path.realpath(run['worktree']) == os.path.realpath(root):
+                return run
+        return None
+    return None
+
+
 # ---- Reports and the observer ------------------------------------------------
 
 def report_path(pane):
@@ -702,20 +762,31 @@ Reply with JSON only:
 {"task": "<the whole job, at most 8 words>",
  "now": "<what it does this minute, at most 10 words>",
  "steps": [{"title": "<at most 6 words>", "status": "done|active|pending"}],
- "progress": <0-100, your estimate for the whole job>}
+ "progress": null}
 Give 3 to 6 steps in order: done ones, the active one, then the likely next ones.
+Keep "progress" null. Give a number 0-100 only when the events count real items, for example
+"test 4 of 10" or "stage 5 of 11", and then give exactly that share. Never estimate it.
 Keep step titles from your last report when they still fit, so the list stays stable.
 Write in Simplified Technical English: plain words, active voice, simple present tense,
 one fact per line, no "-ing" openings, British spelling. Example: "Run the payment tests"."""
 
-OBSERVER_MODEL = 'claude-haiku-5-5'
+OBSERVER_MODEL = 'claude-sonnet-5-5'
+# Records from before version 2 carry a guessed progress; it is dropped so it neither shows nor anchors the next reply.
+OBSERVER_VERSION = 2
+
+
+def observed_result(record):
+    result = record.get('result')
+    if not result or record.get('version') == OBSERVER_VERSION:
+        return result
+    return {**result, 'progress': None}
 
 
 def observe(agent, events_text):
     body = json.dumps({
         'model': setting('AGENT_OBSERVER_MODEL', OBSERVER_MODEL), 'max_tokens': 300,
-        # Haiku 5.5 thinks by default and would spend the whole budget on it; the report needs none.
-        'thinking': {'type': 'disabled'},
+        # Sonnet 5.5 rejects 'disabled'; 'between_tools' means no thinking before the reply, which keeps the 300-token budget.
+        'thinking': {'type': 'between_tools'},
         'system': OBSERVER_PROMPT,
         'messages': [{'role': 'user', 'content': events_text}],
     }).encode()
@@ -743,7 +814,7 @@ def observer_input(agent, found, previous):
     since = previous.get('last_event') or 0
     events = [e for e in found.get('activity', []) if not since or (e.get('at') or 0) > since]
     lines = [f'Agent: {agent["agent"]} in {Path(agent["cwd"]).name or agent["cwd"]}']
-    report = previous.get('result')
+    report = observed_result(previous)
     if report:
         lines.append('Your last report: ' + json.dumps({k: report.get(k) for k in ('task', 'now', 'steps', 'progress')}))
     if found.get('prompt') and (not report or found['prompt'] != previous.get('prompt')):
@@ -899,7 +970,7 @@ def collect(run_observer=False):
         agent['started'] = max(agent.get('started') or 0, found.get('asked') or 0) or None
         observed = read_json(observed_dir / f'{agent["session"]}.json') if agent.get('session') else {}
         if observed.get('result') and not steps and now - observed.get('at', 0) < 3600:
-            result = observed['result']
+            result = observed_result(observed)
             agent.update({'steps': result.get('steps') or [], 'progress': result.get('progress'), 'source': 'observer',
                           'task': result.get('task') or agent['task']})
             agent['now'] = agent['now'] or (result.get('now') if agent['status'] == 'working' else None)
@@ -908,7 +979,12 @@ def collect(run_observer=False):
             if report.get('total'):
                 agent['progress'] = round(100 * (report.get('done') or 0) / report['total'])
                 agent['stepCount'] = [report.get('done') or 0, report['total']]
-        if agent['steps'] and agent.get('progress') is None:
+        flow = flow_run(agent.get('cwd'), now)
+        if flow:
+            agent.update({'task': flow['ticket'], 'steps': flow['steps'], 'progress': flow['progress'],
+                          'stepCount': flow['stepCount'], 'now': flow['now'] or agent['now'], 'source': 'flow'})
+        # The observer's steps are a guess at the job, so their share would be a made-up percent.
+        if agent['steps'] and agent.get('progress') is None and agent['source'] != 'observer':
             done = sum(1 for s in agent['steps'] if s['status'] == 'done')
             agent['progress'] = round(100 * done / len(agent['steps']))
             agent['stepCount'] = [done, len(agent['steps'])]
@@ -980,7 +1056,7 @@ def collect(run_observer=False):
         run_sub_observers(watch, parsed, observed_dir, now)
         for agent in agents:
             if agent.get('session') and agent['source'] == 'activity':
-                result = read_json(observed_dir / f'{agent["session"]}.json').get('result')
+                result = observed_result(read_json(observed_dir / f'{agent["session"]}.json'))
                 if result:
                     agent.update({'steps': result.get('steps') or [], 'progress': result.get('progress'), 'source': 'observer',
                                   'task': result.get('task') or agent['task']})
@@ -1019,7 +1095,7 @@ def run_observers(agents, parsed, folder, now):
     jobs = []
     for agent in agents:
         transcript = agent.get('transcript')
-        if agent['status'] != 'working' or agent['source'] in ('tasks', 'report') or not transcript or not agent.get('session'):
+        if agent['status'] != 'working' or agent['source'] in ('tasks', 'report', 'flow') or not transcript or not agent.get('session'):
             continue
         path = folder / f'{agent["session"]}.json'
         previous = read_json(path)
@@ -1037,13 +1113,14 @@ def run_observers(agents, parsed, folder, now):
         futures = {pool.submit(observe, None, text): job for job in jobs[:6] for text in [job[4]]}
         for future in concurrent.futures.as_completed(futures):
             path, key, previous, found, _, events = futures[future]
-            record = {'at': now, 'key': key, 'prompt': found.get('prompt'), 'last_event': max(e.get('at') or 0 for e in events)}
+            record = {'at': now, 'key': key, 'prompt': found.get('prompt'), 'version': OBSERVER_VERSION,
+                      'last_event': max(e.get('at') or 0 for e in events)}
             try:
                 result = future.result()
                 record['result'] = result
                 record['tokens'] = previous.get('tokens', 0) + result.pop('tokens', 0)
             except Exception as error:  # the proxy may be down; the view keeps the plain activity
-                record.update({'result': previous.get('result'), 'error': str(error)[:200], 'tokens': previous.get('tokens', 0)})
+                record.update({'result': observed_result(previous), 'error': str(error)[:200], 'tokens': previous.get('tokens', 0)})
             path.write_text(json.dumps(record) + '\n')
 
 
@@ -1067,13 +1144,14 @@ def run_sub_observers(watch, parsed, folder, now):
         futures = {pool.submit(observe, None, job[4]): job for job in jobs[:4]}
         for future in concurrent.futures.as_completed(futures):
             path, key, previous, found, _, events = futures[future]
-            record = {'at': now, 'key': key, 'prompt': found.get('prompt'), 'last_event': max(e.get('at') or 0 for e in events)}
+            record = {'at': now, 'key': key, 'prompt': found.get('prompt'), 'version': OBSERVER_VERSION,
+                      'last_event': max(e.get('at') or 0 for e in events)}
             try:
                 result = future.result()
                 record['tokens'] = previous.get('tokens', 0) + result.pop('tokens', 0)
                 record['result'] = result
             except Exception as error:
-                record.update({'result': previous.get('result'), 'error': str(error)[:200], 'tokens': previous.get('tokens', 0)})
+                record.update({'result': observed_result(previous), 'error': str(error)[:200], 'tokens': previous.get('tokens', 0)})
             path.write_text(json.dumps(record) + '\n')
 
 
