@@ -5,7 +5,18 @@ import org.json.JSONObject
 data class AccountLeft(val label: String, val left: Int, val signal: String)
 
 // done/total when the agent counts steps, else a percentage, else neither.
-data class AgentProgress(val label: String, val others: Int, val done: Int?, val total: Int?, val percent: Int?, val state: String) {
+data class AgentProgress(
+    val label: String,
+    val others: Int,
+    val done: Int?,
+    val total: Int?,
+    val percent: Int?,
+    val state: String,
+    val waiting: Boolean = false,
+) {
+    // What fits inside a small ring: a ticket's number ("DEMO-42" -> "42"), else the first 4 letters of the name.
+    val ringLabel: String get() = WatchSummary.ringLabel(label)
+
     val progressText: String get() = when {
         done != null && total != null -> "$done/$total"
         percent != null -> "$percent%"
@@ -15,7 +26,12 @@ data class AgentProgress(val label: String, val others: Int, val done: Int?, val
 
 // What the watch face shows, worked out from the phone's snapshot (see features/capacity/rules.ts toSnapshot).
 object WatchSummary {
-    const val LABEL_LENGTH = 8
+    const val LABEL_LENGTH = 6
+    const val RING_LABEL_LENGTH = 4
+    private val TICKET = Regex("^[A-Za-z][A-Za-z0-9]*-(\\d+)$")
+
+    fun ringLabel(label: String): String =
+        TICKET.find(label)?.groupValues?.get(1) ?: label.filter { it.isLetterOrDigit() }.take(RING_LABEL_LENGTH).lowercase()
     const val AGENT_LABEL_LENGTH = 12
 
     fun parse(json: String?): JSONObject? = json?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -42,6 +58,7 @@ object WatchSummary {
                 total = total,
                 percent = if (agent.isNull("progress") || !agent.has("progress")) null else agent.optDouble("progress").coerceIn(0.0, 100.0).toInt(),
                 state = agent.optString("state"),
+                waiting = agent.optString("status") == "blocked",
             )
         }
     }

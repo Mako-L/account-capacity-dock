@@ -116,14 +116,15 @@ Two packages, built together:
 | --- | --- | --- |
 | Time, date | 24/12 h per the watch setting | WFF clock |
 | Battery | percent | WFF `[BATTERY_PERCENT]` |
-| Weather | temperature and condition icon | WFF `[WEATHER.*]`, "--°" when the watch has no weather |
-| Left arc: 3 account rings | percent left and account name, green 50%+, yellow 20%+, red below | the app's 1st to 3rd "capacity left" sources, user changeable |
-| Right arc: 4 agent rings | one running agent each: the stage count (else a percent) inside, the ticket id for a ticket-flow run (else the agent's name) under it, and a ring for its progress | the app's "Top agent" and 2nd to 4th "running agent" sources, user changeable. A tap opens the app at its agent list |
-| Bottom: health | stress gauge, else heart rate | default Samsung Health stress complication (`SMALL_IMAGE`, drawn 64 px), falling back to the system heart rate provider, user changeable |
+| Weather | temperature and condition icon | WFF `[WEATHER.*]`, hidden when the watch has no reading |
+| Section labels | "ACCOUNTS" over the left arc, "AGENTS" over the right arc, curved along the bezel | WFF `TextCircular` |
+| Left arc: 3 account rings | percent left (bold) and the account name, cut to 6 characters, ring green 50%+, yellow 20%+, red below | the app's 1st to 3rd "capacity left" sources, user changeable |
+| Right arc: 4 agent rings | one running agent each: the ticket number (bold, digits only, e.g. "42"), else the first 4 letters of its name, and the stage count (else a percent) under it. The ring fills with stage progress: blue while it works, amber while it waits on you. A slot with no agent shows a grey "idle" ring | the app's "Top agent" and 2nd to 4th "running agent" sources, user changeable. A tap opens the app at its agent list |
+| Bottom: health | stress gauge with the label "stress", else a heart icon over the heart rate and "BPM" | default Samsung Health stress complication (`SMALL_IMAGE`, drawn 64 px), falling back to the system heart rate provider, user changeable |
 
 Watch Face Format allows at most 8 complication slots on a face, so the left arc holds 3 accounts, not 4. The "4th most capacity left" source exists for other faces.
 
-Samsung Health's stress complication (`com.samsung.android.wear.shealth/.complications.stress.StressComplicationProviderService`) only offers `SMALL_IMAGE` and `ICON`, so it draws as an image with no number. If Samsung Health is missing or refuses the face, the slot falls back to heart rate.
+Samsung Health's stress complication (`com.samsung.android.wear.shealth/.complications.stress.StressComplicationProviderService`) only offers `SMALL_IMAGE` and `ICON`, so it draws as an image with no number. If Samsung Health is missing or refuses the face, the slot falls back to heart rate. Stress shows only on a Galaxy Watch with Samsung Health. The emulator cannot run it (its Wear APK ships only 32-bit ARM libraries), so the stress gauge on a real watch is not verified.
 
 Build: `./gradlew :wear:assembleRelease :watchface:assembleRelease`. The face's XML passes Google's `wff-validator` for format version 2.
 

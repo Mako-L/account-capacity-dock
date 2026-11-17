@@ -15,6 +15,7 @@
     <string name="complication_account_4">4th most capacity left</string>
     <string name="complication_top_agent">Top agent and its progress</string>
     <string name="no_agent_running">No agents</string>
+    <string name="agent_idle">idle</string>
     <string name="complication_agent_2">2nd running agent</string>
     <string name="complication_agent_3">3rd running agent</string>
     <string name="complication_agent_4">4th running agent</string>

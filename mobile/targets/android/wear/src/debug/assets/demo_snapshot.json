@@ -17,7 +17,7 @@
   {
    "id": "demo-2",
    "provider": "Claude",
-   "email": "research",
+   "email": "lab",
    "used": 81,
    "window": "Weekly",
    "resetInHours": 46,
@@ -56,7 +56,7 @@
   {
    "id": "demo-5",
    "provider": "Codex",
-   "email": "builder",
+   "email": "build",
    "used": 12,
    "window": "Weekly",
    "resetInHours": 149,
@@ -69,7 +69,7 @@
   {
    "id": "demo-4",
    "provider": "Claude",
-   "email": "archive",
+   "email": "vault",
    "used": null,
    "window": "",
    "resetInHours": null,

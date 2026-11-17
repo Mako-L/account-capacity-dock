@@ -75,8 +75,9 @@ abstract class CapacityComplicationService : SuspendingComplicationDataSourceSer
             .setTapAction(openApp())
             .build()
 
-    protected fun ranged(value: Float, max: Float, label: String, title: String, description: String) =
-        RangedValueComplicationData.Builder(value.coerceIn(0f, max), 0f, max, text(description))
+    // min below 0 marks an agent waiting on you; the face colours that ring amber and fills it by value / max.
+    protected fun ranged(value: Float, max: Float, label: String, title: String, description: String, min: Float = 0f) =
+        RangedValueComplicationData.Builder(value.coerceIn(0f, max), min, max, text(description))
             .setText(text(label))
             .setTitle(text(title))
             .setMonochromaticImage(image())
@@ -106,7 +107,7 @@ class AgentsComplicationService : CapacityComplicationService() {
     override fun previewSnapshot() = JSONObject("""{"agents":[{"status":"working"},{"status":"working"},{"status":"blocked"},{"status":"idle"}]}""")
 }
 
-// One running agent per rank: its name and how far it is, e.g. "checkout-api" and "5/11"; a tap lists every agent.
+// One running agent per rank: its ticket number (or short name) and how far it is, e.g. "42" and "5/11"; a tap lists every agent.
 abstract class AgentRankComplicationService(private val rank: Int) : CapacityComplicationService() {
     override val icon = R.drawable.ic_complication_agents
     override val opensAgents = true
@@ -119,10 +120,11 @@ abstract class AgentRankComplicationService(private val rank: Int) : CapacityCom
             ComplicationType.RANGED_VALUE -> {
                 val total = agent.total
                 val done = agent.done
-                if (total != null && done != null) ranged(done.toFloat(), total.toFloat(), progress, agent.label, description)
-                else ranged((agent.percent ?: 0).toFloat(), 100f, progress, agent.label, description)
+                val min = if (agent.waiting) WAITING_MIN else 0f
+                if (total != null && done != null) ranged(done.toFloat(), total.toFloat(), agent.ringLabel, progress, description, min)
+                else ranged((agent.percent ?: 0).toFloat(), 100f, agent.ringLabel, progress, description, min)
             }
-            ComplicationType.SHORT_TEXT -> shortText(progress, agent.label, description)
+            ComplicationType.SHORT_TEXT -> shortText(agent.ringLabel, progress, description)
             ComplicationType.LONG_TEXT -> longText("${agent.label} · $progress", description)
             else -> null
         }
@@ -131,9 +133,10 @@ abstract class AgentRankComplicationService(private val rank: Int) : CapacityCom
     // An empty ring keeps the face's circle whole when fewer agents run than there are slots.
     private fun idle(type: ComplicationType): ComplicationData? {
         val title = getString(R.string.no_agent_running)
+        val idle = getString(R.string.agent_idle)
         return when (type) {
-            ComplicationType.RANGED_VALUE -> ranged(0f, 100f, "–", title, title)
-            ComplicationType.SHORT_TEXT -> shortText("–", title, title)
+            ComplicationType.RANGED_VALUE -> ranged(0f, 1f, idle, "", title)
+            ComplicationType.SHORT_TEXT -> shortText(idle, "", title)
             ComplicationType.LONG_TEXT -> longText(title, title)
             else -> null
         }
@@ -143,6 +146,8 @@ abstract class AgentRankComplicationService(private val rank: Int) : CapacityCom
         """{"agents":[{"status":"working","label":"checkout-api","stepCount":[5,11],"state":"Working"},{"status":"working","label":"design-sys","progress":40},{"status":"blocked","label":"docs-site","stepCount":[2,3]}]}""",
     )
 }
+
+private const val WAITING_MIN = -1f
 
 class TopAgentComplicationService : AgentRankComplicationService(0)
 class Agent2ComplicationService : AgentRankComplicationService(1)
